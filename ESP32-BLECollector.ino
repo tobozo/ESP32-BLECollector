@@ -156,6 +156,7 @@ String getVendor(uint16_t devid) {
 
 void testOUI() {
   sqlite3_open("/sd/mac-oui-light.db", &OUIVendorsDB); // https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers
+  Serial.println("Testing MAC OUI database ...");
   String requestStr = "SELECT * FROM 'oui-light' limit 10";
   print_results = true;
   colNeedle = 0;
@@ -167,7 +168,7 @@ void testOUI() {
     Serial.print("OUI Test failed, looping");
     while(1) yield();
   } else {
-    Serial.print("OUI Test success!");
+    Serial.println("OUI Test success!");
   }
   
 }
@@ -445,23 +446,23 @@ void setup() {
   rebuildOUI();
   
   sqlite3_open("/sd/blemacs.db", &BLECollectorDB);
-  print_results = false;
-  rc = db_exec(BLECollectorDB, "SELECT appearance, name, address, ouiname, rssi, vdata, vname, uuid, spower FROM blemacs;");
-  if (rc != SQLITE_OK) {
-    Serial.println("wut?");
-  }
-  Serial.println("DB haz " + String(results) + " entries");
-  
+
+  Serial.println("Named Devices");
   print_results = true;
   rc = db_exec(BLECollectorDB, "SELECT DISTINCT name, vname, ouiname FROM blemacs where name!='';");
+
+  Serial.println("Devices Vendors");
   print_results = true;
-  rc = db_exec(BLECollectorDB, "SELECT DISTINCT vname FROM blemacs;");
+  rc = db_exec(BLECollectorDB, "SELECT DISTINCT vname FROM blemacs where vname!='';");
+
+  Serial.println("Devices MAC's Vendors");
   print_results = true;
-  rc = db_exec(BLECollectorDB, "SELECT DISTINCT ouiname FROM blemacs;");
-  if (rc != SQLITE_OK) {
-    Serial.println("wut?");
-  }
+  rc = db_exec(BLECollectorDB, "SELECT DISTINCT ouiname FROM blemacs where ouiname!='';");
+
+  Serial.println("Counting entries...");
   print_results = false;
+  rc = db_exec(BLECollectorDB, "SELECT appearance, name, address, ouiname, rssi, vdata, vname, uuid, spower FROM blemacs;");
+  Serial.println("DB haz " + String(results) + " entries");
   sqlite3_close(BLECollectorDB);
 
   BLEDevice::init("");
