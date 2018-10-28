@@ -57,12 +57,14 @@
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 
+#include "assets.h"
+
 // because ESP.getFreeHeap() is inconsistent across SDK versions
 // use the primitive... eats 25Kb memory
 #define freeheap heap_caps_get_free_size(MALLOC_CAP_INTERNAL)
-#define SCAN_TIME  10 // seconds
+#define SCAN_TIME  30 // seconds
 #define MAX_FIELD_LEN 32 // max chars returned by field
-#define MAX_ROW_LEN 37 // max chars per line on display
+#define MAX_ROW_LEN 30 // max chars per line on display
 
 #define ICON_X 4
 #define ICON_Y 4
@@ -90,6 +92,7 @@ uint16_t headerArea = 0;
 struct BlueToothDevice {
   int id;
   bool in_db = false;
+  uint16_t deviceColor;
   String appearance = "";
   String name = ""; // device name
   String address = ""; // device mac address
@@ -139,6 +142,55 @@ enum DBMessage {
 };
 
 
+void drawRSSI(int16_t x, int16_t y, int16_t rssi) {
+  uint16_t barColors[4];
+  
+  if(rssi>=-30) {
+    // -30 dBm and more Amazing    - Max achievable signal strength. The client can only be a few feet from the AP to achieve this. Not typical or desirable in the real world.  N/A
+    barColors[0] = WROVER_GREEN;
+    barColors[1] = WROVER_GREEN;
+    barColors[2] = WROVER_GREEN;
+    barColors[3] = WROVER_GREEN;
+  } else if(rssi>=-67) {
+    // between -67 dBm and 31 dBm  - Very Good   Minimum signal strength for applications that require very reliable, timely delivery of data packets.   VoIP/VoWiFi, streaming video
+    barColors[0] = WROVER_GREEN;
+    barColors[1] = WROVER_GREEN;
+    barColors[2] = WROVER_GREEN;
+    barColors[3] = WROVER_WHITE;
+  } else if(rssi>=-70) {
+    // between -70 dBm and -68 dBm - Okay  Minimum signal strength for reliable packet delivery.   Email, web
+    barColors[0] = WROVER_YELLOW;
+    barColors[1] = WROVER_YELLOW;
+    barColors[2] = WROVER_YELLOW;
+    barColors[3] = WROVER_WHITE;
+  } else if(rssi>=-80) {
+    // between -80 dBm and -71 dBm - Not Good  Minimum signal strength for basic connectivity. Packet delivery may be unreliable.  N/A  
+    barColors[0] = WROVER_YELLOW;
+    barColors[1] = WROVER_YELLOW;
+    barColors[2] = WROVER_WHITE;
+    barColors[3] = WROVER_WHITE;
+  } else if(rssi>=-90) {
+    // between -90 dBm and -81 dBm - Unusable  Approaching or drowning in the noise floor. Any functionality is highly unlikely.  
+    barColors[0] = WROVER_RED;
+    barColors[1] = WROVER_WHITE;
+    barColors[2] = WROVER_WHITE;
+    barColors[3] = WROVER_WHITE;
+  }  else {
+    // dude, this sucks
+    barColors[0] = WROVER_RED;
+    barColors[1] = WROVER_WHITE;
+    barColors[2] = WROVER_WHITE;
+    barColors[3] = WROVER_WHITE;
+  }
+
+  tft.fillRect(x,    y+3, 2, 5, barColors[0]);
+  tft.fillRect(x+3,  y+2, 2, 6, barColors[1]);
+  tft.fillRect(x+6,  y+1, 2, 7, barColors[2]);
+  tft.fillRect(x+9,  y,   2, 8, barColors[3]);
+
+}
+
+
 void setupScrollArea(uint16_t TFA, uint16_t BFA, bool clear=false) {
   tft.setCursor(0, TFA);
   tft.setupScrollArea(TFA, BFA);
@@ -183,33 +235,90 @@ struct OutputService {
     Serial.print( str );
     return scroll(str);
   }
-  int printBLECard(BlueToothDevice BLDev) {
-      uint16_t randomcolor = tft.color565(random(128, 255), random(128, 255), random(128, 255));
-      uint16_t pos = 0;
-      tft.setTextColor(randomcolor);
-      //pos+=println("/---------------------------------------");
-      pos+=println(" ");
-
-      if(BLDev.address.length() + BLDev.rssi.length() < MAX_ROW_LEN) {
-        uint8_t len = MAX_ROW_LEN - (BLDev.address.length() + BLDev.rssi.length());
-        pos+=println( "  " + BLDev.address + String(std::string(len, ' ').c_str()) + BLDev.rssi );
-        //String(foo.c_str());
+  int printBLECard(BlueToothDevice BLEDev) {
+    uint16_t randomcolor = tft.color565(random(128, 255), random(128, 255), random(128, 255));
+    uint16_t pos = 0;
+    uint16_t subpos;
+    tft.setTextColor(randomcolor);
+    //pos+=println("/---------------------------------------");
+    subpos = println(" ");
+    pos += subpos;
+    
+    if(BLEDev.address!="" && BLEDev.rssi!="") {
+      uint8_t len = MAX_ROW_LEN - (BLEDev.address.length() + BLEDev.rssi.length());
+      subpos = println( "  " + BLEDev.address + String(std::string(len, ' ').c_str()) + BLEDev.rssi + " dBm" );
+      pos += subpos;
+      drawRSSI(tft_width-18, scrollPosY-subpos, atoi( BLEDev.rssi.c_str() ));
+      if(BLEDev.in_db) {
+        tft.drawJpg( update_jpeg, update_jpeg_len, 138, scrollPosY-subpos, 8,  8);
       } else {
-        if(BLDev.address!="") pos+=println("  Addr: " + BLDev.address);
-        if(BLDev.rssi!="") pos+=println("  RSSI: " + BLDev.rssi);
+        tft.drawJpg( insert_jpeg, insert_jpeg_len, 138, scrollPosY-subpos, 8,  8);
       }
-      
-      if(BLDev.appearance!="") pos+=println("  Appearance: " + BLDev.appearance);
-      if(BLDev.name!="") pos+=println("  Name: " + BLDev.name);
+      if(BLEDev.uuid!="") {
+        tft.drawJpg( service_jpeg, service_jpeg_len, 128, scrollPosY-subpos, 8,  8);
+      }
+    }
+    
+    if(BLEDev.ouiname!="" /*&& BLEDev.ouiname!="[private]"*/) {
+      subpos = println(" ");
+      pos += subpos;
+      subpos = println("      " + BLEDev.ouiname);
+      pos += subpos;
+      tft.drawJpg( nic16_jpeg, nic16_jpeg_len, 10, scrollPosY-subpos, 13, 8);
+    }
+    
+    if(BLEDev.appearance!="") {
+      subpos = println(" ");
+      pos += subpos;
+      subpos = println("  Appearance: " + BLEDev.appearance);
+      pos += subpos;
+    }
+    
+    if(BLEDev.name!="") {
+      subpos = println(" ");
+      pos += subpos;
+      subpos = println("      " + BLEDev.name);
+      pos += subpos;
+      tft.drawJpg( name_jpeg, name_jpeg_len, 12, scrollPosY-subpos, 7,  8);
+    }
+    
+    if(BLEDev.vname!="" /*&& BLEDev.vname!="[unknown]"*/) {
+      subpos = println(" ");
+      pos += subpos;
+      subpos = println("      " + BLEDev.vname);
+      pos += subpos;
+      if(BLEDev.vname=="Apple, Inc.") {
+        tft.drawJpg( apple16_jpeg, apple16_jpeg_len, 12, scrollPosY-subpos, 8,  8);
+      } else if(BLEDev.vname=="IBM Corp.") {
+        tft.drawJpg( ibm8_jpg, ibm8_jpg_len, 10, scrollPosY-subpos, 20,  8);
+      } else if(BLEDev.vname=="Microsoft") {
+        tft.drawJpg( crosoft_jpeg, crosoft_jpeg_len, 12, scrollPosY-subpos, 8,  8);
+      } else {
+        tft.drawJpg( generic_jpeg, generic_jpeg_len, 12, scrollPosY-subpos, 8,  8);
+      }
+    }
 
-      if(BLDev.ouiname!="" && BLDev.ouiname!="[private]") pos+=println("  OUI: " + BLDev.ouiname);
+    subpos = println(" ");
+    pos += subpos;
 
-      //f(BLDev.vdata!="") pos+=println("  HAS VData");
-      if(BLDev.vname!="" && BLDev.vname!="[unknown]") pos+=println("  VName: " + BLDev.vname);
-      if(BLDev.uuid!="") pos+=println("  HAS UUID");
-      if(BLDev.spower!="") pos+=println("  txPow: " + BLDev.spower);
-      pos+=println(" ");
-      return pos;
+    if(scrollPosY-pos>=scrollTopFixedArea) {
+      // no scroll loop point overlap, just render the box
+      tft.drawRect(1, scrollPosY-pos+1, tft_width-2, pos-2, BLEDev.deviceColor);
+    } else {
+      // last block overlaps scroll loop point and has been split
+      int h1 = (scrollTopFixedArea-(scrollPosY-pos));
+      int h2 = pos-h1;
+      int vpos1 = scrollPosY-pos+yArea+1;
+      int vpos2 = scrollPosY-2;
+      tft.drawFastHLine(1,           vpos1,    tft_width-2, BLEDev.deviceColor); // upper hline      
+      tft.drawFastHLine(1,           vpos2,    tft_width-2, BLEDev.deviceColor); // lower hline
+      tft.drawFastVLine(1,           vpos1,    h1,          BLEDev.deviceColor); // upper left vline
+      tft.drawFastVLine(tft_width-2, vpos1,    h1,          BLEDev.deviceColor); // upper right vline
+      tft.drawFastVLine(1,           vpos2-h2, h2,          BLEDev.deviceColor); // upper left vline
+      tft.drawFastVLine(tft_width-2, vpos2-h2, h2,          BLEDev.deviceColor); // upper right vline
+    }
+    
+    return pos;
   }
   int scroll(String str) {
     if(scrollPosY == -1) {
@@ -382,6 +491,7 @@ void showDataSamples() {
   tft.setTextColor(WROVER_PINK);
   db_exec(BLECollectorDB, "SELECT DISTINCT SUBSTR(ouiname,0,32) FROM blemacs where TRIM(ouiname)!=''", true);
   sqlite3_close(BLECollectorDB);
+  Out.println();
 }
 
 
@@ -415,7 +525,9 @@ String getVendor(uint16_t devid) {
 
 
 void resetDB() {
+  Out.println();
   Out.println("Re-creating database");
+  Out.println();
   SD_MMC.remove("/blemacs.db");
   sqlite3_open("/sdcard/blemacs.db", &BLECollectorDB);
   db_exec(BLECollectorDB, "DROP TABLE IF EXISTS blemacs;");
@@ -428,6 +540,7 @@ void resetDB() {
 void pruneDB() {
   unsigned int before_pruning = getEntries();
   tft.setTextColor(WROVER_YELLOW);
+  Out.println();
   Out.println("Pruning DB");
   tft.setTextColor(WROVER_GREEN);
   sqlite3_open("/sdcard/blemacs.db", &BLECollectorDB);
@@ -436,6 +549,7 @@ void pruneDB() {
   entries = getEntries();
   tft.setTextColor(WROVER_YELLOW);
   Out.println("DB haz now " + String(entries) + " entries ("+String(before_pruning-entries)+" removed)");
+  Out.println();
   prune_trigger = 0;
   headerStats();
 }
@@ -443,38 +557,46 @@ void pruneDB() {
 
 void testVendorNames() {
   sqlite3_open("/sdcard/ble-oui.db", &BLEVendorsDB); // https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers
-  Serial.println("Testing Vendor Names Database ...");
+  tft.setTextColor(WROVER_YELLOW);
+  Out.println();
+  Out.println("Testing Vendor Names Database ...");
+  tft.setTextColor(WROVER_ORANGE);
   db_exec(BLEVendorsDB, "SELECT SUBSTR(vendor,0,32)  FROM 'ble-oui' LIMIT 10", true);
   sqlite3_close(BLEVendorsDB);
   // 0x001D = Qualcomm
   String vendorname = getVendor(0x001D);
   if(vendorname!="Qualcomm") {
+    tft.setTextColor(WROVER_RED);
     Out.println(vendorname);
     Out.println("Vendor Names Test failed, looping");
     while(1) yield();
   } else {
+    tft.setTextColor(WROVER_GREEN);
     Out.println("Vendor Names Test success!");
-  }  
+  }
+  Out.println();
 }
 
 
 void testOUI() {
   sqlite3_open("/sdcard/mac-oui-light.db", &OUIVendorsDB); // https://code.wireshark.org/review/gitweb?p=wireshark.git;a=blob_plain;f=manuf
   tft.setTextColor(WROVER_YELLOW);
+  Out.println();
   Out.println("Testing MAC OUI database ...");
   tft.setTextColor(WROVER_ORANGE);
   db_exec(OUIVendorsDB, "SELECT * FROM 'oui-light' limit 10", true);
   sqlite3_close(OUIVendorsDB);
   String ouiname = getOUI("B499BA" /*Hewlett Packard */);
   if(ouiname!="Hewlett Packard") {
-    Out.println(ouiname);
     tft.setTextColor(WROVER_RED);
+    Out.println(ouiname);
     Out.println("MAC OUI Test failed, looping");
     while(1) yield();
   } else {
     tft.setTextColor(WROVER_GREEN);
     Out.println("MAC OUI Test success!");
   }
+  Out.println();
 }
 
 
@@ -593,21 +715,18 @@ int doBLEScan() {
       BLEDev.uuid = String( advertisedDevice.getServiceUUID().toString().c_str() );
     }
     DBMessage insertResult = insertOrUpdate( BLEDev );
-    int h = Out.printBLECard( BLEDev );
-
-    if(scrollPosY-h>=scrollTopFixedArea) {
-      tft.drawRect(1, scrollPosY-h+1, tft_width-2, h-2, WROVER_WHITE);
-    }
-    
+    BLEDev.deviceColor = WROVER_RED;
     switch(insertResult) {
       case INSERTION_SUCCESS:
         entries++;
         prune_trigger++;
         //tft.drawRect(1, scrollPosY-h+1, tft_width-2, h-2, WROVER_WHITE);
+        BLEDev.deviceColor = WROVER_WHITE;
       break;
       case INCREMENT_SUCCESS:
         //tft.drawRect(1, scrollPosY-h+1, tft_width-2, h-2, WROVER_DARKGREY);
         BLEDev.in_db = true;
+        BLEDev.deviceColor = WROVER_DARKGREY;
       break;
       case INCREMENT_FAILED:
       case INSERTION_FAILED:
@@ -616,6 +735,8 @@ int doBLEScan() {
         ESP.restart();
       break;
     }
+
+    Out.printBLECard( BLEDev );
     headerStats();
   }
   return devicesCount;
@@ -648,10 +769,16 @@ void setup() {
   testVendorNames(); // test vendornames database
   showDataSamples(); // print some of the collected values
 
+
+  //drawRSSI(16, 16, -55 );
+  
+
 /*
   // test scrolling
   while(1) {
     Out.println(String(millis()) + " 7a:33:60:9f:30:6c RSSI: -90 VData: 4c0007190102202b990f01000038455070511385375bed94b82f210428 VName: Apple, Inc.  txPow: 0");
+    drawRSSI(random(0, 240), random(0, 320), random(-90, -30));
+    Out.println();
     delay(1000);
   }
 */
