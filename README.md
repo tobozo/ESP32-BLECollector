@@ -30,12 +30,12 @@ More memory errors occur when adding any of the following features:
 - WiFi
 - ArduinoJSON
 - FOTA Update from SD
-- OLED / TFT
+- ~~OLED / TFT~~
 
 Some ideas I'll try to implement in the upcoming changes:
 
 - implement [GATT services](https://www.bluetooth.com/specifications/gatt/services)
-- move the ble-oui query outside the devicecallback (this is causing watchdog messages) and populate between scans
+- ~~move the ble-oui query outside the devicecallback (this is causing watchdog messages) and populate between scans~~
 - reduce the memory problems to avoid restarting the ESP too often (currently restarts when heap is under 120k)
 - have the data easily exported without removing the sd card (wifi, ble, serial)
 
