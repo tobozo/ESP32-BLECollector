@@ -2,7 +2,7 @@
 
 Like a BLE Scanner but with persistence.
 
-  [![ESP32 BLECollector running on Wrover-Kit](https://img.youtube.com/vi/434LDAfpGjE/0.jpg)](https://www.youtube.com/watch?v=434LDAfpGjE)
+  [![ESP32 BLECollector running on Wrover-Kit](https://img.youtube.com/vi/434LDAfpGjE/0.jpg?v=2)](https://www.youtube.com/watch?v=434LDAfpGjE)
 
 
 All BLE data found by the [BLE Scanner](https://github.com/nkolban/ESP32_BLE_Arduino) is collected into a [sqlite3](https://github.com/siara-cc/esp32_arduino_sqlite3_lib) format on the SD Card.
