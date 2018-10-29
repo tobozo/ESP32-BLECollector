@@ -30,11 +30,13 @@ More memory errors occur when adding any of the following features:
 - WiFi
 - ArduinoJSON
 - FOTA Update from SD
+- GPS+NMEA
 - ~~OLED / TFT~~
 
 Some ideas I'll try to implement in the upcoming changes:
 
 - implement [GATT services](https://www.bluetooth.com/specifications/gatt/services)
+- add timestamps + GPS Coords to entries for better pruning [as suggested by /u/playaspect](https://www.reddit.com/r/esp8266/comments/9s594c/esp32blecollector_ble_scanner_data_persistence_on/e8nipr6/?context=3)
 - ~~move the ble-oui query outside the devicecallback (this is causing watchdog messages) and populate between scans~~
 - reduce the memory problems to avoid restarting the ESP too often (currently restarts when heap is under 120k)
 - have the data easily exported without removing the sd card (wifi, ble, serial)
