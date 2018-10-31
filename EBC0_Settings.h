@@ -101,8 +101,9 @@ void updateTimeString() {
   nowDateTime = RTC.now();
 
   unsigned long seconds_since_boot = millis() / 1000;
-  uint16_t mm = seconds_since_boot / 60;
-  uint16_t hh = mm / 60;
+  uint32_t minutes_since_boot = seconds_since_boot / 60;
+  uint32_t mm = minutes_since_boot % 60;
+  uint32_t hh = minutes_since_boot / 60;
   sprintf(UpTimeString, " %02d:%02d ", hh, mm);
   // calculate a date which is 7 days and 30 seconds into the future
   // DateTime future (now + TimeSpan(7,12,30,6));
