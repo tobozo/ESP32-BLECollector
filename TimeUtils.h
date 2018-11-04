@@ -30,7 +30,7 @@
 */
 
 bool RTC_is_running = false;
-static char timeString[13] = "00:00"; // %02d:%02d
+static char timeString[13] = "--:--"; // %02d:%02d
 static char UpTimeString[13] = "00:00"; // %02d:%02d
 #if RTC_PROFILE > HOBO
 static DateTime nowDateTime;

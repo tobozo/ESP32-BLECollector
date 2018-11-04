@@ -46,7 +46,7 @@ class ScrollableOutput {
     uint16_t w_tmp, h_tmp;
     int scrollPosY = -1;
     int scrollPosX = -1;
-  
+    /*
     int printf(char* fmt ...) { // printf for the poor :-)
       char buf[1024]; // resulting string limited to 1024 chars
       va_list args;
@@ -54,7 +54,7 @@ class ScrollableOutput {
       vsnprintf(buf, 1024, fmt, args);
       va_end (args);
       return print(buf);
-    }
+    }*/
     int println(String str = " ") { 
       // force a space to increment scroll on the display
       return print(str + "\n");

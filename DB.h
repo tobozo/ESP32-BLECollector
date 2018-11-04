@@ -59,7 +59,7 @@ const char *countEntriesQuery = "SELECT count(*) FROM blemacs;";
 const char *dropTableQuery   = "DROP TABLE IF EXISTS blemacs;";
 const char *createTableQuery = "CREATE TABLE IF NOT EXISTS blemacs(id INTEGER, appearance, name, address, ouiname, rssi, vdata, vname, uuid, spower, hits INTEGER, created_at timestamp NOT NULL DEFAULT current_timestamp, updated_at timestamp NOT NULL DEFAULT current_timestamp);";
 // used by pruneDB()
-const char *pruneTableQuery = "DELETE FROM blemacs WHERE appearance='' AND name='' AND spower='0' AND uuid='' AND ouiname='[private]' AND (vname LIKE 'Apple%' or vname='[unknown]')";
+const char *pruneTableQuery = "DELETE FROM blemacs WHERE appearance='' AND name='' AND uuid='' AND ouiname='[private]' AND (vname LIKE 'Apple%' or vname='[unknown]')";
 // used by testVendorNames()
 const char *testVendorNamesQuery = "SELECT SUBSTR(vendor,0,32)  FROM 'ble-oui' LIMIT 10";
 // used by testOUI()
@@ -69,7 +69,9 @@ const char* insertQueryTemplate = "INSERT INTO blemacs(appearance, name, address
 static char insertQuery[1024]; // stack overflow ? pray that 1024 is enough :D
 
 // used by getVendor()
-#define VENDORCACHE_SIZE 32
+#ifndef VENDORCACHE_SIZE // override this from Settings.h
+#define VENDORCACHE_SIZE 16
+#endif
 struct VendorCacheStruct {
   uint16_t devid;
   String vendor;
@@ -79,10 +81,12 @@ byte VendorCacheIndex = 0; // index in the circular buffer
 static int VendorCacheHit = 0;
 
 // used by getOUI()
+#ifndef OUICACHE_SIZE // override this from Settings.h
 #define OUICACHE_SIZE 32
+#endif
 struct OUICacheStruct {
-  String mac = "";
-  String assignment = "";
+  String mac;
+  String assignment;
 };
 OUICacheStruct OuiCache[OUICACHE_SIZE];
 byte OuiCacheIndex = 0; // index in the circular buffer
@@ -93,6 +97,7 @@ enum DBMessage {
   INSERTION_FAILED = -2,
   INCREMENT_FAILED = -3,
   INSERTION_IGNORED = -4,
+  DB_IS_OOM = -5,
   INSERTION_SUCCESS = 1,
   INCREMENT_SUCCESS = 2
 };
@@ -122,8 +127,8 @@ class DBUtils {
       }
       sqlite3_initialize();
       initial_free_heap = freeheap;
+      entries = getEntries();
       //resetDB();
-      pruneDB(); // remove unnecessary/redundant entries
       if ( resetReason == 12)  { // =  SW_CPU_RESET
         // CPU was reset by software, don't perform tests for faster load
       } else {
@@ -132,16 +137,16 @@ class DBUtils {
         Out.println();
         Out.println("Testing Database...");
         Out.println();
+        pruneDB(); // remove unnecessary/redundant entries
         delay(2000);
         // initial boot, perform some tests
         testOUI(); // test oui database
         testVendorNames(); // test vendornames database
         showDataSamples(); // print some of the collected values (WARN: memory hungry)
         // restart after test to clear some memory
-        ESP.restart();
+        //ESP.restart();
       }
     }
-
 
     void maintain() {
       if (prune_trigger > prune_threshold) {
@@ -151,22 +156,31 @@ class DBUtils {
 
 
     int open(DBName dbName) {
-      int rc;
+     int rc;
       switch(dbName) {
         case BLE_COLLECTOR_DB:    rc = sqlite3_open("/sdcard/blemacs.db", &BLECollectorDB); break;// will be created upon first boot
         case MAC_OUI_NAMES_DB:    rc = sqlite3_open("/sdcard/mac-oui-light.db", &OUIVendorsDB); break;// https://code.wireshark.org/review/gitweb?p=wireshark.git;a=blob_plain;f=manuf
         case BLE_VENDOR_NAMES_DB: rc = sqlite3_open("/sdcard/ble-oui.db", &BLEVendorsDB); break;// https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers
         default: Serial.println("Can't open null DB"); UI.dbStateIcon(-1); return rc;
       }
-      //int rc = sqlite3_open(DBHive[dbName].filename, &DBHive[dbName].db);
       if (rc) {
-        Serial.println("Can't open database");//, sqlite3_errmsg(*&DBHive[dbName].db));
+        Serial.println("Can't open database " + String(dbName));
+        // SD Card removed ? File corruption ? OOM ?
+        // isOOM = true;
         UI.dbStateIcon(-1);
         return rc;
       } else {
         //Serial.println("Opened database successfully");
         UI.dbStateIcon(1);
       }
+/*
+      if( freeheap + heap_tolerance < min_free_heap || isOOM ) {
+        // cowardly refusing to perform a query
+        Out.println("[DB OOM] restarting");
+        delay(1000);
+        ESP.restart();
+      }
+*/
       return rc;
     }
 
@@ -192,16 +206,17 @@ class DBUtils {
     // checks if a BLE Device exists, returns its cache index if found
     int deviceExists(String bleDeviceAddress) {
       results = 0;
-      //sqlite3_open("/sdcard/blemacs.db", &BLECollectorDB);
       open(BLE_COLLECTOR_DB);
-      String requestStr = "SELECT * FROM blemacs WHERE address='" + bleDeviceAddress + "'";
+      String requestStr = "SELECT appearance, name, address, ouiname, rssi, vname, uuid FROM blemacs WHERE address='" + bleDeviceAddress + "'";
       int rc = sqlite3_exec(BLECollectorDB, requestStr.c_str(), BLEDev_db_callback, (void*)dataBLE, &zErrMsg);
       if (rc != SQLITE_OK) {
+        error(String(zErrMsg));
         //Out.printf("SQL error: %s\n", msg);
-        Out.println("SQL error:"+String(zErrMsg));
+        //Out.println("SQL error:"+String(zErrMsg));
         sqlite3_free(zErrMsg);
+        close(BLE_COLLECTOR_DB);
+        return -2;
       }
-      //sqlite3_close(BLECollectorDB);
       close(BLE_COLLECTOR_DB);
       // if the device exists, it's been loaded into BLEDevCache[BLEDevCacheIndex]
       return results>0 ? BLEDevCacheIndex : -1;
@@ -213,6 +228,7 @@ class DBUtils {
       results++;
       BLEDevCacheIndex++;
       BLEDevCacheIndex = BLEDevCacheIndex % BLEDEVCACHE_SIZE;
+      BLEDevCache[BLEDevCacheIndex].reset(); // avoid mixing new and old data
       if(results < BLEDEVCACHE_SIZE) {
         int i;
         for (i = 0; i < argc; i++) {
@@ -264,6 +280,20 @@ class DBUtils {
     }
 
 
+    void error(String zErrMsg) {
+      if (zErrMsg == "database disk image is malformed") {
+        resetDB();
+      } else if (zErrMsg == "out of memory") {
+        isOOM = true;
+        //ESP.restart();
+      } else {
+        Serial.println("SQL error: "+zErrMsg);
+        UI.headerStats(zErrMsg);
+        delay(1000); 
+      }         
+    }
+
+
     int db_exec(sqlite3 *db, const char *sql, bool _print_results = false, char *_colNeedle = 0) {
       results = 0;
       print_results = _print_results;
@@ -273,16 +303,7 @@ class DBUtils {
       //long start = micros();
       int rc = sqlite3_exec(db, sql, db_callback, (void*)data, &zErrMsg);
       if (rc != SQLITE_OK) {
-        if (String(zErrMsg) == "database disk image is malformed") {
-          resetDB();
-        } else if (String(zErrMsg) == "out of memory") {
-          isOOM = true;
-          //ESP.restart();
-        } else {
-          Serial.println("SQL error: "+String(zErrMsg));
-          UI.headerStats(String(zErrMsg));
-          delay(1000);          
-        }
+        error(String(zErrMsg));
         sqlite3_free(zErrMsg);
       } else {
         //Serial.printf("Operation done successfully\n");
@@ -292,28 +313,32 @@ class DBUtils {
     }
 
 
-    DBMessage insertBTDevice(BlueToothDevice &bleDevice) {
-      if( bleDevice.appearance=="" 
-       && bleDevice.name=="" 
-       && bleDevice.spower==""
-       && bleDevice.uuid=="" 
-       && bleDevice.ouiname==""
-       && bleDevice.vname==""
+    DBMessage insertBTDevice(byte cacheindex) {
+      if(isOOM) {
+        // cowardly refusing to use DB when OOM
+        return DB_IS_OOM;
+      }
+      if( BLEDevCache[cacheindex].appearance=="" 
+       && BLEDevCache[cacheindex].name=="" 
+       //&& bleDevice.spower==""
+       && BLEDevCache[cacheindex].uuid=="" 
+       && BLEDevCache[cacheindex].ouiname==""
+       && BLEDevCache[cacheindex].vname==""
        ) {
         // cowardly refusing to insert empty result
         return INSERTION_IGNORED;
       }
       open(BLE_COLLECTOR_DB);
       sprintf(insertQuery, insertQueryTemplate,
-        escape(bleDevice.appearance).c_str(),
-        escape(bleDevice.name).c_str(),
-        escape(bleDevice.address).c_str(),
-        escape(bleDevice.ouiname).c_str(),
-        escape(bleDevice.rssi).c_str(),
-        escape(bleDevice.vdata).c_str(),
-        escape(bleDevice.vname).c_str(),
-        escape(bleDevice.uuid).c_str(),
-        escape(bleDevice.spower).c_str()
+        escape(BLEDevCache[cacheindex].appearance).c_str(),
+        escape(BLEDevCache[cacheindex].name).c_str(),
+        escape(BLEDevCache[cacheindex].address).c_str(),
+        escape(BLEDevCache[cacheindex].ouiname).c_str(),
+        escape(BLEDevCache[cacheindex].rssi).c_str(),
+        escape(BLEDevCache[cacheindex].vdata).c_str(),
+        escape(BLEDevCache[cacheindex].vname).c_str(),
+        escape(BLEDevCache[cacheindex].uuid).c_str(),
+        ""//escape(bleDevice.spower).c_str()
       );
       
       int rc = db_exec(BLECollectorDB, insertQuery);

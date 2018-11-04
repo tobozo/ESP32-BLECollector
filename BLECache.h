@@ -33,8 +33,10 @@
 static String lastPrintedMac[BLECARD_MAC_CACHE_SIZE]; // BLECard screen cache, where the mac addresses are stored
 static byte lastPrintedMacIndex = 0; // index in the circular buffer
 
+// TODO: store this in psram
+
 struct BlueToothDevice {
-  int id;
+  //int id;
   bool in_db = false;
   uint16_t borderColor;
   uint16_t textColor;
@@ -46,12 +48,26 @@ struct BlueToothDevice {
   String vdata = ""; // manufacturer data
   String vname = ""; // manufacturer name (from manufacturer data, see ble-oui.db)
   String uuid = ""; // service uuid
-  String spower = "";
-  time_t created_at;
-  time_t updated_at;
+  //String spower = "";
+  //time_t created_at;
+  //time_t updated_at;
+  void reset() {
+    in_db = false;
+    borderColor;
+    textColor;
+    appearance = "";
+    name = "";
+    address = "";
+    ouiname = "";
+    rssi = "";
+    vdata = "";
+    vname = "";
+    uuid = "";
+    //spower = "";
+  }
   void set(String prop, String val) {
     bool updated = false;
-    if(prop=="id")              { id = val.toInt(); updated = true; }
+    if(prop=="id")              { /*id = val.toInt();*/ updated = true; }
     else if(prop=="appearance") { appearance = val; updated = true; }
     else if(prop=="name")       { name = val;       updated = true; }
     else if(prop=="address")    { address = val;    updated = true; }
@@ -60,7 +76,7 @@ struct BlueToothDevice {
     else if(prop=="vdata")      { vdata = val;      updated = true; }
     else if(prop=="vname")      { vname = val;      updated = true; }
     else if(prop=="uuid")       { uuid = val;       updated = true; }
-    else if(prop=="spower")     { spower = val;     updated = true; }
+    //else if(prop=="spower")     { spower = val;     updated = true; }
     //else if(prop=="created_at") { created_at = val; updated = true; }
     //else if(prop=="updated_at") { created_at = val; updated = true; }
     else { }
@@ -88,7 +104,9 @@ struct BlueToothDevice {
 
 };
 
-#define BLEDEVCACHE_SIZE 16 // don't store more than the memory can fit
+#ifndef BLEDEVCACHE_SIZE // override this from Settings.h
+#define BLEDEVCACHE_SIZE 10
+#endif
 static BlueToothDevice BLEDevCache[BLEDEVCACHE_SIZE]; // will store database results here 
 static byte BLEDevCacheIndex = 0; // index in the circular buffer
 

@@ -39,15 +39,18 @@
 
 #define HOBO 1 // No TinyRTC module in your build, only uptime will be displayed
 #define ROGUE 2 // TinyRTC module adjusted after flashing, no WiFi, no NTP Sync
-#define CHRONOMANIAC 3 // TinyRTC module adjusts itself via NTP (separate binary)
+#define CHRONOMANIAC 3 // TinyRTC module adjusts itself via NTP (by sd-loading a separate binary, see NTP_MENU)
 #define NTP_MENU 4 // use this to produce the NTPMenu.bin, only if you have a RTC module !!
 
 // edit this value to fit your mode
-#define RTC_PROFILE HOBO
+#define RTC_PROFILE CHRONOMANIAC
 //#define RTC_PROFILE NTP_MENU // to build the NTPMenu.bin
 //#define RTC_PROFILE CHRONOMANIAC // to build the BLEMenu.bin
 
-#define SCAN_TIME  30 // seconds
+#define SCAN_TIME  30 // seconds minimum
+#define BLEDEVCACHE_SIZE 16 // use some heap to cache BLECards, min = 5, max = 64, higher value = smaller uptime
+#define VENDORCACHE_SIZE 32 // use some heap to cache vendor query responses, min = 5, max = 32
+#define OUICACHE_SIZE 32 // use some heap to cache mac query responses, min = 16, max = 64
 
 // don't edit anything below this
 #if RTC_PROFILE==HOBO
@@ -91,6 +94,30 @@ WROVER_KIT_LCD tft;
   #include <stdlib.h>
   #include <sqlite3.h> // https://github.com/siara-cc/esp32_arduino_sqlite3_lib
 #endif
+
+#include <Preferences.h>
+Preferences preferences;
+#define MAX_ITEMS_IN_PREFS 10 // this will fit in the 100k of NVRAM so don't assign a too high value or it will fail
+#if MAX_ITEMS_IN_PREFS > BLEDEVCACHE_SIZE
+  #error "MAX_ITEMS_IN_PREFS must be inferior or equal to BLEDEVCACHE_SIZE in Settings.h"
+#endif
+
+
+/*
+ * 
+ * HEAP Cache
+ * NVS Cache
+ * SQLite3 DB R/O
+ * SQLite3 DB R/W
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ * 
+ */
+
 
 #include <FS.h>
 #include <SD_MMC.h>

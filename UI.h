@@ -49,6 +49,10 @@
 #define NOT_ANONYMOUS_COLOR tft.color565(0xee, 0xee, 0xee)
 // one carefully chosen blue
 #define BLUETOOTH_COLOR tft.color565(0x14, 0x54, 0xf0)
+
+#define WROVER_DARKORANGE tft.color565(0x80, 0x40, 0x00)
+
+
 // sizing the UI
 #define HEADER_HEIGHT 40 // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
 #define FOOTER_HEIGHT 40 // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
@@ -91,6 +95,18 @@ class UIUtils {
 
 
     void init() {
+
+      preferences.begin("BLECollector", false);
+      unsigned int counter = preferences.getUInt("counter", 0);
+      // Increase counter by 1
+      counter++;
+      // Print the counter to Serial Monitor
+      Serial.printf("Current counter value: %u\n", counter);
+      // Store the counter to the Preferences
+      preferences.putUInt("counter", counter);
+      preferences.end();
+
+      
       bool clearScreen = true;
       if (resetReason == 12) { // SW Reset
         clearScreen = false;
@@ -193,11 +209,11 @@ class UIUtils {
       alignTextAt(s_heap.c_str(), 128, 4, WROVER_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT);
       if (status != "") {
         Serial.println(status);
-        tft.fillRect(0, 18, Out.width, 8, HEADER_BGCOLOR); // clear whole area
+        tft.fillRect(0, 18, Out.width, 8, HEADER_BGCOLOR); // clear whole message status area
         alignTextAt((" " + status).c_str(), 0, 18, WROVER_YELLOW, HEADER_BGCOLOR, ALIGN_LEFT);
-        tft.drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, 126, 0, 28,  28);
       }
       alignTextAt(s_entries.c_str(), 128, 18, WROVER_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT);
+      tft.drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, 126, 0, 28,  28);
       tft.setCursor(posX, posY);
     }
 
@@ -280,11 +296,12 @@ class UIUtils {
 
     static void heapGraph(void * parameter) {
       uint32_t lastfreeheap;
+      uint32_t toleranceheap = min_free_heap + heap_tolerance;
       uint8_t i = 0;
       while (1) {
         // only redraw if the heap changed
         if(lastfreeheap!=freeheap) {
-          heapmap[++heapindex] = freeheap;
+          heapmap[heapindex++] = freeheap;
           heapindex = heapindex % HEAPMAP_BUFFLEN;
           lastfreeheap = freeheap;
         } else {
@@ -294,6 +311,9 @@ class UIUtils {
         uint16_t GRAPH_COLOR = WROVER_WHITE;
         uint32_t graphMin = min_free_heap;
         uint32_t graphMax = graphMin;
+        uint32_t toleranceline = GRAPH_LINE_HEIGHT;
+        uint32_t minline = 0;
+        uint16_t GRAPH_BG_COLOR = WROVER_BLACK;
         // dynamic scaling
         for (i = 0; i < GRAPH_LINE_WIDTH; i++) {
           int thisindex = int(heapindex - GRAPH_LINE_WIDTH + i + HEAPMAP_BUFFLEN) % HEAPMAP_BUFFLEN;
@@ -305,26 +325,61 @@ class UIUtils {
             graphMax = heapval;
           }
         }
+        /* min anx max lines */
+        if(graphMin!=graphMax) {
+          toleranceline;// = map(toleranceheap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
+          minline = map(min_free_heap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
+          if(toleranceheap > graphMax) {
+            GRAPH_BG_COLOR = WROVER_ORANGE;
+            toleranceline = GRAPH_LINE_HEIGHT;
+          } else if( toleranceheap < graphMin ) {
+            toleranceline = 0;
+          } else {
+            toleranceline = map(toleranceheap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
+          }
+        }
+        /*
+        Serial.printf("graphMin: %s, graphMax: %s, toleranceheap: %s, toleranceline: %s\n",
+          graphMin,
+          graphMax,
+          toleranceheap,
+          toleranceline
+        );*/
         // draw graph
         for (i = 0; i < GRAPH_LINE_WIDTH; i++) {
           int thisindex = int(heapindex - GRAPH_LINE_WIDTH + i + HEAPMAP_BUFFLEN) % HEAPMAP_BUFFLEN;
           uint32_t heapval = heapmap[thisindex];
-          if( heapval > min_free_heap + heap_tolerance ) {
+          if( heapval > toleranceheap ) {
+            // nominal
             GRAPH_COLOR = WROVER_GREEN;
+            GRAPH_BG_COLOR = WROVER_DARKGREY;
           } else {
-            if( heapval > min_free_heap ) GRAPH_COLOR = WROVER_DARKGREEN;
-            else GRAPH_COLOR = WROVER_ORANGE;
+            if( heapval > min_free_heap ) {
+              // in tolerance zone
+              GRAPH_COLOR = WROVER_YELLOW;
+              GRAPH_BG_COLOR = WROVER_DARKGREEN;
+            } else {
+              // under tolerance zone
+              if(heapval > 0) {
+                GRAPH_COLOR = WROVER_RED;
+                GRAPH_BG_COLOR = WROVER_ORANGE;
+              } else {
+                // no record
+                GRAPH_BG_COLOR = WROVER_BLACK;
+              }
+            }
           }
-          tft.drawLine( GRAPH_X + i, GRAPH_Y, GRAPH_X + i, GRAPH_Y + GRAPH_LINE_HEIGHT, WROVER_BLACK );
+          // fill background
+          tft.drawLine( GRAPH_X + i, GRAPH_Y, GRAPH_X + i, GRAPH_Y + GRAPH_LINE_HEIGHT, GRAPH_BG_COLOR );
           if ( heapval > 0 ) {
             uint32_t lineheight = map(heapval, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
             tft.drawLine( GRAPH_X + i, GRAPH_Y + GRAPH_LINE_HEIGHT, GRAPH_X + i, GRAPH_Y + GRAPH_LINE_HEIGHT - lineheight, GRAPH_COLOR );
           }
         }
         if(graphMin!=graphMax) {
-          uint32_t toleranceline = map(min_free_heap + heap_tolerance, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
-          tft.drawFastHLine( GRAPH_X, GRAPH_Y + GRAPH_LINE_HEIGHT - toleranceline, GRAPH_LINE_WIDTH, WROVER_DARKGREY );
-          uint32_t minline = map(min_free_heap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
+          //uint32_t toleranceline = map(min_free_heap + heap_tolerance, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
+          //uint32_t minline = map(min_free_heap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
+          tft.drawFastHLine( GRAPH_X, GRAPH_Y + GRAPH_LINE_HEIGHT - toleranceline, GRAPH_LINE_WIDTH, WROVER_LIGHTGREY );
           tft.drawFastHLine( GRAPH_X, GRAPH_Y + GRAPH_LINE_HEIGHT - minline, GRAPH_LINE_WIDTH, WROVER_RED );
         }
       }
@@ -516,10 +571,10 @@ class UIUtils {
         barColors[2] = bgcolor;
         barColors[3] = bgcolor;
       }
-      tft.fillRect(x,     y + 3, 2, 5, barColors[0]);
-      tft.fillRect(x + 3, y + 2, 2, 6, barColors[1]);
-      tft.fillRect(x + 6, y + 1, 2, 7, barColors[2]);
-      tft.fillRect(x + 9, y,     2, 8, barColors[3]);
+      tft.fillRect(x,     y + 4, 2, 4, barColors[0]);
+      tft.fillRect(x + 3, y + 3, 2, 5, barColors[1]);
+      tft.fillRect(x + 6, y + 2, 2, 6, barColors[2]);
+      tft.fillRect(x + 9, y + 1, 2, 7, barColors[3]);
     }  
 
 };
