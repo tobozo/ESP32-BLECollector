@@ -128,9 +128,9 @@ class DBUtils {
       sqlite3_initialize();
       initial_free_heap = freeheap;
       entries = getEntries();
-      //resetDB();
+      //resetDB(); // use this when db is corrupt (shit happens)
       if ( resetReason == 12)  { // =  SW_CPU_RESET
-        // CPU was reset by software, don't perform tests for faster load
+        // CPU was reset by software, don't perform tests (faster load)
       } else {
         Out.println();
         Out.println("Cold boot detected");
@@ -143,7 +143,7 @@ class DBUtils {
         testOUI(); // test oui database
         testVendorNames(); // test vendornames database
         showDataSamples(); // print some of the collected values (WARN: memory hungry)
-        // restart after test to clear some memory
+        // let the BLE.init() handle the restart
         //ESP.restart();
       }
     }
@@ -173,14 +173,6 @@ class DBUtils {
         //Serial.println("Opened database successfully");
         UI.dbStateIcon(1);
       }
-/*
-      if( freeheap + heap_tolerance < min_free_heap || isOOM ) {
-        // cowardly refusing to perform a query
-        Out.println("[DB OOM] restarting");
-        delay(1000);
-        ESP.restart();
-      }
-*/
       return rc;
     }
 
@@ -281,16 +273,15 @@ class DBUtils {
 
 
     void error(String zErrMsg) {
+      Serial.println("SQL error: "+zErrMsg);
       if (zErrMsg == "database disk image is malformed") {
         resetDB();
       } else if (zErrMsg == "out of memory") {
         isOOM = true;
-        //ESP.restart();
       } else {
-        Serial.println("SQL error: "+zErrMsg);
         UI.headerStats(zErrMsg);
         delay(1000); 
-      }         
+      }
     }
 
 
@@ -343,8 +334,7 @@ class DBUtils {
       
       int rc = db_exec(BLECollectorDB, insertQuery);
       if (rc != SQLITE_OK) {
-        Serial.println("Heap level:" + String(freeheap));
-        //Serial.println(requestStr);
+        Serial.println("SQlite Error occured when heap level was at:" + String(freeheap));
         Serial.println(insertQuery);
         close(BLE_COLLECTOR_DB);
         return INSERTION_FAILED;

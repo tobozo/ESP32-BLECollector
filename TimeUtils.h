@@ -38,8 +38,17 @@ static DateTime nowDateTime;
 
 void updateTimeString() {
   #if RTC_PROFILE > HOBO
-  nowDateTime = RTC.now();
-  sprintf(timeString, " %02d:%02d ", nowDateTime.hour(), nowDateTime.minute());
+    nowDateTime = RTC.now();
+    sprintf(timeString, " %02d:%02d ", nowDateTime.hour(), nowDateTime.minute());
+    #if RTC_PROFILE == CHRONOMANIAC  // chronomaniac mode
+      if (RTC_is_running) {
+        if( millis()/1000 > 86400 ) {
+          // time to NTP Sync ?
+          updateFromFS( SD_MMC, "/NTPMenu.bin" );
+          ESP.restart();
+        }
+      }
+    #endif
   #endif
   unsigned long seconds_since_boot = millis() / 1000;
   uint32_t minutes_since_boot = seconds_since_boot / 60;
@@ -48,20 +57,6 @@ void updateTimeString() {
   sprintf(UpTimeString, " %02d:%02d ", hh, mm);
   Serial.println("Time:" + String(timeString) + " Uptime:" + String(UpTimeString));
 }
-
-
-void checkForTimeUpdate() {
-  #ifndef BUILD_NTPMENU_BIN
-    #if RTC_PROFILE == CHRONOMANIAC  // chronomaniac mode
-    if( millis()/1000 > 86400 ) {
-      // time to NTP Sync ?
-      updateFromFS( SD_MMC, "/NTPMenu.bin" );
-      ESP.restart();
-    }
-    #endif
-  #endif
-}
-
 
 
 bool RTCSetup() {

@@ -150,10 +150,7 @@ class UIUtils {
         delay(1000);
         ESP.restart();
       }
-      if (RTC_is_running) {
-        updateTimeString();
-        checkForTimeUpdate();
-      }
+      updateTimeString();
     }
 
 

@@ -196,10 +196,8 @@ class BLEScanUtils {
       // Store the new counter to the Preferences
       preferences.putUInt("freezecounter", freezecounter);
       preferences.end();
-
-      Serial.printf("****** Freezing cache index %d into pref index %d : %s\n", cacheindex, freezecounter, BLEDevCache[cacheindex].address.c_str());
-      
       String freezename = "cache-"+String(freezecounter);
+      Serial.printf("****** Freezing cache index %d into NVS as index %s : %s\n", cacheindex, freezename, BLEDevCache[cacheindex].address.c_str());
       preferences.begin(freezename.c_str(), false);
       preferences.putBool("appearance",   BLEDevCache[cacheindex].in_db);
       preferences.putString("appearance", BLEDevCache[cacheindex].appearance);
@@ -314,6 +312,7 @@ class BLEScanUtils {
           cacheIndex = deviceIndexIfExists;
           BLEDevCache[cacheIndex].borderColor = IN_CACHE_COLOR;
           BLEDevCache[cacheIndex].vdata = ""; // hack to free some heap ? this has already been decoded anyway
+          BLEDevCache[cacheIndex].textColor = isAnonymousDevice( cacheIndex ) ? ANONYMOUS_COLOR : NOT_ANONYMOUS_COLOR;
           headerMessage = "Cache "+String(cacheIndex)+"#";
         } else {
           if(!DB.isOOM) {
@@ -329,12 +328,12 @@ class BLEScanUtils {
             if(DB.isOOM) { // newfound but OOM, gather what's left of data without DB
               cacheIndex = store( advertisedDevice, false ); // store data in cache but don't populate
               // freeze it partially ...
+              BLEDevCache[cacheIndex].in_db = false;
               byte prefIndex = freeze( cacheIndex );
               // don't render it (will be thawed, populated, inserted and rendered on reboot)
               continue;
             } else { // newfound
               cacheIndex = store( advertisedDevice ); // store data in cache
-              BLEDevCache[cacheIndex].borderColor = NOT_IN_CACHE_COLOR;
               if(!isAnonymousDevice( cacheIndex )) {
                 if(DB.insertBTDevice( cacheIndex ) == INSERTION_SUCCESS) {
                   entries++;
@@ -342,8 +341,9 @@ class BLEScanUtils {
                   newDevicesCount++;
                   BLEDevCache[cacheIndex].in_db = true;
                   BLEDevCache[cacheIndex].textColor = NOT_ANONYMOUS_COLOR;
+                  BLEDevCache[cacheIndex].borderColor = NOT_IN_CACHE_COLOR;
                   headerMessage = "Inserted "+String(cacheIndex)+"#";
-                  byte prefIndex = freeze( cacheIndex );
+                  //byte prefIndex = freeze( cacheIndex );
                 } else {
                   // DB Error, freeze it in NVS!
                   BLEDevCache[cacheIndex].in_db = false;
@@ -351,76 +351,23 @@ class BLEScanUtils {
                   // don't render it (will be thawed, rendered and inserted on reboot)
                   continue;
                 }
-
               } else {
+                BLEDevCache[cacheIndex].borderColor = IN_CACHE_COLOR;
                 BLEDevCache[cacheIndex].textColor = ANONYMOUS_COLOR;
                 AnonymousCacheHit++;
                 headerMessage = "Anon "+String(cacheIndex)+"#";
               }
             }
-
           }
         }
 
-        /*
-        // check if device is in cache or DB
-        DeviceCacheStatus BLEDevStatus = deviceCacheStatus( address );
-        
-        if ( BLEDevStatus.exists && BLEDevStatus.index >=0 ) { // exists in cache (and maybe in DB too)
-          cacheIndex = BLEDevStatus.index;
-          BLEDevCache[cacheIndex].vdata = ""; // hack to free some heap ? this has already been decoded anyway
-          if( isAnonymousDevice( cacheIndex ) ) {
-            BLEDevCache[cacheIndex].borderColor = IN_CACHE_COLOR;
-            BLEDevCache[cacheIndex].textColor = ANONYMOUS_COLOR;
-            //Serial.println("CACHED ANONYMOUS: " + BLEDevCache[cacheIndex].address);
-          } else {
-            BLEDevCache[cacheIndex].borderColor = IN_CACHE_COLOR;
-            BLEDevCache[cacheIndex].textColor = NOT_ANONYMOUS_COLOR;
-            //Serial.println("CACHED NOT ANONYMOUS: " + BLEDevCache[cacheIndex].address);
-          }
-          headerMessage = "Result #";
-        } else { // not in cache, will copy data
-          
-          if(BLEDevStatus.index == -2 || DB.isOOM) {
-            // OOM occured, store incomplete info in nvram and flag them for completion at reboot
-            cacheIndex = store( advertisedDevice, false ); // store data in cache but don't populate  
-          } else {
-            cacheIndex = store( advertisedDevice ); // store data in cache
-          }
-          byte prefIndex = freeze( cacheIndex );
-
-          if(isAnonymousDevice( cacheIndex )) {
-            BLEDevCache[cacheIndex].borderColor = NOT_IN_CACHE_COLOR;
-            BLEDevCache[cacheIndex].textColor = ANONYMOUS_COLOR;
-            //Serial.println("SKIPPED ANONYMOUS: " + BLEDevCache[cacheIndex].address);
-            headerMessage = "Skipped #";
-            newDevicesCount++;
-            AnonymousCacheHit++;
-          } else {
-            if(DB.insertBTDevice( cacheIndex ) == INSERTION_SUCCESS) {
-              entries++;
-              prune_trigger++;
-              newDevicesCount++;
-              BLEDevCache[cacheIndex].in_db = true;
-              BLEDevCache[cacheIndex].borderColor = NOT_IN_CACHE_COLOR;
-              BLEDevCache[cacheIndex].textColor = NOT_ANONYMOUS_COLOR;
-              //Serial.println("INSERTED NON ANONYMOUS: " + BLEDevCache[cacheIndex].address);
-              headerMessage = "Inserted #";
-            } else { // out of memory ?
-              UI.headerStats("DB Error..!");
-              BLEDevCache[cacheIndex].borderColor = WROVER_RED;
-              BLEDevCache[cacheIndex].textColor = WROVER_RED;
-              //Serial.println("FAILED INSERTING NON ANONYMOUS: " + BLEDevCache[cacheIndex].address);
-            }
-          }
-        }*/
         UI.headerStats(headerMessage + String(i));
         UI.printBLECard( BLEDevCache[cacheIndex] ); // TODO : procrastinate this
         UI.footerStats();
       }
       
       if( DB.isOOM ) {
-        Out.println("[DB ERROR] restarting");
+        Serial.println("[DB ERROR] restarting");
         delay(1000);
         ESP.restart();
       }

@@ -43,7 +43,7 @@
 #define NTP_MENU 4 // use this to produce the NTPMenu.bin, only if you have a RTC module !!
 
 // edit this value to fit your mode
-#define RTC_PROFILE CHRONOMANIAC
+#define RTC_PROFILE HOBO
 //#define RTC_PROFILE NTP_MENU // to build the NTPMenu.bin
 //#define RTC_PROFILE CHRONOMANIAC // to build the BLEMenu.bin
 
@@ -104,17 +104,12 @@ Preferences preferences;
 
 
 /*
- * 
- * HEAP Cache
- * NVS Cache
- * SQLite3 DB R/O
- * SQLite3 DB R/W
- * 
- * 
- * 
- * 
- * 
- * 
+ * Data sources:
+ * - HEAP Cache : used as often as possible
+ * - NVS Cache : used to freeze unsaved data, when heap is too low or DB oom occurs and reboot is required
+ * - SQLite3 DB OUI : readonly, mainly a getter for vendor names by mac address 
+ * - SQLite3 DB Vendor : readonly, mainly a getter for vendor names by manufacturer data
+ * - SQLite3 DB blemacs : read/write, getter and setter for non anonymous BLE Advertised Devices
  * 
  */
 
