@@ -128,7 +128,6 @@ class DBUtils {
       sqlite3_initialize();
       initial_free_heap = freeheap;
       entries = getEntries();
-      //resetDB(); // use this when db is corrupt (shit happens)
       if ( resetReason == 12)  { // =  SW_CPU_RESET
         // CPU was reset by software, don't perform tests (faster load)
       } else {
@@ -137,6 +136,7 @@ class DBUtils {
         Out.println();
         Out.println("Testing Database...");
         Out.println();
+        //resetDB(); // use this when db is corrupt (shit happens) or filled with irrelevant data
         pruneDB(); // remove unnecessary/redundant entries
         delay(2000);
         // initial boot, perform some tests
