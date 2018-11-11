@@ -24,6 +24,7 @@ Hardware requirements
 ---------------------
   - [mandatory] ESP32 (with or without PSRam)
   - [mandatory] SD Card breakout (or bundled in Wrover-Kit, M5Stack, LoLinD32 Pro)
+  - [mandatory] TFT Library [patched](https://github.com/espressif/WROVER_KIT_LCD/pull/3/files) to support vertical scroll definition
   - [mandatory] Micro SD (FAT32 formatted, **max 32GB**)
   - [mandatory] [mac-oui-light.db](https://github.com/tobozo/ESP32-BLECollector/blob/master/SD/mac-oui-light.db) and [ble-oui.db](https://github.com/tobozo/ESP32-BLECollector/blob/master/SD/ble-oui.db) files copied on the Micro SD Card root
   - [mandatory] ILI9341 320x240 TFT (or bundled in Wrover-Kit, M5Stack, LoLinD32 Pro)
