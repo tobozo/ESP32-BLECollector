@@ -63,7 +63,7 @@
 #define HEAPMAP_BUFFLEN 61 // graph width (+ 1 for hscroll)
 #define MAX_ROW_LEN 30 // max chars per line on display, used to position/cut text
 // heap management (used by graph)
-uint32_t min_free_heap = 100000; // sql out of memory errors eventually occur under 100000
+uint32_t min_free_heap = 90000; // sql out of memory errors eventually occur under 100000
 uint32_t initial_free_heap = freeheap;
 uint32_t heap_tolerance = 20000; // how much memory under min_free_heap the sketch can go and recover without restarting itself
 uint32_t heapmap[HEAPMAP_BUFFLEN] = {0}; // stores the history of heapmap values
@@ -80,9 +80,16 @@ enum TextDirections {
 };
 
 uint32_t GRAPH_LINE_WIDTH = HEAPMAP_BUFFLEN-1; 
-uint32_t GRAPH_LINE_HEIGHT = 30;
+uint32_t GRAPH_LINE_HEIGHT = 35;
 uint16_t GRAPH_X = Out.width - GRAPH_LINE_WIDTH - 2;
-uint16_t GRAPH_Y = 287;
+uint16_t GRAPH_Y = 283;
+
+
+struct BLECardStyle {
+  uint16_t textColor;
+  uint16_t borderColor;
+  uint16_t bgColor;
+};
 
 
 class UIUtils {
@@ -93,9 +100,11 @@ class UIUtils {
     bool _NTPStatus  = false;
     bool _DBStatus   = false;
 
+    BLECardStyle BLECardTheme;
 
     void init() {
 
+/*
       preferences.begin("BLECollector", false);
       unsigned int counter = preferences.getUInt("counter", 0);
       // Increase counter by 1
@@ -105,7 +114,7 @@ class UIUtils {
       // Store the counter to the Preferences
       preferences.putUInt("counter", counter);
       preferences.end();
-
+*/
       
       bool clearScreen = true;
       if (resetReason == 12) { // SW Reset
@@ -197,7 +206,7 @@ class UIUtils {
     }
 
 
-    void headerStats(String status = "") {
+    void headerStats(const char *status/*String status = ""*/) {
       if(isScrolling) return;
       int16_t posX = tft.getCursorX();
       int16_t posY = tft.getCursorY();
@@ -205,9 +214,9 @@ class UIUtils {
       String s_entries = " Entries: " + String(entries)+" ";
       alignTextAt(s_heap.c_str(), 128, 4, WROVER_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT);
       if (status != "") {
-        Serial.println(status);
+        //Serial.println(status);
         tft.fillRect(0, 18, Out.width, 8, HEADER_BGCOLOR); // clear whole message status area
-        alignTextAt((" " + status).c_str(), 0, 18, WROVER_YELLOW, HEADER_BGCOLOR, ALIGN_LEFT);
+        alignTextAt(status, 5, 18, WROVER_YELLOW, HEADER_BGCOLOR, ALIGN_FREE);
       }
       alignTextAt(s_entries.c_str(), 128, 18, WROVER_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT);
       tft.drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, 126, 0, 28,  28);
@@ -220,9 +229,9 @@ class UIUtils {
       int16_t posX = tft.getCursorX();
       int16_t posY = tft.getCursorY();
 
-      alignTextAt(String(timeString).c_str(), 128, 288, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_CENTER);
-      alignTextAt(String(UpTimeString).c_str(), 128, 298, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_CENTER);
-      alignTextAt("(c+) tobozo", 128, 308, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_CENTER);
+      alignTextAt(String(timeString).c_str(), 85, 288, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE);
+      alignTextAt(String(UpTimeString).c_str(), 85, 298, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE);
+      alignTextAt("(c+) tobozo", 72, 308, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE);
       
       String sessDevicesCountStr = " Total: " + String(sessDevicesCount) + " ";
       String devicesCountStr = " Last:  " + String(devicesCount) + " ";
@@ -238,6 +247,36 @@ class UIUtils {
       _NTPStatus ; // ntp symbol
       
       tft.setCursor(posX, posY);
+    }
+
+    void cacheStats(byte BLEDevCacheUsed, byte VendorCacheUsed, byte OuiCacheUsed) {
+      percentBox(164, 284, 10, 10, BLEDevCacheUsed, WROVER_CYAN, WROVER_BLACK);
+      percentBox(164, 296, 10, 10, VendorCacheUsed, WROVER_ORANGE, WROVER_BLACK);
+      percentBox(164, 308, 10, 10, OuiCacheUsed, WROVER_GREENYELLOW, WROVER_BLACK);
+    }
+
+    void percentBox(uint16_t x, uint16_t y, byte w, byte h, byte percent, uint16_t barcolor, uint16_t bgcolor, uint16_t bordercolor=WROVER_DARKGREY) {
+      if(percent==0) {
+        tft.drawRect(x-1, y-1, w+2, h+2, bordercolor);
+        tft.fillRect(x, y, w, h, bgcolor);
+        return;
+      }
+      if(percent==100) {
+        tft.drawRect(x-1, y-1, w+2, h+2, BLUETOOTH_COLOR);
+        tft.fillRect(x, y, w, h, barcolor);
+        return; 
+      }
+      tft.drawRect(x-1, y-1, w+2, h+2, bordercolor);
+      tft.fillRect(x, y, w, h, bgcolor);
+      byte yoffsetpercent = percent / 10;
+      byte boxh = (yoffsetpercent*h) / 10 ;
+      tft.fillRect(x, y, w, boxh, barcolor);
+
+      byte xoffsetpercent = percent % 10;
+      if(xoffsetpercent==0) return;
+      byte linew = (xoffsetpercent*w) / 10;
+      tft.drawFastHLine(x, y+boxh, linew, barcolor);
+      
     }
 
 
@@ -418,10 +457,12 @@ class UIUtils {
     }
 
 
-    static bool BLECardIsOnScreen(String address) {
+    static bool BLECardIsOnScreen(const char* &address) {
       bool onScreen = false;
+      //Serial.print("Checking onScreen: "); Serial.println( address );
       for(int j=0;j<BLECARD_MAC_CACHE_SIZE;j++) {
-        if( address == lastPrintedMac[j]) {
+        if( strcmp(address, lastPrintedMac[j].c_str())==0) {
+          //Serial.println("is onScreen!");
           onScreen = true;
         }
       }
@@ -433,8 +474,11 @@ class UIUtils {
       uint16_t randomcolor = tft.color565(random(128, 255), random(128, 255), random(128, 255));
       uint16_t pos = 0;
       uint16_t hop;
-      Out.BGCOLOR = BLECARD_BGCOLOR;
-      tft.setTextColor(BLEDev.textColor);
+
+      Out.BGCOLOR = BLECardTheme.bgColor;
+      
+      //Out.BGCOLOR = BLECARD_BGCOLOR;
+      tft.setTextColor(BLECardTheme.textColor);
       hop = Out.println(SPACE);
       pos += hop;
       if (BLEDev.address != "" && BLEDev.rssi != "") {
@@ -442,7 +486,7 @@ class UIUtils {
         uint8_t len = MAX_ROW_LEN - (BLEDev.address.length() + BLEDev.rssi.length());
         hop = Out.println( "  " + BLEDev.address + String(std::string(len, ' ').c_str()) + BLEDev.rssi + " dBm" );
         pos += hop;
-        drawRSSI(Out.width - 18, Out.scrollPosY - hop - 1, atoi( BLEDev.rssi.c_str() ), BLEDev.textColor);
+        drawRSSI(Out.width - 18, Out.scrollPosY - hop - 1, atoi( BLEDev.rssi.c_str() ), BLECardTheme.textColor);
         if (BLEDev.in_db) {
           // 'already seen this' icon
           tft.drawJpg( update_jpeg, update_jpeg_len, 138, Out.scrollPosY - hop, 8,  8);
@@ -488,7 +532,7 @@ class UIUtils {
       }
       hop = Out.println(SPACE);
       pos += hop;
-      drawRoundRect(pos, 4, BLEDev.borderColor);
+      drawRoundRect(pos, 4, BLECardTheme.borderColor);
       return pos;
     }
 

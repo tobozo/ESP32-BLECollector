@@ -59,7 +59,11 @@ const char *countEntriesQuery = "SELECT count(*) FROM blemacs;";
 const char *dropTableQuery   = "DROP TABLE IF EXISTS blemacs;";
 const char *createTableQuery = "CREATE TABLE IF NOT EXISTS blemacs(id INTEGER, appearance, name, address, ouiname, rssi, vdata, vname, uuid, spower, hits INTEGER, created_at timestamp NOT NULL DEFAULT current_timestamp, updated_at timestamp NOT NULL DEFAULT current_timestamp);";
 // used by pruneDB()
+char charToClean = 3; // for some reason (BLE bug?) invalid/empty devices named \3 are inserted
+String cleanTableQueryString = String("DELETE FROM blemacs WHERE TRIM(name) LIKE '%"+String(charToClean)+"%'");
+const char *cleanTableQuery = cleanTableQueryString.c_str();
 const char *pruneTableQuery = "DELETE FROM blemacs WHERE appearance='' AND name='' AND uuid='' AND ouiname='[private]' AND (vname LIKE 'Apple%' or vname='[unknown]')";
+
 // used by testVendorNames()
 const char *testVendorNamesQuery = "SELECT SUBSTR(vendor,0,32)  FROM 'ble-oui' LIMIT 10";
 // used by testOUI()
@@ -68,13 +72,18 @@ const char *testOUIQuery = "SELECT * FROM 'oui-light' limit 10";
 const char* insertQueryTemplate = "INSERT INTO blemacs(appearance, name, address, ouiname, rssi, vdata, vname, uuid, spower, hits) VALUES('%s','%s','%s','%s','%s','%s','%s','%s','%s','1')";
 static char insertQuery[1024]; // stack overflow ? pray that 1024 is enough :D
 
+const char* searchDeviceTemplate = "SELECT appearance, name, address, ouiname, rssi, vname, uuid FROM blemacs WHERE address='%s'";
+static char searchDeviceQuery[132];
+//String requestStr = "SELECT appearance, name, address, ouiname, rssi, vname, uuid FROM blemacs WHERE address='" + bleDeviceAddress + "'";
+
+
 // used by getVendor()
 #ifndef VENDORCACHE_SIZE // override this from Settings.h
 #define VENDORCACHE_SIZE 16
 #endif
 struct VendorCacheStruct {
   uint16_t devid;
-  String vendor;
+  String vendor = "";
 };
 VendorCacheStruct VendorCache[VENDORCACHE_SIZE];
 byte VendorCacheIndex = 0; // index in the circular buffer
@@ -86,7 +95,7 @@ static int VendorCacheHit = 0;
 #endif
 struct OUICacheStruct {
   String mac;
-  String assignment;
+  String assignment = "";
 };
 OUICacheStruct OuiCache[OUICACHE_SIZE];
 byte OuiCacheIndex = 0; // index in the circular buffer
@@ -117,6 +126,9 @@ class DBUtils {
   public:
   
     bool isOOM = false;
+    byte BLEDevCacheUsed = 0;
+    byte VendorCacheUsed = 0;
+    byte OuiCacheUsed = 0;
     
     void init() {
       while(SDSetup()==false) {
@@ -136,7 +148,7 @@ class DBUtils {
         Out.println();
         Out.println("Testing Database...");
         Out.println();
-        //resetDB(); // use this when db is corrupt (shit happens) or filled with irrelevant data
+        //resetDB(); // use this when db is corrupt (shit happens) or filled by ESP32-BLE-BeaconSpam
         pruneDB(); // remove unnecessary/redundant entries
         delay(2000);
         // initial boot, perform some tests
@@ -152,6 +164,32 @@ class DBUtils {
       if (prune_trigger > prune_threshold) {
         pruneDB();
       }
+    }
+
+
+    void cacheState() {
+      BLEDevCacheUsed = 0;
+      for(int i=0;i<BLEDEVCACHE_SIZE;i++) {
+        if( BLEDevCache[i].address != "") {
+          BLEDevCacheUsed++;
+        }
+      }
+      VendorCacheUsed = 0;
+      for(int i=0;i<VENDORCACHE_SIZE;i++) {
+        if( VendorCache[i].vendor != "") {
+          VendorCacheUsed++;
+        }
+      }
+      OuiCacheUsed = 0;
+      for(int i=0;i<OUICACHE_SIZE;i++) {
+        if( OuiCache[i].assignment != "") {
+          OuiCacheUsed++;
+        }
+      }
+      BLEDevCacheUsed = BLEDevCacheUsed*100 / BLEDEVCACHE_SIZE;
+      VendorCacheUsed = VendorCacheUsed*100 / VENDORCACHE_SIZE;
+      OuiCacheUsed = OuiCacheUsed*100 / OUICACHE_SIZE;
+      //Serial.println("Circular-Buffered Cache Fill: BLEDevCache: "+String(BLEDevCacheUsed)+"%, "+String(VendorCacheUsed)+"%, "+String(OuiCacheUsed)+"%");
     }
 
 
@@ -185,6 +223,8 @@ class DBUtils {
         case BLE_VENDOR_NAMES_DB: sqlite3_close(BLEVendorsDB); break;
         default: /* duh ! */ Serial.println("Can't open null DB");
       }
+      cacheState();
+      UI.cacheStats(BLEDevCacheUsed, VendorCacheUsed, OuiCacheUsed);
     }
     
     
@@ -196,13 +236,15 @@ class DBUtils {
     }
 
     // checks if a BLE Device exists, returns its cache index if found
-    int deviceExists(String bleDeviceAddress) {
+    int deviceExists(const char address[18]) {
       results = 0;
       open(BLE_COLLECTOR_DB);
-      String requestStr = "SELECT appearance, name, address, ouiname, rssi, vname, uuid FROM blemacs WHERE address='" + bleDeviceAddress + "'";
-      int rc = sqlite3_exec(BLECollectorDB, requestStr.c_str(), BLEDev_db_callback, (void*)dataBLE, &zErrMsg);
+      //Serial.print("Building query: "); Serial.println( address );
+      sprintf(searchDeviceQuery, searchDeviceTemplate, address);
+      //Serial.print( address ); Serial.print( " => " ); Serial.println(searchDeviceQuery);
+      int rc = sqlite3_exec(BLECollectorDB, searchDeviceQuery, BLEDev_db_callback, (void*)dataBLE, &zErrMsg);
       if (rc != SQLITE_OK) {
-        error(String(zErrMsg));
+        error(zErrMsg);
         //Out.printf("SQL error: %s\n", msg);
         //Out.println("SQL error:"+String(zErrMsg));
         sqlite3_free(zErrMsg);
@@ -224,7 +266,7 @@ class DBUtils {
       if(results < BLEDEVCACHE_SIZE) {
         int i;
         for (i = 0; i < argc; i++) {
-          BLEDevCache[BLEDevCacheIndex].set(String(azColName[i]), String(argv[i] ? argv[i] : ""));
+          BLEDevCache[BLEDevCacheIndex].set(azColName[i], argv[i] ? argv[i] : "");
           //Serial.printf("BLEDev Set cb %s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
         }
       } else {
@@ -272,11 +314,11 @@ class DBUtils {
     }
 
 
-    void error(String zErrMsg) {
-      Serial.println("SQL error: "+zErrMsg);
+    void error(const char* zErrMsg) {
+      Serial.println("SQL error: "+String(zErrMsg));
       if (zErrMsg == "database disk image is malformed") {
         resetDB();
-      } else if (zErrMsg == "out of memory") {
+      } else if (strcmp(zErrMsg, "out of memory")==0) {
         isOOM = true;
       } else {
         UI.headerStats(zErrMsg);
@@ -294,7 +336,7 @@ class DBUtils {
       //long start = micros();
       int rc = sqlite3_exec(db, sql, db_callback, (void*)data, &zErrMsg);
       if (rc != SQLITE_OK) {
-        error(String(zErrMsg));
+        error(zErrMsg);
         sqlite3_free(zErrMsg);
       } else {
         //Serial.printf("Operation done successfully\n");
@@ -471,6 +513,7 @@ class DBUtils {
       UI.headerStats("Pruning DB");
       tft.setTextColor(WROVER_GREEN);
       open(BLE_COLLECTOR_DB);
+      db_exec(BLECollectorDB, cleanTableQuery, true);
       db_exec(BLECollectorDB, pruneTableQuery, true);
       close(BLE_COLLECTOR_DB);
       entries = getEntries();

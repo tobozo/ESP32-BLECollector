@@ -38,8 +38,8 @@ static byte lastPrintedMacIndex = 0; // index in the circular buffer
 struct BlueToothDevice {
   //int id;
   bool in_db = false;
-  uint16_t borderColor;
-  uint16_t textColor;
+  //uint16_t borderColor;
+  //uint16_t textColor;
   String appearance = "";
   String name = ""; // device name
   String address = ""; // device mac address
@@ -53,8 +53,8 @@ struct BlueToothDevice {
   //time_t updated_at;
   void reset() {
     in_db = false;
-    borderColor;
-    textColor;
+    //borderColor;
+    //textColor;
     appearance = "";
     name = "";
     address = "";
@@ -65,17 +65,17 @@ struct BlueToothDevice {
     uuid = "";
     //spower = "";
   }
-  void set(String prop, String val) {
+  void set(const char* prop, const char* val) {
     bool updated = false;
-    if(prop=="id")              { /*id = val.toInt();*/ updated = true; }
-    else if(prop=="appearance") { appearance = val; updated = true; }
-    else if(prop=="name")       { name = val;       updated = true; }
-    else if(prop=="address")    { address = val;    updated = true; }
-    else if(prop=="ouiname")    { ouiname = val;    updated = true; }
-    else if(prop=="rssi")       { rssi = val;       updated = true; }
-    else if(prop=="vdata")      { vdata = val;      updated = true; }
-    else if(prop=="vname")      { vname = val;      updated = true; }
-    else if(prop=="uuid")       { uuid = val;       updated = true; }
+    if(strcmp(prop, "id")==0)              { /*id = val.toInt();*/ updated = true; }
+    else if(strcmp(prop, "appearance")==0) { appearance = String(val); updated = true; }
+    else if(strcmp(prop, "name")==0)       { name = String(val);       updated = true; }
+    else if(strcmp(prop, "address")==0)    { address = String(val);    updated = true; }
+    else if(strcmp(prop, "ouiname")==0)    { ouiname = String(val);    updated = true; }
+    else if(strcmp(prop, "rssi")==0)       { rssi = String(val);       updated = true; }
+    else if(strcmp(prop, "vdata")==0)      { vdata = String(val);      updated = true; }
+    else if(strcmp(prop, "vname")==0)      { vname = String(val);      updated = true; }
+    else if(strcmp(prop, "uuid")==0)       { uuid = String(val);       updated = true; }
     //else if(prop=="spower")     { spower = val;     updated = true; }
     //else if(prop=="created_at") { created_at = val; updated = true; }
     //else if(prop=="updated_at") { created_at = val; updated = true; }

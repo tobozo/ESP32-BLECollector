@@ -51,6 +51,7 @@
 #define BLEDEVCACHE_SIZE 16 // use some heap to cache BLECards, min = 5, max = 64, higher value = smaller uptime
 #define VENDORCACHE_SIZE 32 // use some heap to cache vendor query responses, min = 5, max = 32
 #define OUICACHE_SIZE 32 // use some heap to cache mac query responses, min = 16, max = 64
+#define USE_NVS // comment this out if you have NVS problems (or just do an erase_flash)
 
 // don't edit anything below this
 #if RTC_PROFILE==HOBO
