@@ -43,16 +43,17 @@
 #define NTP_MENU 4 // use this to produce the NTPMenu.bin, only if you have a RTC module !!
 
 // edit this value to fit your mode
-#define RTC_PROFILE HOBO
+#define RTC_PROFILE ROGUE
 //#define RTC_PROFILE NTP_MENU // to build the NTPMenu.bin
 //#define RTC_PROFILE CHRONOMANIAC // to build the BLEMenu.bin
 
-#define SCAN_TIME  30 // seconds minimum
-#define BLEDEVCACHE_SIZE 16 // use some heap to cache BLECards, min = 5, max = 64, higher value = smaller uptime
+//#define SCAN_TIME  30 // seconds minimum
+byte SCAN_TIME = 30;
+#define BLEDEVCACHE_SIZE 10 // use some heap to cache BLECards, min = 5, max = 64, higher value = smaller uptime
 #define VENDORCACHE_SIZE 32 // use some heap to cache vendor query responses, min = 5, max = 32
 #define OUICACHE_SIZE 32 // use some heap to cache mac query responses, min = 16, max = 64
 #define USE_NVS // comment this out if you have NVS problems (or just do an erase_flash)
-
+#define BUILD_TYPE "BLEMenu"
 // don't edit anything below this
 #if RTC_PROFILE==HOBO
   #undef BUILD_NTPMENU_BIN // no NTP for Hobo mode
@@ -63,11 +64,21 @@
 #elif RTC_PROFILE==NTP_MENU
   // building 'NTPMenu.bin'
   #define BUILD_NTPMENU_BIN
+  #define BUILD_TYPE "NTPMenu"
   //#define WIFI_SSID "my-router-ssid"
   //#define WIFI_PASSWD "my-router-passwd"
 #else
   #error "No valid RTC_PROFILE has been selected, please refer to the comments in Settings.h"
 #endif
+
+#define BUILD_NEEDLE "ESP32 BLE Scanner Compiled On "
+#define BUILD_DATE __DATE__
+#define BUILD_TIME __TIME__
+#define BUILD_SIGNATURE BUILD_DATE " - " BUILD_TIME " - " BUILD_TYPE
+#define WELCOME_MESSAGE BUILD_NEEDLE BUILD_DATE " - " BUILD_TIME " - " BUILD_TYPE
+const char* needle = BUILD_NEEDLE;
+const char* welcomeMessage = WELCOME_MESSAGE;
+const char* buildSignature = BUILD_SIGNATURE;
 
 #include <Adafruit_GFX.h>    // Core graphics library
 #include "WROVER_KIT_LCD.h" // Must have the VScroll def patch: https://github.com/espressif/WROVER_KIT_LCD/pull/3/files
@@ -98,7 +109,7 @@ WROVER_KIT_LCD tft;
 
 #include <Preferences.h>
 Preferences preferences;
-#define MAX_ITEMS_IN_PREFS 10 // this will fit in the 100k of NVRAM so don't assign a too high value or it will fail
+#define MAX_ITEMS_IN_PREFS BLEDEVCACHE_SIZE // hopefully this will not overflow the 100k of NVRAM so don't assign a too high value or it will fail
 #if MAX_ITEMS_IN_PREFS > BLEDEVCACHE_SIZE
   #error "MAX_ITEMS_IN_PREFS must be inferior or equal to BLEDEVCACHE_SIZE in Settings.h"
 #endif

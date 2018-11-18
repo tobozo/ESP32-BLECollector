@@ -53,8 +53,7 @@
 
 void setup() {
   Serial.begin(115200);
-  Serial.println("ESP32 BLE Scanner");
-  Serial.println("Compiled on " + String(__DATE__) + " / " + String(__TIME__));
+  Serial.println(welcomeMessage);
   Serial.println("Free heap at boot: " + String(initial_free_heap));
   BLECollector.init();
 }

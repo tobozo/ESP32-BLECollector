@@ -32,8 +32,112 @@
 bool RTC_is_running = false;
 static char timeString[13] = "--:--"; // %02d:%02d
 static char UpTimeString[13] = "00:00"; // %02d:%02d
+static char LastSyncTimeString[32] = "YYYY-MM-DD HH:MM:SS";
+
 #if RTC_PROFILE > HOBO
 static DateTime nowDateTime;
+static DateTime lastSyncDateTime;
+
+void logTimeActivity(byte source) {
+  preferences.begin("BLECollector", false);
+  DateTime epoch = RTC.now();
+  preferences.putUInt("epoch", epoch.unixtime());
+  preferences.putUChar("source", source);
+  preferences.end();
+}
+
+
+
+enum TimeUpdateSources {
+  SOURCE_NONE = 0,
+  SOURCE_COMPILER = 1,
+  SOURCE_RTC = 2,
+  SOURCE_NTP = 3
+};
+
+struct TimeActivity {
+  DateTime epoch;
+  byte source;
+};
+TimeActivity getTimeActivity() {
+  TimeActivity timeActivity;
+  preferences.begin("BLECollector", true);
+  timeActivity.epoch  = preferences.getUInt("epoch", 0);
+  timeActivity.source = preferences.getUChar("source", 0);
+  preferences.end();
+
+  sprintf(LastSyncTimeString, "%04d-%02d-%02d %02d:%02d:%02d", 
+    timeActivity.epoch.year(),
+    timeActivity.epoch.month(),
+    timeActivity.epoch.day(),
+    timeActivity.epoch.hour(),
+    timeActivity.epoch.minute(),
+    timeActivity.epoch.second()
+  );
+  if(timeActivity.source==0) {
+    if(RTC.isrunning()) {
+      Serial.println("Can't determine when RTC was last updated, setting to now");
+      logTimeActivity(SOURCE_RTC);
+      ESP.restart();
+    } else {
+      Serial.println("RTC isn't running!");
+    }
+  } else {
+    lastSyncDateTime = timeActivity.epoch;
+    nowDateTime = RTC.now();
+    int32_t deltaInSeconds = nowDateTime.unixtime() - lastSyncDateTime.unixtime();
+    Serial.println("Last Time Sync: " + String(LastSyncTimeString) + " ( " + String(deltaInSeconds) + " seconds ago) using source #" + String(timeActivity.source));
+
+    #if RTC_PROFILE > ROGUE
+    
+      enum PartitionNames {
+        NO_PARTITION = -1,
+        CURRENT_PARTITION = 0,
+        NEXT_PARTITION = 1
+      };
+  
+      char *currentMenuSignature = getSignature(CURRENT_PARTITION);
+      char *nextMenuSignature    = getSignature(NEXT_PARTITION);
+      int menuPartition = NO_PARTITION;
+  
+      if(strcmp(buildSignature, currentMenuSignature)==0) {
+        Serial.println("Build signature matches with current partition");
+        menuPartition = CURRENT_PARTITION;
+      } else if(strcmp(buildSignature, nextMenuSignature)==0) {
+        Serial.println("Build signature matches with next partition");
+        menuPartition = NEXT_PARTITION;
+      } else { // this should not happen
+        Serial.println("Build signature matches no partition, giving up");
+        return timeActivity;
+      }
+      
+      #if RTC_PROFILE==NTP_MENU
+        #define MENU_FILENAME "/NTPMenu.bin"
+      #else
+        #define MENU_FILENAME "/BLEMenu.bin"
+      #endif
+      
+      File menuFile = SD_MMC.open(MENU_FILENAME);
+      const char* binarySignature = getBinarySignature( menuFile );
+      menuFile.close();
+      if( (menuPartition == CURRENT_PARTITION && strcmp(binarySignature, currentMenuSignature)==0)
+       || (menuPartition == NEXT_PARTITION    && strcmp(binarySignature, nextMenuSignature)==0)  ) {
+        // nothing to do
+        Out.println();
+        Out.println("[SD=FLASH]");
+        return timeActivity;
+      }
+      Serial.println("[SD] Binary signature " + String(binarySignature));
+      Out.println();
+      Out.println("[SD!=FLASH]");
+      updateToFS(SD_MMC, MENU_FILENAME, menuPartition);
+
+    #endif
+
+  }
+  return timeActivity;
+}
+
 #endif
 
 void updateTimeString() {
@@ -42,11 +146,28 @@ void updateTimeString() {
     sprintf(timeString, " %02d:%02d ", nowDateTime.hour(), nowDateTime.minute());
     #if RTC_PROFILE == CHRONOMANIAC  // chronomaniac mode
       if (RTC_is_running) {
+        int32_t deltaInSeconds = nowDateTime.unixtime() - lastSyncDateTime.unixtime();
+        if ( deltaInSeconds > 86400/*600*/) {
+          Serial.println("Last Time Sync: " + String(LastSyncTimeString) + " ( " + String(deltaInSeconds) + " seconds ago). Time isn't fresh anymore, should reload NTP menu !!");
+
+          if( Update.canRollBack() )  {
+            Serial.println("Using rollback update"); // much faster than re-flashing
+            Update.rollBack();
+            ESP.restart();
+          } else {
+            Serial.println("CANNOT use rollback update");
+            updateFromFS( SD_MMC, "/NTPMenu.bin" );
+          }
+          
+          //updateFromFS( SD_MMC, "/NTPMenu.bin" );
+          //ESP.restart();
+        }
+        /*
         if( millis()/1000 > 86400 ) {
           // time to NTP Sync ?
           updateFromFS( SD_MMC, "/NTPMenu.bin" );
           ESP.restart();
-        }
+        }*/
       }
     #endif
   #endif
@@ -72,6 +193,7 @@ bool RTCSetup() {
     if (!RTC.isrunning()) {
       Serial.println("Suspicious: RTC was NOT running, will try to adjust from hardcoded value");
       RTC.adjust(DateTime(__DATE__, __TIME__));
+      logTimeActivity(SOURCE_COMPILER);
       #ifndef BUILD_NTPMENU_BIN // BLEMenu.bin mode only !!
         #if RTC_PROFILE == CHRONOMANIAC // chronomaniac mode
           if (RTC.isrunning()) {
@@ -92,10 +214,15 @@ bool RTCSetup() {
   #endif
 }
 
+static bool sd_mounted = false;
+
 bool SDSetup() {
+
+  if(sd_mounted) return true;
+  
   unsigned long max_wait = 500;
   byte attempts = 10;
-  bool sd_mounted = false;
+
   while ( sd_mounted == false && attempts>0) {
     if (SD_MMC.begin() ) {
       sd_mounted = true;
@@ -188,15 +315,18 @@ bool SDSetup() {
       Out.println("SD Card Failure, insert SD or check wiring, halting");
       while(1) { ; }
     }
+    TimeActivity lastTimeSync = getTimeActivity();
+    
     configTzTime(TZ_INFO, NTP_SERVER);
     if(WiFiConnect()) {
       WiFiConnected = true;
       if (getLocalTime(&timeinfo, 10000)) {  // wait up to 10sec to sync
         Serial.println(&timeinfo, "Time set: %B %d %Y %H:%M:%S (%A)");
         NTPTimeSet = true;
-        RTC.adjust(DateTime(timeinfo.tm_year+1900, timeinfo.tm_mon, timeinfo.tm_mday, timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec));
+        RTC.adjust(DateTime(timeinfo.tm_year+1900, timeinfo.tm_mon+1, timeinfo.tm_mday, timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec));
         if( RTC.isrunning() ) {
           Out.println("RTC Adjusted from NTP \\o/");
+          logTimeActivity(SOURCE_NTP);
         } else {
           Out.println("NTP OK but RTC died :-(");
         }
@@ -208,7 +338,14 @@ bool SDSetup() {
       Out.println("No WiFi => No NTP Sync");
     }
     WiFi.mode(WIFI_OFF);
-    updateFromFS( SD_MMC, "/BLEMenu.bin" );
+    //if( Update.canRollBack() )  {
+    //  Serial.println("Using rollback update"); // much faster than re-flashing
+    //  Update.rollBack();
+    //  ESP.restart();
+    //} else {
+      Serial.println("CANNOT use rollback update");
+      updateFromFS( SD_MMC, "/BLEMenu.bin" );
+    //}
     ESP.restart();
   }
 

@@ -91,14 +91,11 @@ struct BLECardStyle {
   uint16_t bgColor;
 };
 
+static TaskHandle_t thblink;
+static TaskHandle_t thgraph;
 
 class UIUtils {
   public:
-
-    bool _RTCStatus  = false;
-    bool _WiFiStatus = false;
-    bool _NTPStatus  = false;
-    bool _DBStatus   = false;
 
     BLECardStyle BLECardTheme;
 
@@ -142,6 +139,9 @@ class UIUtils {
       }
       Out.setupScrollArea(HEADER_HEIGHT, FOOTER_HEIGHT);
       timeSetup();
+      #if RTC_PROFILE > HOBO
+        TimeActivity lastTimeSync = getTimeActivity();
+      #endif
       updateTimeString();
       timeStateIcon();
       footerStats();
@@ -239,12 +239,6 @@ class UIUtils {
       alignTextAt(devicesCountStr.c_str(), 0, 288, WROVER_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT);
       alignTextAt(sessDevicesCountStr.c_str(), 0, 298, WROVER_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT);
       alignTextAt(newDevicesCountStr.c_str(), 0, 308, WROVER_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT);
-
-      _RTCStatus ; // clock is running
-      _DBStatus  ; // db up
-
-      _WiFiStatus; // wifi symbol
-      _NTPStatus ; // ntp symbol
       
       tft.setCursor(posX, posY);
     }
@@ -321,12 +315,13 @@ class UIUtils {
 
 
     void taskHeapGraph() { // always running
-      xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 1000, NULL, 0, NULL, 1); /* last = Task Core */
+      xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 1000, NULL, 0, &thgraph, 1); /* last = Task Core */
     }
 
 
+    
     void taskBlink() { // runs one and detaches
-      xTaskCreatePinnedToCore(blinkBlueIcon, "BlinkBlueIcon", 1000, NULL, 0, NULL, 0); /* last = Task Core */
+      xTaskCreatePinnedToCore(blinkBlueIcon, "BlinkBlueIcon", 1000, NULL, 0, &thblink, 0); /* last = Task Core */
     }
 
 
@@ -420,7 +415,12 @@ class UIUtils {
         }
       }
     }
-    
+
+
+    static void stopTaskBlink() {
+      // clear progress bar
+      vTaskDelete( thblink );
+    }
 
     static void blinkBlueIcon( void * parameter ) {
       unsigned long now = millis();
@@ -428,8 +428,9 @@ class UIUtils {
       unsigned long then = now + scanTime;
       unsigned long lastblink = millis();
       unsigned long lastprogress = millis();
+
       bool toggler = true;
-      while (now < then) {
+      while (now < then ) {
         now = millis();
         if (lastblink + random(333, 666) < now) {
           toggler = !toggler;
@@ -447,30 +448,30 @@ class UIUtils {
           lastprogress = now;
         }
         vTaskDelay(30);
+        
       }
-      // clear progress bar
       tft.fillRect(0, PROGRESSBAR_Y, Out.width, 2, WROVER_DARKGREY);
       // clear blue pin
       bleStateIcon(WROVER_DARKGREY);
-      //Serial.println("Task: Ending blinkBlueIcon");
-      vTaskDelete( NULL );
+      vTaskDelete( thblink );
     }
 
 
-    static bool BLECardIsOnScreen(const char* &address) {
+    static bool BLECardIsOnScreen(const char* address) {
       bool onScreen = false;
       //Serial.print("Checking onScreen: "); Serial.println( address );
       for(int j=0;j<BLECARD_MAC_CACHE_SIZE;j++) {
-        if( strcmp(address, lastPrintedMac[j].c_str())==0) {
+        if( strcmp(address, lastPrintedMac[j])==0) {
           //Serial.println("is onScreen!");
           onScreen = true;
+          break;
         }
       }
       return onScreen;
     }
     
-    
-    int printBLECard(BlueToothDevice &BLEDev) {
+
+    int printBLECard(byte cacheindex) {
       uint16_t randomcolor = tft.color565(random(128, 255), random(128, 255), random(128, 255));
       uint16_t pos = 0;
       uint16_t hop;
@@ -481,50 +482,51 @@ class UIUtils {
       tft.setTextColor(BLECardTheme.textColor);
       hop = Out.println(SPACE);
       pos += hop;
-      if (BLEDev.address != "" && BLEDev.rssi != "") {
-        lastPrintedMac[lastPrintedMacIndex++%BLECARD_MAC_CACHE_SIZE] = BLEDev.address;
-        uint8_t len = MAX_ROW_LEN - (BLEDev.address.length() + BLEDev.rssi.length());
-        hop = Out.println( "  " + BLEDev.address + String(std::string(len, ' ').c_str()) + BLEDev.rssi + " dBm" );
+      if (BLEDevCache[cacheindex].address != "" && BLEDevCache[cacheindex].rssi != "") {
+        memcpy(lastPrintedMac[lastPrintedMacIndex++%BLECARD_MAC_CACHE_SIZE], BLEDevCache[cacheindex].address.c_str(), 18);
+        hop = Out.println( "  " + BLEDevCache[cacheindex].address );
         pos += hop;
-        drawRSSI(Out.width - 18, Out.scrollPosY - hop - 1, atoi( BLEDev.rssi.c_str() ), BLECardTheme.textColor);
-        if (BLEDev.in_db) {
+        alignTextAt(String(BLEDevCache[cacheindex].rssi + " dBm    ").c_str(), 0, Out.scrollPosY - hop, BLECardTheme.textColor, BLECardTheme.bgColor, ALIGN_RIGHT);
+        tft.setCursor(0, Out.scrollPosY);
+        drawRSSI(Out.width - 18, Out.scrollPosY - hop - 1, BLEDevCache[cacheindex].rssi.toInt(), BLECardTheme.textColor);
+        if (BLEDevCache[cacheindex].in_db) {
           // 'already seen this' icon
           tft.drawJpg( update_jpeg, update_jpeg_len, 138, Out.scrollPosY - hop, 8,  8);
         } else {
           // 'just inserted this' icon
           tft.drawJpg( insert_jpeg, insert_jpeg_len, 138, Out.scrollPosY - hop, 8,  8);
         }
-        if (BLEDev.uuid != "") {
+        if (BLEDevCache[cacheindex].uuid != "") {
           // 'has service UUID' Icon
           tft.drawJpg( service_jpeg, service_jpeg_len, 128, Out.scrollPosY - hop, 8,  8);
         }
       }
-      if (BLEDev.ouiname != "") {
+      if (BLEDevCache[cacheindex].ouiname != "") {
         pos += Out.println(SPACE);
-        hop = Out.println(SPACETABS + BLEDev.ouiname);
+        hop = Out.println(SPACETABS + BLEDevCache[cacheindex].ouiname);
         pos += hop;
         tft.drawJpg( nic16_jpeg, nic16_jpeg_len, 10, Out.scrollPosY - hop, 13, 8);
       }
-      if (BLEDev.appearance != "") {
+      if (BLEDevCache[cacheindex].appearance != "") {
         pos += Out.println(SPACE);
-        hop = Out.println("  Appearance: " + BLEDev.appearance);
+        hop = Out.println("  Appearance: " + BLEDevCache[cacheindex].appearance);
         pos += hop;
       }
-      if (BLEDev.name != "") {
+      if (BLEDevCache[cacheindex].name != "") {
         pos += Out.println(SPACE);
-        hop = Out.println(SPACETABS + BLEDev.name);
+        hop = Out.println(SPACETABS + BLEDevCache[cacheindex].name);
         pos += hop;
         tft.drawJpg( name_jpeg, name_jpeg_len, 12, Out.scrollPosY - hop, 7,  8);
       }
-      if (BLEDev.vname != "") {
+      if (BLEDevCache[cacheindex].vname != "") {
         pos += Out.println(SPACE);
-        hop = Out.println(SPACETABS + BLEDev.vname);
+        hop = Out.println(SPACETABS + BLEDevCache[cacheindex].vname);
         pos += hop;
-        if (BLEDev.vname == "Apple, Inc.") {
+        if (BLEDevCache[cacheindex].vname == "Apple, Inc.") {
           tft.drawJpg( apple16_jpeg, apple16_jpeg_len, 12, Out.scrollPosY - hop, 8,  8);
-        } else if (BLEDev.vname == "IBM Corp.") {
+        } else if (BLEDevCache[cacheindex].vname == "IBM Corp.") {
           tft.drawJpg( ibm8_jpg, ibm8_jpg_len, 10, Out.scrollPosY - hop, 20,  8);
-        } else if (BLEDev.vname == "Microsoft") {
+        } else if (BLEDevCache[cacheindex].vname == "Microsoft") {
           tft.drawJpg( crosoft_jpeg, crosoft_jpeg_len, 12, Out.scrollPosY - hop, 8,  8);
         } else {
           tft.drawJpg( generic_jpeg, generic_jpeg_len, 12, Out.scrollPosY - hop, 8,  8);

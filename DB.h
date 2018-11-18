@@ -69,7 +69,7 @@ const char *testVendorNamesQuery = "SELECT SUBSTR(vendor,0,32)  FROM 'ble-oui' L
 // used by testOUI()
 const char *testOUIQuery = "SELECT * FROM 'oui-light' limit 10";
 // used by insertBTDevice()
-const char* insertQueryTemplate = "INSERT INTO blemacs(appearance, name, address, ouiname, rssi, vdata, vname, uuid, spower, hits) VALUES('%s','%s','%s','%s','%s','%s','%s','%s','%s','1')";
+const char* insertQueryTemplate = "INSERT INTO blemacs(appearance, name, address, ouiname, rssi, vdata, vname, uuid, spower, hits) VALUES(\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"1\")";
 static char insertQuery[1024]; // stack overflow ? pray that 1024 is enough :D
 
 const char* searchDeviceTemplate = "SELECT appearance, name, address, ouiname, rssi, vname, uuid FROM blemacs WHERE address='%s'";
@@ -101,34 +101,39 @@ OUICacheStruct OuiCache[OUICACHE_SIZE];
 byte OuiCacheIndex = 0; // index in the circular buffer
 static int OuiCacheHit = 0;
 
-enum DBMessage {
-  TABLE_CREATION_FAILED = -1,
-  INSERTION_FAILED = -2,
-  INCREMENT_FAILED = -3,
-  INSERTION_IGNORED = -4,
-  DB_IS_OOM = -5,
-  INSERTION_SUCCESS = 1,
-  INCREMENT_SUCCESS = 2
-};
 
-sqlite3 *BLECollectorDB; // read/write
-sqlite3 *BLEVendorsDB; // readonly
-sqlite3 *OUIVendorsDB; // readonly
-
-enum DBName {
-  BLE_COLLECTOR_DB = 0,
-  MAC_OUI_NAMES_DB = 1,
-  BLE_VENDOR_NAMES_DB =2
-};
 
 
 class DBUtils {
   public:
+
+    char currentBLEAddress[18] = "00:00:00:00:00:00"; // used to proxy BLE search term to DB query
+
+    sqlite3 *BLECollectorDB; // read/write
+    sqlite3 *BLEVendorsDB; // readonly
+    sqlite3 *OUIVendorsDB; // readonly
+
+    enum DBMessage {
+      TABLE_CREATION_FAILED = -1,
+      INSERTION_FAILED = -2,
+      INCREMENT_FAILED = -3,
+      INSERTION_IGNORED = -4,
+      DB_IS_OOM = -5,
+      INSERTION_SUCCESS = 1,
+      INCREMENT_SUCCESS = 2
+    };
+    
+    enum DBName {
+      BLE_COLLECTOR_DB = 0,
+      MAC_OUI_NAMES_DB = 1,
+      BLE_VENDOR_NAMES_DB =2
+    };
   
     bool isOOM = false;
     byte BLEDevCacheUsed = 0;
     byte VendorCacheUsed = 0;
     byte OuiCacheUsed = 0;
+
     
     void init() {
       while(SDSetup()==false) {
@@ -148,7 +153,7 @@ class DBUtils {
         Out.println();
         Out.println("Testing Database...");
         Out.println();
-        //resetDB(); // use this when db is corrupt (shit happens) or filled by ESP32-BLE-BeaconSpam
+        resetDB(); // use this when db is corrupt (shit happens) or filled by ESP32-BLE-BeaconSpam
         pruneDB(); // remove unnecessary/redundant entries
         delay(2000);
         // initial boot, perform some tests
@@ -229,15 +234,23 @@ class DBUtils {
     
     
     // adds a backslash before needle (defaults to single quotes)
-    String escape(String haystack, String needle = "'") {
-      haystack.replace(String(BACKSLASH), String(BACKSLASH) + String(BACKSLASH)); // escape existing backslashes
+    String escape(String haystack, String needle = "\"") {
       haystack.replace(String(needle), String(BACKSLASH) + String(needle)); // slash needle
+      haystack.replace(String(BACKSLASH), String(BACKSLASH) + String(BACKSLASH)); // escape existing backslashes
       return haystack;
     }
 
     // checks if a BLE Device exists, returns its cache index if found
-    int deviceExists(const char address[18]) {
+    int deviceExists(const char* address) {
       results = 0;
+      if( (address && !address[0]) || strlen( address ) > 18 || strlen( address ) < 17 || address[0]==3) {
+        Serial.print("Cowardly refusing to perform an empty or invalid request :");
+        Serial.print(address);
+        Serial.print(" / ");
+        Serial.print( currentBLEAddress );
+        Serial.println();
+        return -1;
+      }
       open(BLE_COLLECTOR_DB);
       //Serial.print("Building query: "); Serial.println( address );
       sprintf(searchDeviceQuery, searchDeviceTemplate, address);
@@ -260,17 +273,21 @@ class DBUtils {
     static int BLEDev_db_callback(void *dataBLE, int argc, char **argv, char **azColName) {
       //Serial.println("BLEDev_db_callback");
       results++;
-      BLEDevCacheIndex++;
-      BLEDevCacheIndex = BLEDevCacheIndex % BLEDEVCACHE_SIZE;
-      BLEDevCache[BLEDevCacheIndex].reset(); // avoid mixing new and old data
       if(results < BLEDEVCACHE_SIZE) {
-        int i;
-        for (i = 0; i < argc; i++) {
-          BLEDevCache[BLEDevCacheIndex].set(azColName[i], argv[i] ? argv[i] : "");
+        BLEDevCacheIndex = getNextBLEDevCacheIndex();
+        BLEDevCacheReset(BLEDevCacheIndex); // avoid mixing new and old data
+        //BLEDevCache[BLEDevCacheIndex].reset(); // avoid mixing new and old data
+        for (int i = 0; i < argc; i++) {
+          //BLEDevCache[BLEDevCacheIndex].set(azColName[i], argv[i] ? argv[i] : "");
+          BLEDevCacheSet(BLEDevCacheIndex, azColName[i], argv[i] ? argv[i] : "");
           //Serial.printf("BLEDev Set cb %s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
         }
+        BLEDevCache[BLEDevCacheIndex].hits = 1;
       } else {
-        Serial.println("Device Pool Size Exceeded, ignoring");
+        Serial.print("Device Pool Size Exceeded, ignoring: ");
+        for (int i = 0; i < argc; i++) {
+          Serial.printf("    %s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
+        }
       }
       //Serial.println( BLEDevCache[BLEDevCacheIndex].toString() );
       return 0;
@@ -368,7 +385,7 @@ class DBUtils {
         escape(BLEDevCache[cacheindex].address).c_str(),
         escape(BLEDevCache[cacheindex].ouiname).c_str(),
         escape(BLEDevCache[cacheindex].rssi).c_str(),
-        escape(BLEDevCache[cacheindex].vdata).c_str(),
+        escape(String(BLEDevCache[cacheindex].vdata)).c_str(),
         escape(BLEDevCache[cacheindex].vname).c_str(),
         escape(BLEDevCache[cacheindex].uuid).c_str(),
         ""//escape(bleDevice.spower).c_str()
