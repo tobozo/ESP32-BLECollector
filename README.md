@@ -39,12 +39,16 @@ RTC available Profiles:
 
 Optional I2C RTC Module requirements (/!\ **Chronomaniac** profile only):
 -------------------------------------
+  - Wite your TinyRTC to SDA/SCL (edit `Wire.begin()` in [Timeutils.h](https://github.com/tobozo/ESP32-BLECollector/blob/master/TimeUtils.h#L173) if necessary)
   - Insert the SD Card
   - Set `#define RTC_PROFILE CHRONOMANIAC` in [Settings.h](https://github.com/tobozo/ESP32-BLECollector/blob/master/Settings.h)
-  - Flash the ESP (the binary will mirror itself onto the SD Card)
+  - Flash the ESP with partition scheme `Minimal SPIFFS (Large APPS with OTA)`
+  - Wait for the binary to mirror itself onto the SD Card as '/BLEMenu.bin'
   - Set your `WIFI_SSID` and `WIFI_PASSWD` in [Settings.h](https://github.com/tobozo/ESP32-BLECollector/blob/master/Settings.h)
   - Set `#define RTC_PROFILE NTP_MENU` in [Settings.h](https://github.com/tobozo/ESP32-BLECollector/blob/master/Settings.h)
-  - Flash the ESP (the binary will mirror itself onto the SD Card, attempt a NTP sync, and reload the menu)
+  - Flash the ESP using partition scheme `Minimal SPIFFS (Large APPS with OTA)` 
+  - Wait the binary to mirror itself onto the SD Card as 'NTPMenu.bin'
+  - A NTP sync should occur, the BLECollector menu will reload  and start scanning if successful
 
 Contributions are welcome :-)
 
