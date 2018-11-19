@@ -91,9 +91,9 @@ class ScrollableOutput {
       tft.getTextBounds(str, scrollPosX, scrollPosY, &x1_tmp, &y1_tmp, &w_tmp, &h_tmp);
   
       if (scrollPosX == 0) {
-        tft.fillRect(0, scrollPosY, width, h_tmp, BGCOLOR/*BLECARD_BGCOLOR*/);
-      } else {
-        tft.fillRect(0, scrollPosY, w_tmp, h_tmp, BGCOLOR/*BLECARD_BGCOLOR*/);
+        tft.fillRect(0, scrollPosY, width, h_tmp, BGCOLOR);
+      } else { // fill the horizontal gap
+        tft.fillRect(0, scrollPosY, w_tmp, h_tmp, BGCOLOR);
       }
       tft.setCursor(scrollPosX, scrollPosY);
       scroll_slow(h_tmp, 5); // Scroll lines, 5ms per line

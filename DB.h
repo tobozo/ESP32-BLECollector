@@ -42,37 +42,35 @@
 const char* data = 0; // for some reason sqlite3 db callback needs this
 const char* dataBLE = 0; // for some reason sqlite3 db callback needs this
 char *zErrMsg = 0; // holds DB Error message
-const char BACKSLASH = '\\'; // used to escape() slashes
+const char BACKSLASH = '\\'; // used to clean() slashes
 char *colNeedle = 0; // search criteria
 String colValue = ""; // search result
 #define MAX_FIELD_LEN 32 // max chars returned by field
 
 // all DB queries
 // used by showDataSamples()
-const char *nameQuery    = "SELECT DISTINCT SUBSTR(name,0,32) FROM blemacs where TRIM(name)!=''";
-const char *vnameQuery   = "SELECT DISTINCT SUBSTR(vname,0,32) FROM blemacs where TRIM(vname)!=''";
-const char *ouinameQuery = "SELECT DISTINCT SUBSTR(ouiname,0,32) FROM blemacs where TRIM(ouiname)!=''";
+#define nameQuery    "SELECT DISTINCT SUBSTR(name,0,32) FROM blemacs where TRIM(name)!=''"
+#define vnameQuery   "SELECT DISTINCT SUBSTR(vname,0,32) FROM blemacs where TRIM(vname)!=''"
+#define ouinameQuery "SELECT DISTINCT SUBSTR(ouiname,0,32) FROM blemacs where TRIM(ouiname)!=''"
 // used by getEntries()
-const char *allEntriesQuery   = "SELECT appearance, name, address, ouiname, rssi, vdata, vname, uuid, spower FROM blemacs;";
-const char *countEntriesQuery = "SELECT count(*) FROM blemacs;";
+#define allEntriesQuery "SELECT appearance, name, address, ouiname, rssi, vdata, vname, uuid, spower FROM blemacs;"
+#define countEntriesQuery "SELECT count(*) FROM blemacs;"
 // used by resetDB()
-const char *dropTableQuery   = "DROP TABLE IF EXISTS blemacs;";
-const char *createTableQuery = "CREATE TABLE IF NOT EXISTS blemacs(id INTEGER, appearance, name, address, ouiname, rssi, vdata, vname, uuid, spower, hits INTEGER, created_at timestamp NOT NULL DEFAULT current_timestamp, updated_at timestamp NOT NULL DEFAULT current_timestamp);";
+#define dropTableQuery   "DROP TABLE IF EXISTS blemacs;"
+#define createTableQuery "CREATE TABLE IF NOT EXISTS blemacs(id INTEGER, appearance, name, address, ouiname, rssi, vdata, vname, uuid, spower, hits INTEGER, created_at timestamp NOT NULL DEFAULT current_timestamp, updated_at timestamp NOT NULL DEFAULT current_timestamp);"
 // used by pruneDB()
 char charToClean = 3; // for some reason (BLE bug?) invalid/empty devices named \3 are inserted
 String cleanTableQueryString = String("DELETE FROM blemacs WHERE TRIM(name) LIKE '%"+String(charToClean)+"%'");
 const char *cleanTableQuery = cleanTableQueryString.c_str();
-const char *pruneTableQuery = "DELETE FROM blemacs WHERE appearance='' AND name='' AND uuid='' AND ouiname='[private]' AND (vname LIKE 'Apple%' or vname='[unknown]')";
-
+#define pruneTableQuery "DELETE FROM blemacs WHERE appearance='' AND name='' AND uuid='' AND ouiname='[private]' AND (vname LIKE 'Apple%' or vname='[unknown]')"
 // used by testVendorNames()
-const char *testVendorNamesQuery = "SELECT SUBSTR(vendor,0,32)  FROM 'ble-oui' LIMIT 10";
+#define testVendorNamesQuery "SELECT SUBSTR(vendor,0,32)  FROM 'ble-oui' LIMIT 10"
 // used by testOUI()
-const char *testOUIQuery = "SELECT * FROM 'oui-light' limit 10";
+#define testOUIQuery "SELECT * FROM 'oui-light' limit 10"
 // used by insertBTDevice()
-const char* insertQueryTemplate = "INSERT INTO blemacs(appearance, name, address, ouiname, rssi, vdata, vname, uuid, spower, hits) VALUES(\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"1\")";
-static char insertQuery[1024]; // stack overflow ? pray that 1024 is enough :D
-
-const char* searchDeviceTemplate = "SELECT appearance, name, address, ouiname, rssi, vname, uuid FROM blemacs WHERE address='%s'";
+#define insertQueryTemplate "INSERT INTO blemacs(appearance, name, address, ouiname, rssi, vdata, vname, uuid, spower, hits) VALUES(\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"1\")"
+static char insertQuery[512]; // stack overflow ? pray that 512 is enough :D
+#define searchDeviceTemplate "SELECT appearance, name, address, ouiname, rssi, vname, uuid FROM blemacs WHERE address='%s'"
 static char searchDeviceQuery[132];
 //String requestStr = "SELECT appearance, name, address, ouiname, rssi, vname, uuid FROM blemacs WHERE address='" + bleDeviceAddress + "'";
 
@@ -83,7 +81,7 @@ static char searchDeviceQuery[132];
 #endif
 struct VendorCacheStruct {
   uint16_t devid;
-  String vendor = "";
+  String vendor = ""; // todo: to char[32]
 };
 VendorCacheStruct VendorCache[VENDORCACHE_SIZE];
 byte VendorCacheIndex = 0; // index in the circular buffer
@@ -94,14 +92,12 @@ static int VendorCacheHit = 0;
 #define OUICACHE_SIZE 32
 #endif
 struct OUICacheStruct {
-  String mac;
-  String assignment = "";
+  String mac; // todo: to char[18]
+  String assignment = ""; // todo: to char[32]
 };
 OUICacheStruct OuiCache[OUICACHE_SIZE];
 byte OuiCacheIndex = 0; // index in the circular buffer
 static int OuiCacheHit = 0;
-
-
 
 
 class DBUtils {
@@ -129,10 +125,10 @@ class DBUtils {
       BLE_VENDOR_NAMES_DB =2
     };
   
-    bool isOOM = false;
-    byte BLEDevCacheUsed = 0;
-    byte VendorCacheUsed = 0;
-    byte OuiCacheUsed = 0;
+    bool isOOM = false; // for stability
+    byte BLEDevCacheUsed = 0; // for statistics
+    byte VendorCacheUsed = 0; // for statistics
+    byte OuiCacheUsed = 0; // for statistics
 
     
     void init() {
@@ -198,7 +194,7 @@ class DBUtils {
     }
 
 
-    int open(DBName dbName) {
+    int open(DBName dbName, bool readonly=true) {
      int rc;
       switch(dbName) {
         case BLE_COLLECTOR_DB:    rc = sqlite3_open("/sdcard/blemacs.db", &BLECollectorDB); break;// will be created upon first boot
@@ -210,11 +206,15 @@ class DBUtils {
         Serial.println("Can't open database " + String(dbName));
         // SD Card removed ? File corruption ? OOM ?
         // isOOM = true;
-        UI.dbStateIcon(-1);
+        UI.dbStateIcon(-1); // OOM
         return rc;
       } else {
         //Serial.println("Opened database successfully");
-        UI.dbStateIcon(1);
+        if(readonly) {
+          UI.dbStateIcon(1); // R/O
+        } else {
+          UI.dbStateIcon(2); // R+W
+        }
       }
       return rc;
     }
@@ -233,10 +233,9 @@ class DBUtils {
     }
     
     
-    // adds a backslash before needle (defaults to single quotes)
-    String escape(String haystack, String needle = "\"") {
-      haystack.replace(String(needle), String(BACKSLASH) + String(needle)); // slash needle
-      haystack.replace(String(BACKSLASH), String(BACKSLASH) + String(BACKSLASH)); // escape existing backslashes
+    // removes any needle from haystack (defaults to double quotes)
+    String clean(String haystack, String needle = "\"") {
+      haystack.replace(String(needle), "");
       return haystack;
     }
 
@@ -378,17 +377,17 @@ class DBUtils {
         // cowardly refusing to insert empty result
         return INSERTION_IGNORED;
       }
-      open(BLE_COLLECTOR_DB);
+      open(BLE_COLLECTOR_DB, false);
       sprintf(insertQuery, insertQueryTemplate,
-        escape(BLEDevCache[cacheindex].appearance).c_str(),
-        escape(BLEDevCache[cacheindex].name).c_str(),
-        escape(BLEDevCache[cacheindex].address).c_str(),
-        escape(BLEDevCache[cacheindex].ouiname).c_str(),
-        escape(BLEDevCache[cacheindex].rssi).c_str(),
-        escape(String(BLEDevCache[cacheindex].vdata)).c_str(),
-        escape(BLEDevCache[cacheindex].vname).c_str(),
-        escape(BLEDevCache[cacheindex].uuid).c_str(),
-        ""//escape(bleDevice.spower).c_str()
+        clean(BLEDevCache[cacheindex].appearance).c_str(),
+        clean(BLEDevCache[cacheindex].name).c_str(),
+        clean(BLEDevCache[cacheindex].address).c_str(),
+        clean(BLEDevCache[cacheindex].ouiname).c_str(),
+        clean(BLEDevCache[cacheindex].rssi).c_str(),
+        clean(String(BLEDevCache[cacheindex].vdata)).c_str(),
+        clean(BLEDevCache[cacheindex].vname).c_str(),
+        clean(BLEDevCache[cacheindex].uuid).c_str(),
+        ""//clean(bleDevice.spower).c_str()
       );
       
       int rc = db_exec(BLECollectorDB, insertQuery);
@@ -396,10 +395,12 @@ class DBUtils {
         Serial.println("SQlite Error occured when heap level was at:" + String(freeheap));
         Serial.println(insertQuery);
         close(BLE_COLLECTOR_DB);
+        BLEDevCache[cacheindex].in_db = false;
         return INSERTION_FAILED;
       }
       //requestStr = "";
       close(BLE_COLLECTOR_DB);
+      BLEDevCache[cacheindex].in_db = true;
       return INSERTION_SUCCESS;
       /*
       if (RTC_is_running) {
@@ -516,7 +517,7 @@ class DBUtils {
       Out.println("Re-creating database");
       Out.println();
       SD_MMC.remove("/blemacs.db");
-      open(BLE_COLLECTOR_DB);
+      open(BLE_COLLECTOR_DB, false);
       db_exec(BLECollectorDB, dropTableQuery);
       db_exec(BLECollectorDB, createTableQuery);
       close(BLE_COLLECTOR_DB);
@@ -529,7 +530,7 @@ class DBUtils {
       tft.setTextColor(WROVER_YELLOW);
       UI.headerStats("Pruning DB");
       tft.setTextColor(WROVER_GREEN);
-      open(BLE_COLLECTOR_DB);
+      open(BLE_COLLECTOR_DB, false);
       db_exec(BLECollectorDB, cleanTableQuery, true);
       db_exec(BLECollectorDB, pruneTableQuery, true);
       close(BLE_COLLECTOR_DB);

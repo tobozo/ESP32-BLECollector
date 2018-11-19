@@ -29,18 +29,20 @@
 
 */
 
-#define BLECARD_MAC_CACHE_SIZE 8 // "virtual" BLE Card cache size, keeps mac addresses to avoid duplicate rendering
-//static String lastPrintedMac[BLECARD_MAC_CACHE_SIZE]; // BLECard screen cache, where the mac addresses are stored
-static char lastPrintedMac[BLECARD_MAC_CACHE_SIZE][18]; // BLECard screen cache, where the mac addresses are stored
+#define BLECARD_MAC_CACHE_SIZE BLEDEVCACHE_SIZE // "virtual" BLE Card circular cache size, keeps mac addresses to avoid duplicate rendering
+static char lastPrintedMac[BLECARD_MAC_CACHE_SIZE][18]; // BLECard circular screen cache, where the mac addresses are stored
 static byte lastPrintedMacIndex = 0; // index in the circular buffer
 
-//static char currentBLEAddress[18] = "00:00:00:00:00:00"; // used to proxy BLE search term to DB query
+static uint16_t notInCacheCount = 0; // scan-relative
+static uint16_t inCacheCount = 0; // scan-relative
+static int BLEDevCacheHit = 0; // cache relative
+static int SelfCacheHit = 0; // cache relative
+static int AnonymousCacheHit = 0; // cache relative
 
 // TODO: store this in psram
-
 struct BlueToothDevice {
   bool in_db = false;
-  byte hits = 0;
+  byte hits = 0; // cache hits
   String appearance = "";
   String name = ""; // device name
   String address = ""; // device mac address
@@ -98,7 +100,8 @@ static void BLEDevCacheSet(byte cacheindex, const char* prop, const char* val) {
 }
 
 static byte getNextBLEDevCacheIndex() {
-  byte min = 255;
+  byte minCacheValue = 255;
+  byte maxCacheValue = 0;
   byte defaultIndex = BLEDevCacheIndex;
   defaultIndex++;
   defaultIndex=defaultIndex%BLEDEVCACHE_SIZE;
@@ -107,15 +110,13 @@ static byte getNextBLEDevCacheIndex() {
   for(int i=defaultIndex;i<defaultIndex+BLEDEVCACHE_SIZE;i++) {
     byte tempIndex = i%BLEDEVCACHE_SIZE;
     if(BLEDevCache[tempIndex].address=="") return tempIndex;
-    if(BLEDevCache[tempIndex].hits < min) {
-      min = BLEDevCache[tempIndex].hits;
+    if(BLEDevCache[tempIndex].hits > maxCacheValue) {
+      maxCacheValue = BLEDevCache[tempIndex].hits;
+    }
+    if(BLEDevCache[tempIndex].hits < minCacheValue) {
+      minCacheValue = BLEDevCache[tempIndex].hits;
       outIndex = tempIndex;
     }
   }
   return defaultIndex;      
 }
-
-
-static int BLEDevCacheHit = 0;
-static int SelfCacheHit = 0;
-static int AnonymousCacheHit = 0;

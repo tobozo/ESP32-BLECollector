@@ -60,6 +60,8 @@ static bool updateFromFS(fs::FS &fs, String fileName = MENU_BIN ) {
 
 #define SPI_FLASH_SEC_STEP8 SPI_FLASH_SEC_SIZE / 4
 static uint8_t g8_rbuf[SPI_FLASH_SEC_STEP8];
+static uint8_t g32_rbuf[SPI_FLASH_SEC_STEP8];
+
 uint32_t sizeofneedle = strlen(needle);
 uint32_t sizeoftrail = strlen(welcomeMessage) - sizeofneedle;
 
@@ -96,12 +98,28 @@ static char* getPartitionBuildSignature(const esp_partition_t* &currentpartition
 }
 
 
-static char* getBinarySignature(fs::File &binaryFile) {
+static char* getBinarySignature(fs::FS &fs, String fileName ) {
   char *signature = (char*)malloc(sizeoftrail);
-  memset(g8_rbuf, 0, SPI_FLASH_SEC_STEP8);
-  while(binaryFile.read(g8_rbuf, SPI_FLASH_SEC_STEP8)) {
-     if(parseBuffer(signature)) return signature;
+  if(!fs.exists(fileName)) {
+    Serial.println("[FAIL] getBinarySignature() file not found: " + fileName);
+    return signature;  
   }
+  File binaryFile = fs.open(fileName);
+  if(!binaryFile) {
+    Serial.println("[FAIL] getBinarySignature() can't open file: " + fileName);
+    binaryFile.close();
+    return signature;      
+  }
+  memset(g8_rbuf, 0, SPI_FLASH_SEC_STEP8);
+  uint32_t pos = 0;
+  while(binaryFile.read(g8_rbuf, SPI_FLASH_SEC_STEP8)) {
+     if(parseBuffer(signature)) {
+      break;
+     }
+     pos+=SPI_FLASH_SEC_STEP8/2;
+     binaryFile.seek(pos, SeekSet);
+  }
+  binaryFile.close();
   return signature;
 }
 
@@ -122,31 +140,16 @@ static bool doUpdateToFS(fs::FS &fs, String fileName, const esp_partition_t* cur
     return false;
   }
 
-  if(fs.exists(fileName)) {
-    File checkSize = fs.open(fileName);
-    if( checkSize.size()==currentpartition->size ) {
-      //Serial.println("Current partition has the same size, checking build signature");
-      const char* partitionSignature = getPartitionBuildSignature( currentpartition );
-      const char* binarySignature    = getBinarySignature( checkSize );
-      if(strcmp(partitionSignature, binarySignature)==0) {
-        //Serial.println("Flash and SD Partitions match");
-        checkSize.close();
-        return false;
-      } else {
-        Out.println("Partition signatures differ");
-        Out.println(partitionSignature);
-        Out.println(binarySignature);
-      }
-    } else {
-      Out.println("Binary and Flash differ");
-    }
-    checkSize.close();
+  const char* partitionSignature = getPartitionBuildSignature( currentpartition );
+  const char* binarySignature    = getBinarySignature( fs, fileName );
+  if(strcmp(partitionSignature, binarySignature)==0) {
+    return false;
+  } else {
+    Out.println("Partition signatures differ"); Out.println(partitionSignature); Out.println(binarySignature);
   }
 
   if(fs.remove(fileName)){
     Out.println("Outdated "+fileName+" deleted");
-  } else {
-    //Serial.println("No previous version of "+fileName+" file to delete");
   }
 
   File updateBin = fs.open(fileName, FILE_WRITE);
@@ -176,14 +179,13 @@ static bool doUpdateToFS(fs::FS &fs, String fileName, const esp_partition_t* cur
 
 static char* getSignature(byte sourcepartition) {
   if(sourcepartition==0) {
-    const esp_partition_t* partitionSignature = esp_ota_get_running_partition();
-    return getPartitionBuildSignature( partitionSignature );
+    const esp_partition_t* partition = esp_ota_get_running_partition();
+    return getPartitionBuildSignature( partition );
   } else {
-    const esp_partition_t* partitionSignature = esp_ota_get_next_update_partition(NULL);
-    return getPartitionBuildSignature(partitionSignature);
+    const esp_partition_t* partition = esp_ota_get_next_update_partition(NULL);
+    return getPartitionBuildSignature( partition );
   }    
 }
-
 
 
 static bool updateToFS(fs::FS &fs, String fileName, byte sourcepartition) {
@@ -193,6 +195,31 @@ static bool updateToFS(fs::FS &fs, String fileName, byte sourcepartition) {
     default: return false;
   }
   return false;
+}
+
+
+static bool rollBackOrUpdateFromFS(fs::FS &fs, String fileName = MENU_BIN ) {
+  const char* binarySignature = getBinarySignature( fs, fileName );
+  const esp_partition_t* partition = esp_ota_get_next_update_partition(NULL);
+  const char* partitionSignature = getPartitionBuildSignature( partition );
+  Serial.print("[rollBackOrUpdateFromFS] SD binary signature for " + fileName + " is: ");
+  Serial.println( binarySignature );
+  Serial.print("[rollBackOrUpdateFromFS] Next partition signature is: " );
+  Serial.println( partitionSignature );
+  if(strcmp(binarySignature, partitionSignature)==0) {
+    Serial.println("[rollBackOrUpdateFromFS][INFO] Both signatures match");
+    if( Update.canRollBack() )  {
+      Serial.println("[rollBackOrUpdateFromFS][ROLLBACK OK] Using rollback update"); // much faster than re-flashing
+      Update.rollBack();
+      return true;
+    } else {
+      Serial.println("[rollBackOrUpdateFromFS][ROLLBACK FAIL] Looks like rollback is not possible");
+    }
+  } else {
+    Serial.println("[rollBackOrUpdateFromFS][ROLLBACK FAIL] None of the signatures match");
+  }
+  SDUpdater sdUpdater;
+  return sdUpdater.updateFromFS(fs, fileName);
 }
 
 
@@ -212,11 +239,8 @@ void SDUpdater::SDMenuProgress(int state, int size) {
   Serial.printf("percent = %d\n", percent);
   uint16_t x = tft.getCursorX();
   uint16_t y = tft.getCursorY();
-
   uint16_t wpercent = (SDU_PROGRESS_W * percent) / 100;
-
   tft.setTextColor(WROVER_WHITE, WROVER_BLACK);
-
   if (percent > 0 && wpercent <= SDU_PROGRESS_W) {
     tft.fillRect(SDU_PROGRESS_X+1, SDU_PROGRESS_Y+1, wpercent, SDU_PROGRESS_H-2, WROVER_GREEN);
     tft.fillRect(SDU_PROGRESS_X+1+wpercent, SDU_PROGRESS_Y+1, SDU_PROGRESS_W-wpercent, SDU_PROGRESS_H-2, WROVER_BLACK);
@@ -242,28 +266,18 @@ bool SDUpdater::performUpdate(Stream &updateSource, size_t updateSize, String fi
       if (Update.end()) {
          Serial.println("OTA done!");
          if (Update.isFinished()) {
-            Out.println();
-            Out.println("Update successfully completed");
-            Out.println("Rebooting.");
-            Out.println();
+            Out.println(); Out.println("Update successfully completed"); Out.println("Rebooting."); Out.println();
             return true;
          } else {
-            Out.println();
-            Out.println("Update not finished!");
-            Out.println("Something went wrong!");
-            Out.println();
+            Out.println(); Out.println("Update not finished!"); Out.println("Something went wrong!"); Out.println();
             return false;
          }
       } else {
-         Out.println();
-         Out.println("Error Occurred. Error #: " + String(Update.getError()));
-         Out.println();
+         Out.println(); Out.println("Error Occurred. Error #: " + String(Update.getError())); Out.println();
          return false;
       }
    } else {
-      Out.println();
-      Out.println("Not enough space to begin OTA");
-      Out.println();
+      Out.println(); Out.println("Not enough space to begin OTA"); Out.println();
       return false;
    }
 }
@@ -274,28 +288,20 @@ bool SDUpdater::updateFromFS(fs::FS &fs, String fileName) {
   bool ret = false;
   if (updateBin) {
     if(updateBin.isDirectory()){
-      Out.println();
-      Out.println("Error, "+ fileName +" is a directory");
-      Out.println();
+      Out.println(); Out.println("Error, "+ fileName +" is a directory"); Out.println();
       updateBin.close();
       return ret;
     }
     size_t updateSize = updateBin.size();
     if (updateSize > 0) {
-      Out.println();
-      Out.println("Updating from "+ fileName);
-      Out.println();
+      Out.println(); Out.println("Updating from "+ fileName); Out.println();
       ret = performUpdate(updateBin, updateSize, fileName);
     } else {
-      Out.println();
-      Out.println("Error, file "+ fileName +" is empty!");
-      Out.println();
+      Out.println(); Out.println("Error, file "+ fileName +" is empty!"); Out.println();
     }
     updateBin.close();
   } else {
-    Out.println();
-    Out.println("Could not load "+ fileName);
-    Out.println();
+    Out.println(); Out.println("Could not load "+ fileName); Out.println();
   }
   return ret;
 }

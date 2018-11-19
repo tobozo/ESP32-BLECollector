@@ -39,26 +39,11 @@
 #define ICON_R 4
 // blescan progress bar vertical position
 #define PROGRESSBAR_Y 30
-// top and bottom non-scrolly zones
-#define HEADER_BGCOLOR tft.color565(0x22, 0x22, 0x22)
-#define FOOTER_BGCOLOR tft.color565(0x22, 0x22, 0x22)
-// BLECard info styling
-#define IN_CACHE_COLOR tft.color565(0x37, 0x6b, 0x37)
-#define NOT_IN_CACHE_COLOR tft.color565(0xa4, 0xa0, 0x5f)
-#define ANONYMOUS_COLOR tft.color565(0x88, 0x88, 0x88)
-#define NOT_ANONYMOUS_COLOR tft.color565(0xee, 0xee, 0xee)
-// one carefully chosen blue
-#define BLUETOOTH_COLOR tft.color565(0x14, 0x54, 0xf0)
-
-#define WROVER_DARKORANGE tft.color565(0x80, 0x40, 0x00)
-
-
 // sizing the UI
 #define HEADER_HEIGHT 40 // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
 #define FOOTER_HEIGHT 40 // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
 #define SCROLL_HEIGHT ( tft.height() - ( HEADER_HEIGHT + FOOTER_HEIGHT ))
-// middle scrolly zone
-#define BLECARD_BGCOLOR tft.color565(0x22, 0x22, 0x44)
+
 // heap map settings
 #define HEAPMAP_BUFFLEN 61 // graph width (+ 1 for hscroll)
 #define MAX_ROW_LEN 30 // max chars per line on display, used to position/cut text
@@ -68,6 +53,7 @@ uint32_t initial_free_heap = freeheap;
 uint32_t heap_tolerance = 20000; // how much memory under min_free_heap the sketch can go and recover without restarting itself
 uint32_t heapmap[HEAPMAP_BUFFLEN] = {0}; // stores the history of heapmap values
 byte heapindex = 0; // index in the circular buffer
+static bool blinkit = false; // task blinker state
 
 const String SPACETABS = "      ";
 const String SPACE = " ";
@@ -79,20 +65,54 @@ enum TextDirections {
   ALIGN_CENTER = 3,
 };
 
-uint32_t GRAPH_LINE_WIDTH = HEAPMAP_BUFFLEN-1; 
-uint32_t GRAPH_LINE_HEIGHT = 35;
-uint16_t GRAPH_X = Out.width - GRAPH_LINE_WIDTH - 2;
-uint16_t GRAPH_Y = 283;
+// top and bottom non-scrolly zones
+uint16_t HEADER_BGCOLOR = tft.color565(0x22, 0x22, 0x22);
+uint16_t FOOTER_BGCOLOR = tft.color565(0x22, 0x22, 0x22);
+// BLECard info styling
+uint16_t IN_CACHE_COLOR = tft.color565(0x37, 0x6b, 0x37);
+uint16_t NOT_IN_CACHE_COLOR = tft.color565(0xa4, 0xa0, 0x5f);
+uint16_t ANONYMOUS_COLOR = tft.color565(0x88, 0x88, 0x88);
+uint16_t NOT_ANONYMOUS_COLOR = tft.color565(0xee, 0xee, 0xee);
+// one carefully chosen blue
+uint16_t BLUETOOTH_COLOR = tft.color565(0x14, 0x54, 0xf0);
+uint16_t WROVER_DARKORANGE = tft.color565(0x80, 0x40, 0x00);
+// middle scrolly zone
+uint16_t BLECARD_BGCOLOR = tft.color565(0x22, 0x22, 0x44);
 
+enum BLECardThemes {
+  IN_CACHE_ANON = 0,
+  IN_CACHE_NOT_ANON = 1,
+  NOT_IN_CACHE_ANON = 2,
+  NOT_IN_CACHE_NOT_ANON = 3
+};
 
 struct BLECardStyle {
   uint16_t textColor;
   uint16_t borderColor;
   uint16_t bgColor;
+  void setTheme( byte themeID ) {
+    bgColor = BLECARD_BGCOLOR;
+    switch( themeID ) {
+      case IN_CACHE_ANON:// = 0,
+        borderColor = IN_CACHE_COLOR;
+        textColor = ANONYMOUS_COLOR;
+      break;
+      case IN_CACHE_NOT_ANON:// = 1,
+        borderColor = IN_CACHE_COLOR;
+        textColor = NOT_ANONYMOUS_COLOR;
+      break;
+      case NOT_IN_CACHE_ANON:// = 2,
+        borderColor = NOT_IN_CACHE_COLOR;
+        textColor = ANONYMOUS_COLOR;
+      break;
+      case NOT_IN_CACHE_NOT_ANON:// = 3
+        borderColor = NOT_IN_CACHE_COLOR;
+        textColor = NOT_ANONYMOUS_COLOR;
+      break;
+    }
+  }
 };
 
-static TaskHandle_t thblink;
-static TaskHandle_t thgraph;
 
 class UIUtils {
   public:
@@ -130,7 +150,7 @@ class UIUtils {
       tft.fillRect(0, Out.height - FOOTER_HEIGHT, Out.width, FOOTER_HEIGHT, FOOTER_BGCOLOR);
       tft.fillRect(0, PROGRESSBAR_Y, Out.width, 2, WROVER_GREENYELLOW);
 
-      alignTextAt("BLE Collector", 6, 4, WROVER_YELLOW, HEADER_BGCOLOR, ALIGN_FREE);
+      alignTextAt( "BLE Collector", 6, 4, WROVER_YELLOW, HEADER_BGCOLOR, ALIGN_FREE );
       if (resetReason == 12) { // SW Reset
         headerStats("Heap heap heap...");
         delay(1000);
@@ -139,9 +159,6 @@ class UIUtils {
       }
       Out.setupScrollArea(HEADER_HEIGHT, FOOTER_HEIGHT);
       timeSetup();
-      #if RTC_PROFILE > HOBO
-        TimeActivity lastTimeSync = getTimeActivity();
-      #endif
       updateTimeString();
       timeStateIcon();
       footerStats();
@@ -165,6 +182,7 @@ class UIUtils {
 
     void playIntro() {
       uint16_t pos = 0;
+      tft.setTextColor(WROVER_GREENYELLOW, Out.BGCOLOR);
       for(int i=0;i<5;i++) {
         pos+=Out.println();
       }
@@ -182,45 +200,50 @@ class UIUtils {
 
 
     void alignTextAt(const char* text, uint16_t x, uint16_t y, int16_t color = WROVER_YELLOW, int16_t bgcolor = WROVER_BLACK, byte textAlign = ALIGN_FREE) {
-      tft.setTextColor(color);
+      tft.setTextColor(color, bgcolor);
       tft.getTextBounds(text, x, y, &Out.x1_tmp, &Out.y1_tmp, &Out.w_tmp, &Out.h_tmp);
       switch (textAlign) {
         case ALIGN_FREE:
           tft.setCursor(x, y);
-          tft.fillRect(x, y, Out.w_tmp, Out.h_tmp, bgcolor);
-          break;
+        break;
         case ALIGN_LEFT:
           tft.setCursor(0, y);
-          tft.fillRect(0, y, Out.w_tmp, Out.h_tmp, bgcolor);
-          break;
+        break;
         case ALIGN_RIGHT:
           tft.setCursor(Out.width - Out.w_tmp, y);
-          tft.fillRect(Out.width - Out.w_tmp, y, Out.w_tmp, Out.h_tmp, bgcolor);
-          break;
+        break;
         case ALIGN_CENTER:
           tft.setCursor(Out.width / 2 - Out.w_tmp / 2, y);
-          tft.fillRect(Out.width / 2 - Out.w_tmp / 2, y, Out.w_tmp, Out.h_tmp, bgcolor);
-          break;
+        break;
       }
       tft.print(text);
     }
 
 
-    void headerStats(const char *status/*String status = ""*/) {
+    void alignTextAt(String text, uint16_t x, uint16_t y, int16_t color = WROVER_YELLOW, int16_t bgcolor = WROVER_BLACK, byte textAlign = ALIGN_FREE) {
+      alignTextAt( text.c_str(), x, y, color, bgcolor, textAlign );
+    }
+
+
+    void headerStats(const char *status) {
       if(isScrolling) return;
       int16_t posX = tft.getCursorX();
       int16_t posY = tft.getCursorY();
       String s_heap = " Heap: " + String(freeheap)+" ";
       String s_entries = " Entries: " + String(entries)+" ";
-      alignTextAt(s_heap.c_str(), 128, 4, WROVER_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT);
+      alignTextAt( s_heap, 128, 4, WROVER_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
       if (status != "") {
-        //Serial.println(status);
         tft.fillRect(0, 18, Out.width, 8, HEADER_BGCOLOR); // clear whole message status area
-        alignTextAt(status, 5, 18, WROVER_YELLOW, HEADER_BGCOLOR, ALIGN_FREE);
+        alignTextAt( status, 5, 18, WROVER_YELLOW, HEADER_BGCOLOR, ALIGN_FREE );
       }
-      alignTextAt(s_entries.c_str(), 128, 18, WROVER_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT);
+      alignTextAt( s_entries, 128, 18, WROVER_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
       tft.drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, 126, 0, 28,  28);
       tft.setCursor(posX, posY);
+    }
+
+
+    void headerStats(String status) {
+      headerStats( status.c_str() );
     }
 
 
@@ -229,16 +252,16 @@ class UIUtils {
       int16_t posX = tft.getCursorX();
       int16_t posY = tft.getCursorY();
 
-      alignTextAt(String(timeString).c_str(), 85, 288, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE);
-      alignTextAt(String(UpTimeString).c_str(), 85, 298, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE);
-      alignTextAt("(c+) tobozo", 72, 308, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE);
+      alignTextAt( timeString,   95, 288, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+      alignTextAt( UpTimeString, 95, 298, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+      alignTextAt("(c+) tobozo", 77, 308, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
       
       String sessDevicesCountStr = " Total: " + String(sessDevicesCount) + " ";
       String devicesCountStr = " Last:  " + String(devicesCount) + " ";
       String newDevicesCountStr = " New:   " + String(newDevicesCount) + " ";
-      alignTextAt(devicesCountStr.c_str(), 0, 288, WROVER_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT);
-      alignTextAt(sessDevicesCountStr.c_str(), 0, 298, WROVER_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT);
-      alignTextAt(newDevicesCountStr.c_str(), 0, 308, WROVER_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT);
+      alignTextAt( devicesCountStr, 0, 288, WROVER_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
+      alignTextAt( sessDevicesCountStr, 0, 298, WROVER_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
+      alignTextAt( newDevicesCountStr, 0, 308, WROVER_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
       
       tft.setCursor(posX, posY);
     }
@@ -277,7 +300,10 @@ class UIUtils {
     static void dbStateIcon(int state) {
       uint16_t color = WROVER_DARKGREY;
       switch(state) {
-        case 1/*DB_OPEN*/:
+        case 2:/*DB OPEN FOR WRITING*/
+          color = WROVER_ORANGE;
+        break;
+        case 1/*DB_OPEN FOR READING*/:
           color = WROVER_YELLOW;
         break;
         case 0/*DB CLOSED*/:
@@ -315,13 +341,7 @@ class UIUtils {
 
 
     void taskHeapGraph() { // always running
-      xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 1000, NULL, 0, &thgraph, 1); /* last = Task Core */
-    }
-
-
-    
-    void taskBlink() { // runs one and detaches
-      xTaskCreatePinnedToCore(blinkBlueIcon, "BlinkBlueIcon", 1000, NULL, 0, &thblink, 0); /* last = Task Core */
+      xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 1000, NULL, 0, NULL, 0); /* last = Task Core */
     }
 
 
@@ -329,6 +349,10 @@ class UIUtils {
       uint32_t lastfreeheap;
       uint32_t toleranceheap = min_free_heap + heap_tolerance;
       uint8_t i = 0;
+      uint32_t GRAPH_LINE_WIDTH = HEAPMAP_BUFFLEN-1; 
+      uint32_t GRAPH_LINE_HEIGHT = 35;
+      uint16_t GRAPH_X = Out.width - GRAPH_LINE_WIDTH - 2;
+      uint16_t GRAPH_Y = 283;
       while (1) {
         // only redraw if the heap changed
         if(lastfreeheap!=freeheap) {
@@ -417,9 +441,15 @@ class UIUtils {
     }
 
 
+    void startTaskBlink() { // runs one and detaches
+      blinkit = true;
+      xTaskCreatePinnedToCore(blinkBlueIcon, "BlinkBlueIcon", 1000, NULL, 0, NULL, 0); /* last = Task Core */
+    }
+
     static void stopTaskBlink() {
       // clear progress bar
-      vTaskDelete( thblink );
+      blinkit = false;
+      delay(50); // give some time to the task to end
     }
 
     static void blinkBlueIcon( void * parameter ) {
@@ -430,7 +460,7 @@ class UIUtils {
       unsigned long lastprogress = millis();
 
       bool toggler = true;
-      while (now < then ) {
+      while (now < then && blinkit) {
         now = millis();
         if (lastblink + random(333, 666) < now) {
           toggler = !toggler;
@@ -447,13 +477,15 @@ class UIUtils {
           tft.fillRect(0, PROGRESSBAR_Y, (Out.width * percent) / 100, 2, BLUETOOTH_COLOR);
           lastprogress = now;
         }
-        vTaskDelay(30);
+        //vTaskDelay(30);
+        delay(30);
         
       }
       tft.fillRect(0, PROGRESSBAR_Y, Out.width, 2, WROVER_DARKGREY);
       // clear blue pin
       bleStateIcon(WROVER_DARKGREY);
-      vTaskDelete( thblink );
+      blinkit = false;
+      vTaskDelete( NULL );
     }
 
 
@@ -475,29 +507,23 @@ class UIUtils {
       uint16_t randomcolor = tft.color565(random(128, 255), random(128, 255), random(128, 255));
       uint16_t pos = 0;
       uint16_t hop;
-
+      tft.setTextColor(BLECardTheme.textColor, BLECardTheme.bgColor);
       Out.BGCOLOR = BLECardTheme.bgColor;
-      
-      //Out.BGCOLOR = BLECARD_BGCOLOR;
-      tft.setTextColor(BLECardTheme.textColor);
       hop = Out.println(SPACE);
       pos += hop;
       if (BLEDevCache[cacheindex].address != "" && BLEDevCache[cacheindex].rssi != "") {
         memcpy(lastPrintedMac[lastPrintedMacIndex++%BLECARD_MAC_CACHE_SIZE], BLEDevCache[cacheindex].address.c_str(), 18);
         hop = Out.println( "  " + BLEDevCache[cacheindex].address );
         pos += hop;
-        alignTextAt(String(BLEDevCache[cacheindex].rssi + " dBm    ").c_str(), 0, Out.scrollPosY - hop, BLECardTheme.textColor, BLECardTheme.bgColor, ALIGN_RIGHT);
+        alignTextAt( BLEDevCache[cacheindex].rssi + " dBm    ", 0, Out.scrollPosY - hop, BLECardTheme.textColor, BLECardTheme.bgColor, ALIGN_RIGHT );
         tft.setCursor(0, Out.scrollPosY);
         drawRSSI(Out.width - 18, Out.scrollPosY - hop - 1, BLEDevCache[cacheindex].rssi.toInt(), BLECardTheme.textColor);
-        if (BLEDevCache[cacheindex].in_db) {
-          // 'already seen this' icon
+        if (BLEDevCache[cacheindex].in_db) { // 'already seen this' icon
           tft.drawJpg( update_jpeg, update_jpeg_len, 138, Out.scrollPosY - hop, 8,  8);
-        } else {
-          // 'just inserted this' icon
+        } else { // 'just inserted this' icon
           tft.drawJpg( insert_jpeg, insert_jpeg_len, 138, Out.scrollPosY - hop, 8,  8);
         }
-        if (BLEDevCache[cacheindex].uuid != "") {
-          // 'has service UUID' Icon
+        if (BLEDevCache[cacheindex].uuid != "") { // 'has service UUID' Icon
           tft.drawJpg( service_jpeg, service_jpeg_len, 128, Out.scrollPosY - hop, 8,  8);
         }
       }
