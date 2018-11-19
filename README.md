@@ -39,13 +39,12 @@ RTC available Profiles:
 
 Optional I2C RTC Module requirements (/!\ **Chronomaniac** profile only):
 -------------------------------------
-  - Set `#define RTC_PROFILE NTP_MENU` in [Settings.h](https://github.com/tobozo/ESP32-BLECollector/blob/master/Settings.h)
-  - Set your `WIFI_SSID` and `WIFI_PASSWD` in [Settings.h](https://github.com/tobozo/ESP32-BLECollector/blob/master/Settings.h)
-  - Export compiled binary as `NTPMenu.bin` && copy the file on the SD Card
-  - Set `#define RTC_PROFILE CHRONOMANIAC` in [Settings.h](https://github.com/tobozo/ESP32-BLECollector/blob/master/Settings.h)
-  - Export compiled binary as `BLEMenu.bin` && copy the file on the SD Card
   - Insert the SD Card
-  - Flash the ESP
+  - Set `#define RTC_PROFILE CHRONOMANIAC` in [Settings.h](https://github.com/tobozo/ESP32-BLECollector/blob/master/Settings.h)
+  - Flash the ESP (the binary will mirror itself onto the SD Card)
+  - Set your `WIFI_SSID` and `WIFI_PASSWD` in [Settings.h](https://github.com/tobozo/ESP32-BLECollector/blob/master/Settings.h)
+  - Set `#define RTC_PROFILE NTP_MENU` in [Settings.h](https://github.com/tobozo/ESP32-BLECollector/blob/master/Settings.h)
+  - Flash the ESP (the binary will mirror itself onto the SD Card, attempt a NTP sync, and reload the menu)
 
 Contributions are welcome :-)
 
@@ -64,6 +63,7 @@ Some ideas I'll try to implement in the upcoming changes:
 - ~~move the ble-oui query outside the devicecallback (this is causing watchdog messages) and populate between scans~~
 - Reduce the memory problems to avoid restarting the ESP too often (currently restarts when heap is under 100k)
 - Have the data easily exported without removing the sd card (wifi, ble, serial)
+- Auto downloading/refreshing sqlite databases
 
 Credits/requirements:
 
