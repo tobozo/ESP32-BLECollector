@@ -58,6 +58,8 @@ byte SCAN_TIME = 30; // seconds
 
 #define NTP_MENU_NAME "NTPMenu"
 #define BLE_MENU_NAME "BLEMenu"
+#define RTC_SDA 26 // pin number
+#define RTC_SCL 27 // pin number
 
 // don't edit anything below this
 #if RTC_PROFILE==HOBO // no NTP for Hobo mode

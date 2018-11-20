@@ -170,7 +170,7 @@ bool RTCSetup() {
     Serial.println("[RTC] Hobo mode, no time to waste :)");
     return false;
   #else
-    Wire.begin(26, 27); // RTC wired to SDA, SCL (26,27 on Wrover Kit)
+    Wire.begin(RTC_SDA/*26*/, RTC_SCL/*27*/); // RTC wired to SDA, SCL (26,27 on Wrover Kit)
     if(!RTC.begin()) {
       Serial.println("[RTC] begin() failed");
       return false;
