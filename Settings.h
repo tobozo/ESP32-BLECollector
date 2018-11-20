@@ -48,7 +48,7 @@
 //#define RTC_PROFILE CHRONOMANIAC // to build the BLEMenu.bin with RTC support and NTP Sync
 //#define RTC_PROFILE ROGUE // to build the BLEMenu.bin with RTC support, but *without* NTP sync
 //#define RTC_PROFILE HOBO // to build the NTPMenu.bin *without* RTC/NTP support
-byte SCAN_TIME = 30; // seconds 
+byte SCAN_TIME = 10; // seconds 
 #define MIN_SCAN_TIME 10 // seconds min
 #define MAX_SCAN_TIME 50 // seconds max
 #define BLEDEVCACHE_SIZE 16 // use some heap to cache BLECards, min = 5, max = 64, higher value = smaller uptime

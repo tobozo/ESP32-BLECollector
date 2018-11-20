@@ -47,7 +47,7 @@ class FoundDeviceCallback: public BLEAdvertisedDeviceCallbacks {
   bool toggler = true;
   byte foundDevicesCount = 0;
   void onResult(BLEAdvertisedDevice advertisedDevice) {
-    Serial.printf("Found %s \n", advertisedDevice.toString().c_str());
+    //Serial.printf("Found %s \n", advertisedDevice.toString().c_str()); // <<< memory leak
     foundDevicesCount++;
     if( foundDevicesCount > BLEDEVCACHE_SIZE ) {
       // too many devices found can't fit in cache, stop scan
@@ -56,6 +56,7 @@ class FoundDeviceCallback: public BLEAdvertisedDeviceCallbacks {
         Serial.println("[SCAN_TIME] decreased to " + String(SCAN_TIME));
       }
       advertisedDevice.getScan()->stop();
+      foundDevicesCount = 0;
       UI.stopTaskBlink();
     }
     //UI.headerStats("Found " + String(foundDevicesCount));
@@ -68,7 +69,9 @@ class FoundDeviceCallback: public BLEAdvertisedDeviceCallbacks {
   }
 };
 
-
+const char* processTemplateLong = "%s%d%s%d";
+const char* processTemplateShort = "%s%d";
+static char processMessage[20];
 
 class BLEScanUtils {
 
@@ -93,7 +96,8 @@ class BLEScanUtils {
       #endif
       
       WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
-      BLEDevice::init("");
+      //BLEDevice::init("");
+      xTaskCreatePinnedToCore(scanTask, "scanTask", 5000, NULL, 0, NULL, 1); /* last = Task Core */
     }
 
 
@@ -102,7 +106,7 @@ class BLEScanUtils {
         if( strcmp(address, BLEDevCache[i].address.c_str())==0  ) {
           BLEDevCache[i].hits++;
           BLEDevCacheHit++;
-          Serial.printf("[CACHE HIT] BLEDevCache ID #%s has %d cache hits\n", address, BLEDevCache[i].hits);
+          //Serial.printf("[CACHE HIT] BLEDevCache ID #%s has %d cache hits\n", address, BLEDevCache[i].hits);
           return i;
         }
       }
@@ -339,13 +343,13 @@ class BLEScanUtils {
     }
 
     /* process+persist device data in 6 steps to determine if worthy to display or not */
-    static bool processDevice( BLEAdvertisedDevice &advertisedDevice, byte &cacheIndex, int deviceNum, String &headerMessage ) {
+    static bool processDevice( BLEAdvertisedDevice &advertisedDevice, byte &cacheIndex, int deviceNum ) {
       const char* currentBLEAddress = advertisedDevice.getAddress().toString().c_str();
       memcpy(DB.currentBLEAddress, currentBLEAddress, 18);
       // 1) return if BLECard is already on screen
       if( UI.BLECardIsOnScreen( DB.currentBLEAddress ) ) {
         SelfCacheHit++;
-        headerMessage = "Ignoring #" + String(deviceNum);
+        sprintf( processMessage, processTemplateShort, "Ignoring #", deviceNum );
         return false;
       }
       // 2) return if BLECard is already in cache
@@ -354,14 +358,14 @@ class BLEScanUtils {
         inCacheCount++;
         cacheIndex = deviceIndexIfExists;
         UI.BLECardTheme.setTheme( (isAnonymousDevice( cacheIndex ) ? IN_CACHE_ANON : IN_CACHE_NOT_ANON) );
-        headerMessage = "Cache "+String(cacheIndex)+"#"+String(deviceNum);
+        sprintf( processMessage, processTemplateLong, "Cache ", cacheIndex, "#", deviceNum );
         return true;
       }
       // 3) return if BLEDevCache will explode
       notInCacheCount++;
       if( notInCacheCount+inCacheCount > BLEDEVCACHE_SIZE) {
         Serial.println("[CRITICAL] device scan count exceeds circular cache size, cowardly giving up on this one: " + String(DB.currentBLEAddress));
-        headerMessage = "Avoiding #" + String(deviceNum);
+        sprintf( processMessage, processTemplateShort, "Avoiding ", deviceNum );
         return false;
       }
       if(!DB.isOOM) {
@@ -371,7 +375,7 @@ class BLEScanUtils {
       if(deviceIndexIfExists>-1) {
         cacheIndex = deviceIndexIfExists;
         UI.BLECardTheme.setTheme( IN_CACHE_NOT_ANON );
-        headerMessage = "DB Seen "+String(cacheIndex)+"#"+String(deviceNum);
+        sprintf( processMessage, processTemplateLong, "DB Seen ", cacheIndex, "#", deviceNum );
         return true;
       }
       // 5) return if data frozen
@@ -382,7 +386,7 @@ class BLEScanUtils {
         BLEDevCache[cacheIndex].in_db = false;
         #ifdef USE_NVS
           byte prefIndex = freeze( cacheIndex );
-          headerMessage = "Frozen "+String(cacheIndex)+"#"+String(deviceNum);
+          sprintf( processMessage, processTemplateLong, "Frozen ", cacheIndex, "#", deviceNum );
         #endif
         return false; // don't render it (will be thawed, populated, inserted and rendered on reboot)
       }
@@ -393,80 +397,133 @@ class BLEScanUtils {
           entries++;
           prune_trigger++;
           UI.BLECardTheme.setTheme( NOT_IN_CACHE_NOT_ANON );
-          headerMessage = "Inserted "+String(cacheIndex)+"#"+String(deviceNum);
+          sprintf( processMessage, processTemplateLong, "Inserted ", cacheIndex, "#", deviceNum );
           return true;
         }
         #ifdef USE_NVS // DB Insert Error, freeze it in NVS!
           byte prefIndex = freeze( cacheIndex );
-          headerMessage = "Frozen "+String(cacheIndex)+"#"+String(deviceNum);
+          sprintf( processMessage, processTemplateLong, "Frozen ", cacheIndex, "#", deviceNum );
         #endif
         return false; // don't render it (will be thawed, rendered and inserted on reboot)
       }
       // 7) device is anonymous
       AnonymousCacheHit++;
       UI.BLECardTheme.setTheme( IN_CACHE_ANON );
-      headerMessage = "Anon "+String(cacheIndex)+"#"+String(deviceNum);
+      sprintf( processMessage, processTemplateLong, "Anon ", cacheIndex, "#", deviceNum );
       return true;
     }
 
     /* process scan data */
     static void onScanDone(BLEScanResults foundDevices) {
+      UI.stopTaskBlink();
+      UI.footerStats();
       UI.headerStats("Showing results ...");
-      String headerMessage = "";
-      headerMessage.reserve(20);
+      //String headerMessage = "";
+      //headerMessage.reserve(20);
       byte cacheIndex;
+      bool is_printable;
       notInCacheCount = 0;
       inCacheCount = 0;
       devicesCount = foundDevices.getCount();
+      if(devicesCount < BLEDEVCACHE_SIZE) {
+        if( SCAN_TIME+1 < MAX_SCAN_TIME ) {
+          SCAN_TIME++;
+          Serial.println("[SCAN_TIME] increased to " + String(SCAN_TIME));
+        }
+      }
       sessDevicesCount += devicesCount;
       for (int i = 0; i < devicesCount; i++) {
         BLEAdvertisedDevice advertisedDevice = foundDevices.getDevice(i);
-        bool is_printable = processDevice( advertisedDevice, cacheIndex, i, headerMessage );
-        UI.headerStats( headerMessage );
+        is_printable = processDevice( advertisedDevice, cacheIndex, i );
+        UI.headerStats( processMessage );
         if( is_printable ) {
           UI.printBLECard( cacheIndex ); // TODO : procrastinate this
         }
         UI.footerStats();
       }
+      UI.update(); // run after-scan display stuff
+      
       if( DB.isOOM ) {
         Serial.println("[DB ERROR] restarting");
-        Serial.println("During this session ("+ String(UpTimeString) +"), " + String(newDevicesCount-AnonymousCacheHit) + " out of " + String(sessDevicesCount) + " devices were added to the DB\n");
+        Serial.println("During this session ("+ String(UpTimeString) +"), " 
+         + String(newDevicesCount-AnonymousCacheHit) 
+         + " out of " + String(sessDevicesCount) + " devices were added to the DB\n");
         delay(1000);
         ESP.restart();
       }
     }
 
 
+    static void scanTask( void * parameter ) {
+      BLEDevice::init("");
+      auto pBLEScan = BLEDevice::getScan(); //create new scan
+      pBLEScan->setAdvertisedDeviceCallbacks(new FoundDeviceCallback()); // memory leak ?
+      pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
+      pBLEScan->setInterval(0x50); // 0x50
+      pBLEScan->setWindow(0x30); // 0x30
+      unsigned long lastheap = 0;
+      char heapsign[4] = " ";
+
+      while(1) {
+        UI.headerStats("Scan in progress...");
+        UI.startTaskBlink();
+        pBLEScan->start(SCAN_TIME, onScanDone);
+        delay(1000);
+        if(lastheap > freeheap) {
+          // heap decreased
+          sprintf(heapsign, "%s", "↘");
+        } else if(lastheap < freeheap) {
+          // heap increased
+          sprintf(heapsign, "%s", "↗");
+        } else {
+          // heap unchanged
+          sprintf(heapsign, "%s", "⇉");
+        }
+        lastheap = freeheap;
+        
+        Serial.printf("[%s][Heap:%d][Cache hits][Screen:%s][BLEDevCards:%s][Anonymous:%s][Oui:%s][Vendor:%s]\n", 
+          heapsign,
+          lastheap,
+          String(SelfCacheHit).c_str(),
+          String(BLEDevCacheHit).c_str(),
+          String(AnonymousCacheHit).c_str(),
+          String(OuiCacheHit).c_str(),
+          String(VendorCacheHit).c_str()
+        );
+      }
+      vTaskDelete( NULL );
+    }
+
+
     void scan() {
-      UI.headerStats("Scan in progress...");
-      UI.footerStats();
+
       // synchronous scan: blink icon and draw time-based scan progress in a separate task
       // while using the callback to update its status in real time
-      UI.startTaskBlink();
+      delay(SCAN_TIME*1000);
+
+/*
       auto pBLEScan = BLEDevice::getScan(); //create new scan
-      pBLEScan->setAdvertisedDeviceCallbacks(new FoundDeviceCallback());
+      //pBLEScan->setAdvertisedDeviceCallbacks(new FoundDeviceCallback()); // memory leak !
       pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
       pBLEScan->setInterval(0x50); // 0x50
       pBLEScan->setWindow(0x30); // 0x30
       BLEScanResults foundDevices = pBLEScan->start(SCAN_TIME);
-      UI.stopTaskBlink();
+*/
+
+      
+
+      /*
       if(foundDevices.getCount()<BLEDEVCACHE_SIZE) {
         if( SCAN_TIME+1 < MAX_SCAN_TIME ) {
           SCAN_TIME++;
           Serial.println("[SCAN_TIME] increased to " + String(SCAN_TIME));
         }
-      }
-      onScanDone( foundDevices );
+      }*/
+      //onScanDone( foundDevices );
+
       //pBLEScan->start(SCAN_TIME, onScanDone);
-      UI.update(); // run after-scan display stuff
-      DB.maintain(); // check for db pruning
-      Serial.printf("Cache hits -- Screen:%s BLEDevCards:%s (including %s Anonymous), Oui:%s Vendor:%s\n", 
-        String(SelfCacheHit).c_str(),
-        String(BLEDevCacheHit).c_str(),
-        String(AnonymousCacheHit).c_str(),
-        String(OuiCacheHit).c_str(),
-        String(VendorCacheHit).c_str()
-      );
+      //UI.update(); // run after-scan display stuff
+      //DB.maintain(); // check for db pruning
     }
 
 };

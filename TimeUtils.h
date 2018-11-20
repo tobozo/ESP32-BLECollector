@@ -95,7 +95,9 @@ static char LastSyncTimeString[32] = "YYYY-MM-DD HH:MM:SS";
       lastSyncDateTime = timeActivity.epoch;
       nowDateTime = RTC.now();
       int32_t deltaInSeconds = nowDateTime.unixtime() - lastSyncDateTime.unixtime();
-      Serial.println("[RTC] Last Time Sync: " + String(LastSyncTimeString) + " ( " + String(deltaInSeconds) + " seconds ago) using source #" + String(timeActivity.source));
+      Serial.println("[RTC] Last Time Sync: " + String(LastSyncTimeString) 
+                     + " ( " + String(deltaInSeconds) 
+                     + " seconds ago) using source #" + String(timeActivity.source));
   
       #if RTC_PROFILE > ROGUE // on NTP_MENU and CHRONOMANIAC SD-mirror themselves
         // mirror current binary to SD Card if needed
@@ -149,7 +151,10 @@ void updateTimeString() {
       if (RTC_is_running) {
         int32_t deltaInSeconds = nowDateTime.unixtime() - lastSyncDateTime.unixtime();
         if ( deltaInSeconds > 86400/*300*/) {
-          Serial.println("[CHRONOMANIAC] Last Time Sync: " + String(LastSyncTimeString) + " ( " + String(deltaInSeconds) + " seconds ago). Time isn't fresh anymore, should reload NTP menu !!");
+          Serial.println("[CHRONOMANIAC] Last Time Sync: " 
+           + String(LastSyncTimeString) 
+           + " ( " + String(deltaInSeconds) 
+           + " seconds ago). Time isn't fresh anymore, should reload NTP menu !!");
           rollBackOrUpdateFromFS( SD_MMC, NTP_MENU_FILENAME );
           ESP.restart();
         }

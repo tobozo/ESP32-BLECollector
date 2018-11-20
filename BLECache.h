@@ -29,8 +29,9 @@
 
 */
 
-#define BLECARD_MAC_CACHE_SIZE BLEDEVCACHE_SIZE // "virtual" BLE Card circular cache size, keeps mac addresses to avoid duplicate rendering
-static char lastPrintedMac[BLECARD_MAC_CACHE_SIZE][18]; // BLECard circular screen cache, where the mac addresses are stored
+#define BLECARD_MAC_CACHE_SIZE BLEDEVCACHE_SIZE
+//#define BLECARD_MAC_CACHE_SIZE 5 // "virtual" BLE Card circular cache size, keeps mac addresses to avoid duplicate rendering
+static char lastPrintedMac[BLECARD_MAC_CACHE_SIZE][18]; // BLECard circular screen cache
 static byte lastPrintedMacIndex = 0; // index in the circular buffer
 
 static uint16_t notInCacheCount = 0; // scan-relative
@@ -65,38 +66,41 @@ static byte BLEDevCacheIndex = 0; // index in the circular buffer
 void BLEDevCacheReset(byte cacheindex) {
   BLEDevCache[cacheindex].in_db = false;
   BLEDevCache[cacheindex].hits = 0;
-  BLEDevCache[cacheindex].appearance = ""; BLEDevCache[cacheindex].appearance.reserve(16);
-  BLEDevCache[cacheindex].name = ""; BLEDevCache[cacheindex].name.reserve(16);
-  BLEDevCache[cacheindex].address = ""; BLEDevCache[cacheindex].address.reserve(18);
-  BLEDevCache[cacheindex].ouiname = ""; BLEDevCache[cacheindex].ouiname.reserve(32);
-  BLEDevCache[cacheindex].rssi = ""; BLEDevCache[cacheindex].rssi.reserve(8);
+  BLEDevCache[cacheindex].appearance = "";
+  BLEDevCache[cacheindex].name = ""; 
+  BLEDevCache[cacheindex].address = ""; 
+  BLEDevCache[cacheindex].ouiname = ""; 
+  BLEDevCache[cacheindex].rssi = ""; 
   BLEDevCache[cacheindex].vdata = 0;// vdata.reserve(32);
-  BLEDevCache[cacheindex].vname = ""; BLEDevCache[cacheindex].vname.reserve(16);
-  BLEDevCache[cacheindex].uuid = ""; BLEDevCache[cacheindex].uuid.reserve(37);
+  BLEDevCache[cacheindex].vname = ""; 
+  BLEDevCache[cacheindex].uuid = ""; 
+  
+  BLEDevCache[cacheindex].uuid.reserve(37);
+  BLEDevCache[cacheindex].vname.reserve(16);
+  BLEDevCache[cacheindex].rssi.reserve(8);
+  BLEDevCache[cacheindex].ouiname.reserve(32);
+  BLEDevCache[cacheindex].address.reserve(18);
+  BLEDevCache[cacheindex].name.reserve(16);
+  BLEDevCache[cacheindex].appearance.reserve(16);
   //spower = "";
+  //created_at = RTC.now().unixtime()
+  //updated_at = RTC.now().unixtime()
 }
 
 static void BLEDevCacheSet(byte cacheindex, const char* prop, const char* val) {
   bool updated = false;
-  if(strcmp(prop, "rowid")==0)           { /*id = val.toInt();*/ updated = true; }
-  else if(strcmp(prop, "appearance")==0) { BLEDevCache[cacheindex].appearance = String(val); updated = true; }
-  else if(strcmp(prop, "name")==0)       { BLEDevCache[cacheindex].name = String(val);       updated = true; }
-  else if(strcmp(prop, "address")==0)    { BLEDevCache[cacheindex].address = String(val);    updated = true; }
-  else if(strcmp(prop, "ouiname")==0)    { BLEDevCache[cacheindex].ouiname = String(val);    updated = true; }
-  else if(strcmp(prop, "rssi")==0)       { BLEDevCache[cacheindex].rssi = String(val);       updated = true; }
-  else if(strcmp(prop, "vdata")==0)      { BLEDevCache[cacheindex].vdata = String(val).toInt(); updated = true; }
-  else if(strcmp(prop, "vname")==0)      { BLEDevCache[cacheindex].vname = String(val);      updated = true; }
-  else if(strcmp(prop, "uuid")==0)       { BLEDevCache[cacheindex].uuid = String(val);       updated = true; }
-  //else if(prop=="spower")     { spower = val;     updated = true; }
-  //else if(prop=="created_at") { created_at = val; updated = true; }
-  //else if(prop=="updated_at") { created_at = val; updated = true; }
-  else { }
-  if(updated) {
-    //Serial.print("[OK]");
-  } else {
-    //Serial.print("[MISS]");
-  }
-  //Serial.println("Setting " + String(prop) + " to '" + val + "' ... ");
+  if(strcmp(prop, "rowid")==0)           { /*id = val.toInt();*/}
+  else if(strcmp(prop, "appearance")==0) { BLEDevCache[cacheindex].appearance = String(val);}
+  else if(strcmp(prop, "name")==0)       { BLEDevCache[cacheindex].name = String(val);      }
+  else if(strcmp(prop, "address")==0)    { BLEDevCache[cacheindex].address = String(val);   }
+  else if(strcmp(prop, "ouiname")==0)    { BLEDevCache[cacheindex].ouiname = String(val);   }
+  else if(strcmp(prop, "rssi")==0)       { BLEDevCache[cacheindex].rssi = String(val);      }
+  else if(strcmp(prop, "vdata")==0)      { BLEDevCache[cacheindex].vdata = String(val).toInt();}
+  else if(strcmp(prop, "vname")==0)      { BLEDevCache[cacheindex].vname = String(val);     }
+  else if(strcmp(prop, "uuid")==0)       { BLEDevCache[cacheindex].uuid = String(val);      }
+  //else if(prop=="spower")     { spower = val;    }
+  //else if(prop=="created_at") { created_at = val;}
+  //else if(prop=="updated_at") { created_at = val;}
 }
 
 static byte getNextBLEDevCacheIndex() {

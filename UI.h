@@ -360,7 +360,7 @@ class UIUtils {
           heapindex = heapindex % HEAPMAP_BUFFLEN;
           lastfreeheap = freeheap;
         } else {
-          vTaskDelay(300);
+          delay(300);
           continue;
         }
         uint16_t GRAPH_COLOR = WROVER_WHITE;
@@ -477,9 +477,7 @@ class UIUtils {
           tft.fillRect(0, PROGRESSBAR_Y, (Out.width * percent) / 100, 2, BLUETOOTH_COLOR);
           lastprogress = now;
         }
-        //vTaskDelay(30);
         delay(30);
-        
       }
       tft.fillRect(0, PROGRESSBAR_Y, Out.width, 2, WROVER_DARKGREY);
       // clear blue pin
@@ -501,7 +499,7 @@ class UIUtils {
       }
       return onScreen;
     }
-    
+
 
     int printBLECard(byte cacheindex) {
       uint16_t randomcolor = tft.color565(random(128, 255), random(128, 255), random(128, 255));
@@ -604,13 +602,15 @@ class UIUtils {
     void drawRSSI(int16_t x, int16_t y, int16_t rssi, uint16_t bgcolor) {
       uint16_t barColors[4];
       if (rssi >= -30) {
-        // -30 dBm and more Amazing    - Max achievable signal strength. The client can only be a few feet from the AP to achieve this. Not typical or desirable in the real world.  N/A
+        // -30 dBm and more Amazing    - Max achievable signal strength. The client can only be a few feet 
+        // from the AP to achieve this. Not typical or desirable in the real world.  N/A
         barColors[0] = WROVER_GREEN;
         barColors[1] = WROVER_GREEN;
         barColors[2] = WROVER_GREEN;
         barColors[3] = WROVER_GREEN;
       } else if (rssi >= -67) {
-        // between -67 dBm and 31 dBm  - Very Good   Minimum signal strength for applications that require very reliable, timely delivery of data packets.   VoIP/VoWiFi, streaming video
+        // between -67 dBm and 31 dBm  - Very Good   Minimum signal strength for applications that require 
+        // very reliable, timely delivery of data packets.   VoIP/VoWiFi, streaming video
         barColors[0] = WROVER_GREEN;
         barColors[1] = WROVER_GREEN;
         barColors[2] = WROVER_GREEN;
@@ -644,8 +644,7 @@ class UIUtils {
       tft.fillRect(x + 3, y + 3, 2, 5, barColors[1]);
       tft.fillRect(x + 6, y + 2, 2, 6, barColors[2]);
       tft.fillRect(x + 9, y + 1, 2, 7, barColors[3]);
-    }  
-
+    }
 };
 
 

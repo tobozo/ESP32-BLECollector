@@ -53,11 +53,23 @@ String colValue = ""; // search result
 #define vnameQuery   "SELECT DISTINCT SUBSTR(vname,0,32) FROM blemacs where TRIM(vname)!=''"
 #define ouinameQuery "SELECT DISTINCT SUBSTR(ouiname,0,32) FROM blemacs where TRIM(ouiname)!=''"
 // used by getEntries()
-#define allEntriesQuery "SELECT appearance, name, address, ouiname, rssi, vdata, vname, uuid, spower FROM blemacs;"
+#define BLEMAC_FIELDNAMES " \
+  appearance, \
+  name, \
+  address, \
+  ouiname, \
+  rssi, \
+  vdata, \
+  vname, \
+  uuid \
+"
+#define allEntriesQuery "SELECT " BLEMAC_FIELDNAMES " FROM blemacs;"
 #define countEntriesQuery "SELECT count(*) FROM blemacs;"
 // used by resetDB()
 #define dropTableQuery   "DROP TABLE IF EXISTS blemacs;"
-#define createTableQuery "CREATE TABLE IF NOT EXISTS blemacs(id INTEGER, appearance, name, address, ouiname, rssi, vdata, vname, uuid, spower, hits INTEGER, created_at timestamp NOT NULL DEFAULT current_timestamp, updated_at timestamp NOT NULL DEFAULT current_timestamp);"
+#define createTableQuery "CREATE TABLE IF NOT EXISTS blemacs( " BLEMAC_FIELDNAMES " )"
+//  created_at timestamp NOT NULL DEFAULT current_timestamp, \
+//  updated_at timestamp NOT NULL DEFAULT current_timestamp) \
 // used by pruneDB()
 char charToClean = 3; // for some reason (BLE bug?) invalid/empty devices named \3 are inserted
 String cleanTableQueryString = String("DELETE FROM blemacs WHERE TRIM(name) LIKE '%"+String(charToClean)+"%'");
@@ -68,9 +80,9 @@ const char *cleanTableQuery = cleanTableQueryString.c_str();
 // used by testOUI()
 #define testOUIQuery "SELECT * FROM 'oui-light' limit 10"
 // used by insertBTDevice()
-#define insertQueryTemplate "INSERT INTO blemacs(appearance, name, address, ouiname, rssi, vdata, vname, uuid, spower, hits) VALUES(\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"1\")"
+#define insertQueryTemplate "INSERT INTO blemacs(" BLEMAC_FIELDNAMES ") VALUES(\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\",\"%s\")"
 static char insertQuery[512]; // stack overflow ? pray that 512 is enough :D
-#define searchDeviceTemplate "SELECT appearance, name, address, ouiname, rssi, vname, uuid FROM blemacs WHERE address='%s'"
+#define searchDeviceTemplate "SELECT " BLEMAC_FIELDNAMES " FROM blemacs WHERE address='%s'"
 static char searchDeviceQuery[132];
 //String requestStr = "SELECT appearance, name, address, ouiname, rssi, vname, uuid FROM blemacs WHERE address='" + bleDeviceAddress + "'";
 
@@ -197,9 +209,15 @@ class DBUtils {
     int open(DBName dbName, bool readonly=true) {
      int rc;
       switch(dbName) {
-        case BLE_COLLECTOR_DB:    rc = sqlite3_open("/sdcard/blemacs.db", &BLECollectorDB); break;// will be created upon first boot
-        case MAC_OUI_NAMES_DB:    rc = sqlite3_open("/sdcard/mac-oui-light.db", &OUIVendorsDB); break;// https://code.wireshark.org/review/gitweb?p=wireshark.git;a=blob_plain;f=manuf
-        case BLE_VENDOR_NAMES_DB: rc = sqlite3_open("/sdcard/ble-oui.db", &BLEVendorsDB); break;// https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers
+        case BLE_COLLECTOR_DB: // will be created upon first boot
+          rc = sqlite3_open("/sdcard/blemacs.db", &BLECollectorDB); 
+        break;
+        case MAC_OUI_NAMES_DB: // https://code.wireshark.org/review/gitweb?p=wireshark.git;a=blob_plain;f=manuf
+          rc = sqlite3_open("/sdcard/mac-oui-light.db", &OUIVendorsDB); 
+        break;
+        case BLE_VENDOR_NAMES_DB: // https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers
+          rc = sqlite3_open("/sdcard/ble-oui.db", &BLEVendorsDB); 
+        break;
         default: Serial.println("Can't open null DB"); UI.dbStateIcon(-1); return rc;
       }
       if (rc) {
