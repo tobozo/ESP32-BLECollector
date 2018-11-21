@@ -30,7 +30,8 @@
 */
 
 bool RTC_is_running = false;
-static char timeString[13] = "--:--"; // %02d:%02d
+static char hhmmString[13] = "--:--"; // %02d:%02d
+static char hhmmssString[13] = "--:--:--"; // %02d:%02d:%02d
 static char UpTimeString[13] = "00:00"; // %02d:%02d
 static char LastSyncTimeString[32] = "YYYY-MM-DD HH:MM:SS";
 
@@ -143,12 +144,18 @@ static char LastSyncTimeString[32] = "YYYY-MM-DD HH:MM:SS";
 
 #endif
 
-void updateTimeString() {
+void updateTimeString(bool checkNTP=false) {
+  unsigned long seconds_since_boot = millis() / 1000;
+  uint32_t minutes_since_boot = seconds_since_boot / 60;
+  uint32_t mm = minutes_since_boot % 60;
+  uint32_t hh = minutes_since_boot / 60;
+  
   #if RTC_PROFILE > HOBO
     nowDateTime = RTC.now();
-    sprintf(timeString, "%02d:%02d", nowDateTime.hour(), nowDateTime.minute());
+    sprintf(hhmmString, "%02d:%02d", nowDateTime.hour(), nowDateTime.minute());
+    sprintf(hhmmssString, "%02d:%02d:%02d", nowDateTime.hour(), nowDateTime.minute(), nowDateTime.second());
     #if RTC_PROFILE == CHRONOMANIAC  // chronomaniac mode
-      if (RTC_is_running) {
+      if (checkNTP && RTC_is_running) {
         int32_t deltaInSeconds = nowDateTime.unixtime() - lastSyncDateTime.unixtime();
         if ( deltaInSeconds > 86400/*300*/) {
           Serial.println("[CHRONOMANIAC] Last Time Sync: " 
@@ -160,13 +167,13 @@ void updateTimeString() {
         }
       }
     #endif
+  #else
+    //sprintf(hhmmString, "%02d:%02d", hh, mm);
+    sprintf(hhmmssString, "%02d:%02d:%02d", hh, mm, ss);
   #endif
-  unsigned long seconds_since_boot = millis() / 1000;
-  uint32_t minutes_since_boot = seconds_since_boot / 60;
-  uint32_t mm = minutes_since_boot % 60;
-  uint32_t hh = minutes_since_boot / 60;
+
   sprintf(UpTimeString, "%02d:%02d", hh, mm);
-  Serial.println("Time:" + String(timeString) + " Uptime:" + String(UpTimeString));
+  //Serial.println("Time:" + String(hhmmString) + " Uptime:" + String(UpTimeString));
 }
 
 

@@ -42,21 +42,22 @@ class BLEScanUtils {
 #else
 
 
+static byte foundDevicesCount = 0;
 
 class FoundDeviceCallback: public BLEAdvertisedDeviceCallbacks {
   bool toggler = true;
-  byte foundDevicesCount = 0;
+  //byte foundDevicesCount = 0;
   void onResult(BLEAdvertisedDevice advertisedDevice) {
     //Serial.printf("Found %s \n", advertisedDevice.toString().c_str()); // <<< memory leak
     foundDevicesCount++;
-    if( foundDevicesCount > BLEDEVCACHE_SIZE ) {
+    if( foundDevicesCount+1 > BLEDEVCACHE_SIZE ) {
       // too many devices found can't fit in cache, stop scan
-      if( SCAN_TIME-1 >= MIN_SCAN_TIME ) {
-        SCAN_TIME--;
-        Serial.println("[SCAN_TIME] decreased to " + String(SCAN_TIME));
+      if( SCAN_DURATION-1 >= MIN_SCAN_DURATION ) {
+        SCAN_DURATION--;
+        //#Serial.println("[SCAN_DURATION] decreased to " + String(SCAN_DURATION));
       }
+      //foundDevicesCount = 0;
       advertisedDevice.getScan()->stop();
-      foundDevicesCount = 0;
       UI.stopTaskBlink();
     }
     //UI.headerStats("Found " + String(foundDevicesCount));
@@ -72,6 +73,7 @@ class FoundDeviceCallback: public BLEAdvertisedDeviceCallbacks {
 const char* processTemplateLong = "%s%d%s%d";
 const char* processTemplateShort = "%s%d";
 static char processMessage[20];
+static int scan_rounds = 0;
 
 class BLEScanUtils {
 
@@ -97,7 +99,7 @@ class BLEScanUtils {
       
       WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
       //BLEDevice::init("");
-      xTaskCreatePinnedToCore(scanTask, "scanTask", 5000, NULL, 0, NULL, 1); /* last = Task Core */
+      xTaskCreatePinnedToCore(scanTask, "scanTask", 5000, NULL, 0, NULL, 0); /* last = Task Core */
     }
 
 
@@ -426,9 +428,9 @@ class BLEScanUtils {
       inCacheCount = 0;
       devicesCount = foundDevices.getCount();
       if(devicesCount < BLEDEVCACHE_SIZE) {
-        if( SCAN_TIME+1 < MAX_SCAN_TIME ) {
-          SCAN_TIME++;
-          Serial.println("[SCAN_TIME] increased to " + String(SCAN_TIME));
+        if( SCAN_DURATION+1 < MAX_SCAN_DURATION ) {
+          SCAN_DURATION++;
+          //Serial.println("[SCAN_DURATION] increased to " + String(SCAN_DURATION));
         }
       }
       sessDevicesCount += devicesCount;
@@ -457,17 +459,21 @@ class BLEScanUtils {
     static void scanTask( void * parameter ) {
       BLEDevice::init("");
       auto pBLEScan = BLEDevice::getScan(); //create new scan
-      pBLEScan->setAdvertisedDeviceCallbacks(new FoundDeviceCallback()); // memory leak ?
+      auto pDeviceCallback = new FoundDeviceCallback();
+      pBLEScan->setAdvertisedDeviceCallbacks( pDeviceCallback ); // memory leak ?
       pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
       pBLEScan->setInterval(0x50); // 0x50
       pBLEScan->setWindow(0x30); // 0x30
       unsigned long lastheap = 0;
-      char heapsign[4] = " ";
+      byte lastscanduration = SCAN_DURATION;
+      char heapsign[5]; // unicode sign terminated
+      char scantimesign[5]; // unicode sign terminated
 
       while(1) {
         UI.headerStats("Scan in progress...");
         UI.startTaskBlink();
-        pBLEScan->start(SCAN_TIME, onScanDone);
+        foundDevicesCount = 0;
+        pBLEScan->start(SCAN_DURATION, onScanDone);
         delay(1000);
         if(lastheap > freeheap) {
           // heap decreased
@@ -479,16 +485,31 @@ class BLEScanUtils {
           // heap unchanged
           sprintf(heapsign, "%s", "⇉");
         }
-        lastheap = freeheap;
+        if(lastscanduration > SCAN_DURATION) {
+          sprintf(scantimesign, "%s", "↘");
+        } else if(lastscanduration < SCAN_DURATION) {
+          sprintf(scantimesign, "%s", "↗");
+        } else {
+          sprintf(scantimesign, "%s", "⇉");
+        }
         
-        Serial.printf("[%s][Heap:%d][Cache hits][Screen:%s][BLEDevCards:%s][Anonymous:%s][Oui:%s][Vendor:%s]\n", 
+        lastheap = freeheap;
+        lastscanduration = SCAN_DURATION;
+        updateTimeString();
+        
+        Serial.printf("[Scan#%02d][%s][Duration%s%d,Found:%d][Heap%s%d] [Cache hits][Screen:%d][BLEDevCards:%d][Anonymous:%d][Oui:%d][Vendor:%d]\n", 
+          scan_rounds++,
+          hhmmssString,
+          scantimesign,
+          lastscanduration,
+          foundDevicesCount,
           heapsign,
           lastheap,
-          String(SelfCacheHit).c_str(),
-          String(BLEDevCacheHit).c_str(),
-          String(AnonymousCacheHit).c_str(),
-          String(OuiCacheHit).c_str(),
-          String(VendorCacheHit).c_str()
+          SelfCacheHit,
+          BLEDevCacheHit,
+          AnonymousCacheHit,
+          OuiCacheHit,
+          VendorCacheHit
         );
       }
       vTaskDelete( NULL );
@@ -499,7 +520,7 @@ class BLEScanUtils {
 
       // synchronous scan: blink icon and draw time-based scan progress in a separate task
       // while using the callback to update its status in real time
-      delay(SCAN_TIME*1000);
+      delay(SCAN_DURATION*1000);
 
 /*
       auto pBLEScan = BLEDevice::getScan(); //create new scan
@@ -507,21 +528,21 @@ class BLEScanUtils {
       pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
       pBLEScan->setInterval(0x50); // 0x50
       pBLEScan->setWindow(0x30); // 0x30
-      BLEScanResults foundDevices = pBLEScan->start(SCAN_TIME);
+      BLEScanResults foundDevices = pBLEScan->start(SCAN_DURATION);
 */
 
       
 
       /*
       if(foundDevices.getCount()<BLEDEVCACHE_SIZE) {
-        if( SCAN_TIME+1 < MAX_SCAN_TIME ) {
-          SCAN_TIME++;
-          Serial.println("[SCAN_TIME] increased to " + String(SCAN_TIME));
+        if( SCAN_DURATION+1 < MAX_SCAN_DURATION ) {
+          SCAN_DURATION++;
+          Serial.println("[SCAN_DURATION] increased to " + String(SCAN_DURATION));
         }
       }*/
       //onScanDone( foundDevices );
 
-      //pBLEScan->start(SCAN_TIME, onScanDone);
+      //pBLEScan->start(SCAN_DURATION, onScanDone);
       //UI.update(); // run after-scan display stuff
       //DB.maintain(); // check for db pruning
     }

@@ -43,15 +43,15 @@
 #define NTP_MENU 4 // use this to produce the NTPMenu.bin, only if you have a RTC module !!
 
 // edit this value to fit your mode
-#define RTC_PROFILE HOBO
+#define RTC_PROFILE CHRONOMANIAC
 //#define RTC_PROFILE NTP_MENU // to build the NTPMenu.bin (will perform the NTP Sync)
 //#define RTC_PROFILE CHRONOMANIAC // to build the BLEMenu.bin with RTC support and NTP Sync
 //#define RTC_PROFILE ROGUE // to build the BLEMenu.bin with RTC support, but *without* NTP sync
 //#define RTC_PROFILE HOBO // to build the NTPMenu.bin *without* RTC/NTP support
-byte SCAN_TIME = 10; // seconds 
-#define MIN_SCAN_TIME 10 // seconds min
-#define MAX_SCAN_TIME 50 // seconds max
-#define BLEDEVCACHE_SIZE 16 // use some heap to cache BLECards, min = 5, max = 64, higher value = smaller uptime
+byte SCAN_DURATION = 10; // seconds 
+#define MIN_SCAN_DURATION 10 // seconds min
+#define MAX_SCAN_DURATION 50 // seconds max
+#define BLEDEVCACHE_SIZE 10 // use some heap to cache BLECards, min = 5, max = 64, higher value = smaller uptime
 #define VENDORCACHE_SIZE 32 // use some heap to cache vendor query responses, min = 5, max = 32
 #define OUICACHE_SIZE 32 // use some heap to cache mac query responses, min = 16, max = 64
 #define USE_NVS // comment this out if you have NVS problems (or just do an erase_flash)

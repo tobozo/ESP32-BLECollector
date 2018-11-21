@@ -159,7 +159,7 @@ class UIUtils {
       }
       Out.setupScrollArea(HEADER_HEIGHT, FOOTER_HEIGHT);
       timeSetup();
-      updateTimeString();
+      updateTimeString( true );
       timeStateIcon();
       footerStats();
       taskHeapGraph();
@@ -176,7 +176,7 @@ class UIUtils {
         delay(1000);
         ESP.restart();
       }
-      updateTimeString();
+      updateTimeString( );
     }
 
 
@@ -252,7 +252,7 @@ class UIUtils {
       int16_t posX = tft.getCursorX();
       int16_t posY = tft.getCursorY();
 
-      alignTextAt( timeString,   95, 288, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+      alignTextAt( hhmmString,   95, 288, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
       alignTextAt( UpTimeString, 95, 298, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
       alignTextAt("(c+) tobozo", 77, 308, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
       
@@ -454,7 +454,7 @@ class UIUtils {
 
     static void blinkBlueIcon( void * parameter ) {
       unsigned long now = millis();
-      unsigned long scanTime = SCAN_TIME * 1000;
+      unsigned long scanTime = SCAN_DURATION * 1000;
       unsigned long then = now + scanTime;
       unsigned long lastblink = millis();
       unsigned long lastprogress = millis();
