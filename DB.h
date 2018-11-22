@@ -43,9 +43,9 @@ const char* data = 0; // for some reason sqlite3 db callback needs this
 const char* dataBLE = 0; // for some reason sqlite3 db callback needs this
 char *zErrMsg = 0; // holds DB Error message
 const char BACKSLASH = '\\'; // used to clean() slashes
-char *colNeedle = 0; // search criteria
-String colValue = ""; // search result
-#define MAX_FIELD_LEN 32 // max chars returned by field
+static char *colNeedle = 0; // search criteria
+static String colValue = ""; // search result
+
 
 // all DB queries
 // used by showDataSamples()
@@ -92,8 +92,8 @@ static char searchDeviceQuery[132];
 #define VENDORCACHE_SIZE 16
 #endif
 struct VendorCacheStruct {
-  uint16_t devid;
-  String vendor = ""; // todo: to char[32]
+  int devid = -1;
+  char vendor[MAX_FIELD_LEN+1] = ""; // todo: to char[32]
 };
 VendorCacheStruct VendorCache[VENDORCACHE_SIZE];
 byte VendorCacheIndex = 0; // index in the circular buffer
@@ -189,7 +189,7 @@ class DBUtils {
       }
       VendorCacheUsed = 0;
       for(int i=0;i<VENDORCACHE_SIZE;i++) {
-        if( VendorCache[i].vendor != "") {
+        if( VendorCache[i].devid > -1 ) {
           VendorCacheUsed++;
         }
       }
@@ -439,6 +439,54 @@ class DBUtils {
     }
 
 
+    /* checks for existence in cache */
+    int vendorExists(uint16_t devid, char *dest) {
+      // try fast answer first
+      for(int i=0;i<VENDORCACHE_SIZE;i++) {
+        if( VendorCache[i].devid == devid) {
+          VendorCacheHit++;
+          return i;
+        }
+      }
+      return -1;
+    }
+
+
+    void getVendor(uint16_t devid, char *dest) {
+      int vendorCacheIdIfExists = vendorExists(devid, dest);
+      if(vendorCacheIdIfExists>-1) {
+        memcpy( dest, VendorCache[vendorCacheIdIfExists].vendor, sizeof(VendorCache[vendorCacheIdIfExists].vendor) );
+        return;
+      }
+      VendorCacheIndex++;
+      VendorCacheIndex = VendorCacheIndex % VENDORCACHE_SIZE;
+      VendorCache[VendorCacheIndex].devid = devid;
+      open(BLE_VENDOR_NAMES_DB);
+      String requestStr = "SELECT vendor FROM 'ble-oui' WHERE id='" + String(devid) + "'";
+      db_exec(BLEVendorsDB, requestStr.c_str(), true, (char*)"vendor");
+      requestStr = "";
+      close(BLE_VENDOR_NAMES_DB);
+      uint16_t colValueLen = 10; // sizeof("unknown")
+      if (colValue != "" && colValue != "NULL") {
+        if (colValue.length() > MAX_FIELD_LEN) {
+          colValue = colValue.substring(0, MAX_FIELD_LEN);
+        }
+        const char* colValueStr = colValue.c_str();
+        colValueLen = strlen( colValueStr );
+        memcpy( VendorCache[VendorCacheIndex].vendor, colValueStr, colValueLen );
+        //VendorCache[VendorCacheIndex].vendor[colValueLen] = '\0'; // null terminate
+        //colValueLen++;
+        //VendorCache[VendorCacheIndex].vendor = colValue;
+      } else {
+        memcpy( VendorCache[VendorCacheIndex].vendor, "[unknown]", 10 );
+        //VendorCache[VendorCacheIndex].vendor = "[unknown]";
+      }
+      memcpy( dest, VendorCache[VendorCacheIndex].vendor, colValueLen );
+      //dest = VendorCache[VendorCacheIndex].vendor;
+      return;
+    }
+
+/*
     String getVendor(uint16_t devid) {
       // try fast answer first
       for(int i=0;i<VENDORCACHE_SIZE;i++) {
@@ -465,7 +513,7 @@ class DBUtils {
       }
       return VendorCache[VendorCacheIndex].vendor ;
     }
-
+*/
 
     String getOUI(String mac) {
       mac.replace(":", "");
@@ -569,8 +617,10 @@ class DBUtils {
       db_exec(BLEVendorsDB, testVendorNamesQuery, true);
       close(BLE_VENDOR_NAMES_DB);
       // 0x001D = Qualcomm
-      String vendorname = getVendor(0x001D);
-      if (vendorname != "Qualcomm") {
+      char vendorname[32];
+      //String vendorname = getVendor(0x001D);
+      getVendor( 0x001D, vendorname );
+      if (strcmp(vendorname, "Qualcomm")!=0) {
         tft.setTextColor(WROVER_RED);
         Out.println(vendorname);
         Out.println("Vendor Names Test failed, looping");

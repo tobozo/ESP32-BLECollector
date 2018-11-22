@@ -49,8 +49,8 @@ struct BlueToothDevice {
   String address = ""; // device mac address
   String ouiname = ""; // oui vendor name (from mac address, see oui.h)
   String rssi = "";
-  uint16_t manufid = NULL; // manufacturer data (or ID)
-  String manufname = ""; // manufacturer name (from manufacturer data, see ble-oui.db)
+  int manufid = -1; // manufacturer data (or ID)
+  char manufname[MAX_FIELD_LEN+1]; // manufacturer name (from manufacturer data, see ble-oui.db)
   String uuid = ""; // service uuid
   //String spower = "";
   //time_t created_at;
@@ -71,12 +71,12 @@ void BLEDevCacheReset(byte cacheindex) {
   BLEDevCache[cacheindex].address = ""; 
   BLEDevCache[cacheindex].ouiname = ""; 
   BLEDevCache[cacheindex].rssi = ""; 
-  BLEDevCache[cacheindex].manufid = 0;// manufid.reserve(32);
-  BLEDevCache[cacheindex].manufname = ""; 
+  BLEDevCache[cacheindex].manufid = -1;// manufid.reserve(32);
+  *BLEDevCache[cacheindex].manufname = '\0'; 
   BLEDevCache[cacheindex].uuid = ""; 
   
   BLEDevCache[cacheindex].uuid.reserve(37);
-  BLEDevCache[cacheindex].manufname.reserve(16);
+  //BLEDevCache[cacheindex].manufname.reserve(16);
   BLEDevCache[cacheindex].rssi.reserve(8);
   BLEDevCache[cacheindex].ouiname.reserve(32);
   BLEDevCache[cacheindex].address.reserve(18);
@@ -96,7 +96,7 @@ static void BLEDevCacheSet(byte cacheindex, const char* prop, const char* val) {
   else if(strcmp(prop, "ouiname")==0)    { BLEDevCache[cacheindex].ouiname = String(val);   }
   else if(strcmp(prop, "rssi")==0)       { BLEDevCache[cacheindex].rssi = String(val);      }
   else if(strcmp(prop, "manufid")==0)    { BLEDevCache[cacheindex].manufid = String(val).toInt();}
-  else if(strcmp(prop, "manufname")==0)  { BLEDevCache[cacheindex].manufname = String(val);     }
+  else if(strcmp(prop, "manufname")==0)  { memcpy(BLEDevCache[cacheindex].manufname, val, sizeof(val)); }
   else if(strcmp(prop, "uuid")==0)       { BLEDevCache[cacheindex].uuid = String(val);      }
   //else if(prop=="spower")     { spower = val;    }
   //else if(prop=="created_at") { created_at = val;}

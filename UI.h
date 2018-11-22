@@ -568,16 +568,18 @@ class UIUtils {
         pos += hop;
         tft.drawJpg( name_jpeg, name_jpeg_len, 12, Out.scrollPosY - hop, 7,  8);
       }
-      if (BLEDevCache[cacheindex].manufname != "") {
+      if (BLEDevCache[cacheindex].manufname[0] != '\0') {
         pos += Out.println(SPACE);
         hop = Out.println(SPACETABS + BLEDevCache[cacheindex].manufname);
         pos += hop;
-        if (BLEDevCache[cacheindex].manufname == "Apple, Inc.") {
+        if (strstr(BLEDevCache[cacheindex].manufname, "Apple")) {
           tft.drawJpg( apple16_jpeg, apple16_jpeg_len, 12, Out.scrollPosY - hop, 8,  8);
-        } else if (BLEDevCache[cacheindex].manufname == "IBM Corp.") {
+        } else if (strstr(BLEDevCache[cacheindex].manufname, "IBM ")) {
           tft.drawJpg( ibm8_jpg, ibm8_jpg_len, 10, Out.scrollPosY - hop, 20,  8);
-        } else if (BLEDevCache[cacheindex].manufname == "Microsoft") {
+        } else if (strstr(BLEDevCache[cacheindex].manufname, "Microsoft")) {
           tft.drawJpg( crosoft_jpeg, crosoft_jpeg_len, 12, Out.scrollPosY - hop, 8,  8);
+        } else if (strstr(BLEDevCache[cacheindex].manufname, "Bose ")) {
+          tft.drawJpg( speaker_icon_jpg, speaker_icon_jpg_len, 12, Out.scrollPosY - hop, 6,  8);
         } else {
           tft.drawJpg( generic_jpeg, generic_jpeg_len, 12, Out.scrollPosY - hop, 8,  8);
         }

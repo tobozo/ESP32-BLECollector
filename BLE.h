@@ -242,15 +242,16 @@ class BLEScanUtils {
         uint8_t vmsb = mdp[1];
         uint16_t vint = vmsb * 256 + vlsb;
         if(populate) {
-          BLEDevCache[BLEDevCacheIndex].manufname = DB.getVendor( vint ); // TODO : procrastinate this
+          //BLEDevCache[BLEDevCacheIndex].manufname = DB.getVendor( vint ); // TODO : procrastinate this
+          DB.getVendor( vint, BLEDevCache[BLEDevCacheIndex].manufname ); // TODO : procrastinate this
         } else {
-          BLEDevCache[BLEDevCacheIndex].manufname = "[unpopulated]";
+          memcpy( BLEDevCache[BLEDevCacheIndex].manufname, "[unpopulated]", 14 );
         }
         //BLEDevCache[BLEDevCacheIndex].manufid = String ( pHex );
         BLEDevCache[BLEDevCacheIndex].manufid = vint;
       } else {
-        BLEDevCache[BLEDevCacheIndex].manufname = "";
-        BLEDevCache[BLEDevCacheIndex].manufid = NULL;
+        *BLEDevCache[BLEDevCacheIndex].manufname = '\0';
+        BLEDevCache[BLEDevCacheIndex].manufid = -1;
       }
       if (advertisedDevice.haveServiceUUID()) {
         BLEDevCache[BLEDevCacheIndex].uuid = String( advertisedDevice.getServiceUUID().toString().c_str() );
@@ -297,7 +298,7 @@ class BLEScanUtils {
       preferences.putString("address",    BLEDevCache[cacheindex].address);
       preferences.putString("ouiname",    BLEDevCache[cacheindex].ouiname);
       preferences.putString("rssi",       BLEDevCache[cacheindex].rssi);
-      preferences.putUShort("manufid",    BLEDevCache[cacheindex].manufid);
+      preferences.putInt("manufid",       BLEDevCache[cacheindex].manufid);
       preferences.putString("manufname",  BLEDevCache[cacheindex].manufname);
       preferences.putString("uuid",       BLEDevCache[cacheindex].uuid);
       preferences.end();
@@ -317,8 +318,8 @@ class BLEScanUtils {
       BLEDevCache[cacheindex].address     = preferences.getString("address", "");
       BLEDevCache[cacheindex].ouiname     = preferences.getString("ouiname", "");
       BLEDevCache[cacheindex].rssi        = preferences.getString("rssi", "");
-      BLEDevCache[cacheindex].manufid     = preferences.getUShort("manufid", NULL);
-      BLEDevCache[cacheindex].manufname   = preferences.getString("manufname", "");
+      BLEDevCache[cacheindex].manufid     = preferences.getInt("manufid", -1);
+      preferences.getString("manufname", BLEDevCache[cacheindex].manufname, 32);
       BLEDevCache[cacheindex].uuid        = preferences.getString("uuid", "");
       if(BLEDevCache[cacheindex].address != "") {
         Serial.printf("****** Thawing pref index %d into cache index %d : %s\n", freezeindex, cacheindex, BLEDevCache[cacheindex].address.c_str());
@@ -359,13 +360,14 @@ class BLEScanUtils {
         BLEDevCache[cacheIndex].ouiname = DB.getOUI( BLEDevCache[cacheIndex].address );
       }
       if(BLEDevCache[cacheIndex].manufname == "[unpopulated]") {
-        if(BLEDevCache[cacheIndex].manufid!=NULL /*&& BLEDevCache[cacheIndex].manufid.length()>=4*/) {
-          BLEDevCache[cacheIndex].manufname = DB.getVendor( BLEDevCache[cacheIndex].manufid );
+        if(BLEDevCache[cacheIndex].manufid!=-1 /*&& BLEDevCache[cacheIndex].manufid.length()>=4*/) {
+          //BLEDevCache[cacheIndex].manufname = DB.getVendor( BLEDevCache[cacheIndex].manufid );
+          DB.getVendor( BLEDevCache[cacheIndex].manufid, BLEDevCache[cacheIndex].manufname );
           //Serial.println("manufname-populating " + BLEDevCache[BLEDevCacheIndex].address);
           //Serial.println("  manufname: " + BLEDevCache[BLEDevCacheIndex].manufname);
         } else {
           //Serial.println("manufname-clearing " + BLEDevCache[BLEDevCacheIndex].address);
-          BLEDevCache[cacheIndex].manufname = ""; 
+          *BLEDevCache[cacheIndex].manufname = '\0';
         }
       }
       

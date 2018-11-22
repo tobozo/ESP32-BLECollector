@@ -54,6 +54,7 @@ byte SCAN_DURATION = 10; // seconds
 #define BLEDEVCACHE_SIZE 10 // use some heap to cache BLECards, min = 5, max = 64, higher value = smaller uptime
 #define VENDORCACHE_SIZE 32 // use some heap to cache vendor query responses, min = 5, max = 32
 #define OUICACHE_SIZE 32 // use some heap to cache mac query responses, min = 16, max = 64
+#define MAX_FIELD_LEN 32 // max chars returned by field
 #define USE_NVS // comment this out if you have NVS problems (or just do an erase_flash)
 
 #define NTP_MENU_NAME "NTPMenu"
