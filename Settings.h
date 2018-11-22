@@ -146,15 +146,15 @@ Preferences preferences;
 #define resetReason (int)rtc_get_reset_reason(0)
 
 // statistical values
-int devicesCount = 0; // devices count per scan
-int sessDevicesCount = 0; // total devices count per session
-int newDevicesCount = 0; // total devices count per session
+static int devicesCount = 0; // devices count per scan
+static int sessDevicesCount = 0; // total devices count per session
+static int newDevicesCount = 0; // total devices count per session
 static int results = 0; // total results during last query
-unsigned int entries = 0; // total entries in database
-byte prune_trigger = 0; // incremented on every insertion, reset on prune()
-byte prune_threshold = 10; // prune every x inertions
-bool print_results = false;
-bool print_tabular = true;
+static unsigned int entries = 0; // total entries in database
+static byte prune_trigger = 0; // incremented on every insertion, reset on prune()
+static byte prune_threshold = 10; // prune every x inertions
+static bool print_results = false;
+static bool print_tabular = true;
 
 // load stack
 #include "Assets.h" // bitmaps

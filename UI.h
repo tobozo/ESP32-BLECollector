@@ -54,6 +54,11 @@ uint32_t heap_tolerance = 20000; // how much memory under min_free_heap the sket
 uint32_t heapmap[HEAPMAP_BUFFLEN] = {0}; // stores the history of heapmap values
 byte heapindex = 0; // index in the circular buffer
 static bool blinkit = false; // task blinker state
+unsigned long blinknow = millis(); // task blinker start time
+unsigned long scanTime = SCAN_DURATION * 1000; // task blinker duration
+unsigned long blinkthen = blinknow + scanTime; // task blinker end time
+unsigned long lastblink = millis(); // task blinker last blink
+unsigned long lastprogress = millis(); // task blinker progress
 
 const String SPACETABS = "      ";
 const String SPACE = " ";
@@ -92,23 +97,23 @@ struct BLECardStyle {
   uint16_t bgColor;
   void setTheme( byte themeID ) {
     bgColor = BLECARD_BGCOLOR;
-    switch( themeID ) {
+    switch ( themeID ) {
       case IN_CACHE_ANON:// = 0,
         borderColor = IN_CACHE_COLOR;
         textColor = ANONYMOUS_COLOR;
-      break;
+        break;
       case IN_CACHE_NOT_ANON:// = 1,
         borderColor = IN_CACHE_COLOR;
         textColor = NOT_ANONYMOUS_COLOR;
-      break;
+        break;
       case NOT_IN_CACHE_ANON:// = 2,
         borderColor = NOT_IN_CACHE_COLOR;
         textColor = ANONYMOUS_COLOR;
-      break;
+        break;
       case NOT_IN_CACHE_NOT_ANON:// = 3
         borderColor = NOT_IN_CACHE_COLOR;
         textColor = NOT_ANONYMOUS_COLOR;
-      break;
+        break;
     }
   }
 };
@@ -121,18 +126,18 @@ class UIUtils {
 
     void init() {
 
-/*
-      preferences.begin("BLECollector", false);
-      unsigned int counter = preferences.getUInt("counter", 0);
-      // Increase counter by 1
-      counter++;
-      // Print the counter to Serial Monitor
-      Serial.printf("Current counter value: %u\n", counter);
-      // Store the counter to the Preferences
-      preferences.putUInt("counter", counter);
-      preferences.end();
-*/
-      
+      /*
+            preferences.begin("BLECollector", false);
+            unsigned int counter = preferences.getUInt("counter", 0);
+            // Increase counter by 1
+            counter++;
+            // Print the counter to Serial Monitor
+            Serial.printf("Current counter value: %u\n", counter);
+            // Store the counter to the Preferences
+            preferences.putUInt("counter", counter);
+            preferences.end();
+      */
+
       bool clearScreen = true;
       if (resetReason == 12) { // SW Reset
         clearScreen = false;
@@ -163,7 +168,8 @@ class UIUtils {
       timeStateIcon();
       footerStats();
       taskHeapGraph();
-      if( clearScreen ) {
+      createTaskBlink();
+      if ( clearScreen ) {
         playIntro();
       }
     }
@@ -183,16 +189,16 @@ class UIUtils {
     void playIntro() {
       uint16_t pos = 0;
       tft.setTextColor(WROVER_GREENYELLOW, Out.BGCOLOR);
-      for(int i=0;i<5;i++) {
-        pos+=Out.println();
+      for (int i = 0; i < 5; i++) {
+        pos += Out.println();
       }
-      pos+=Out.println("         /---------------------\\");
-      pos+=Out.println("         | ESP32 BLE Collector |");
-      pos+=Out.println("         | ------------------- |");
-      pos+=Out.println("         | (c+)  tobozo  2018  |");
-      pos+=Out.println("         \\---------------------/");
+      pos += Out.println("         /---------------------\\");
+      pos += Out.println("         | ESP32 BLE Collector |");
+      pos += Out.println("         | ------------------- |");
+      pos += Out.println("         | (c+)  tobozo  2018  |");
+      pos += Out.println("         \\---------------------/");
       tft.drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, 106, Out.scrollPosY - pos + 8, 28,  28);
-      for(int i=0;i<5;i++) {
+      for (int i = 0; i < 5; i++) {
         Out.println();
       }
       delay(5000);
@@ -205,16 +211,16 @@ class UIUtils {
       switch (textAlign) {
         case ALIGN_FREE:
           tft.setCursor(x, y);
-        break;
+          break;
         case ALIGN_LEFT:
           tft.setCursor(0, y);
-        break;
+          break;
         case ALIGN_RIGHT:
           tft.setCursor(Out.width - Out.w_tmp, y);
-        break;
+          break;
         case ALIGN_CENTER:
           tft.setCursor(Out.width / 2 - Out.w_tmp / 2, y);
-        break;
+          break;
       }
       tft.print(text);
     }
@@ -226,11 +232,11 @@ class UIUtils {
 
 
     void headerStats(const char *status) {
-      if(isScrolling) return;
+      if (isScrolling) return;
       int16_t posX = tft.getCursorX();
       int16_t posY = tft.getCursorY();
-      String s_heap = " Heap: " + String(freeheap)+" ";
-      String s_entries = " Entries: " + String(entries)+" ";
+      String s_heap = " Heap: " + String(freeheap) + " ";
+      String s_entries = " Entries: " + String(entries) + " ";
       alignTextAt( s_heap, 128, 4, WROVER_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
       if (status != "") {
         tft.fillRect(0, 18, Out.width, 8, HEADER_BGCOLOR); // clear whole message status area
@@ -248,21 +254,21 @@ class UIUtils {
 
 
     void footerStats() {
-      if(isScrolling) return;
+      if (isScrolling) return;
       int16_t posX = tft.getCursorX();
       int16_t posY = tft.getCursorY();
 
       alignTextAt( hhmmString,   95, 288, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
       alignTextAt( UpTimeString, 95, 298, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
       alignTextAt("(c+) tobozo", 77, 308, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
-      
+
       String sessDevicesCountStr = " Total: " + String(sessDevicesCount) + " ";
       String devicesCountStr = " Last:  " + String(devicesCount) + " ";
       String newDevicesCountStr = " New:   " + String(newDevicesCount) + " ";
       alignTextAt( devicesCountStr, 0, 288, WROVER_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
       alignTextAt( sessDevicesCountStr, 0, 298, WROVER_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
       alignTextAt( newDevicesCountStr, 0, 308, WROVER_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
-      
+
       tft.setCursor(posX, posY);
     }
 
@@ -272,46 +278,46 @@ class UIUtils {
       percentBox(164, 308, 10, 10, OuiCacheUsed, WROVER_GREENYELLOW, WROVER_BLACK);
     }
 
-    void percentBox(uint16_t x, uint16_t y, byte w, byte h, byte percent, uint16_t barcolor, uint16_t bgcolor, uint16_t bordercolor=WROVER_DARKGREY) {
-      if(percent==0) {
-        tft.drawRect(x-1, y-1, w+2, h+2, bordercolor);
+    void percentBox(uint16_t x, uint16_t y, byte w, byte h, byte percent, uint16_t barcolor, uint16_t bgcolor, uint16_t bordercolor = WROVER_DARKGREY) {
+      if (percent == 0) {
+        tft.drawRect(x - 1, y - 1, w + 2, h + 2, bordercolor);
         tft.fillRect(x, y, w, h, bgcolor);
         return;
       }
-      if(percent==100) {
-        tft.drawRect(x-1, y-1, w+2, h+2, BLUETOOTH_COLOR);
+      if (percent == 100) {
+        tft.drawRect(x - 1, y - 1, w + 2, h + 2, BLUETOOTH_COLOR);
         tft.fillRect(x, y, w, h, barcolor);
-        return; 
+        return;
       }
-      tft.drawRect(x-1, y-1, w+2, h+2, bordercolor);
+      tft.drawRect(x - 1, y - 1, w + 2, h + 2, bordercolor);
       tft.fillRect(x, y, w, h, bgcolor);
       byte yoffsetpercent = percent / 10;
-      byte boxh = (yoffsetpercent*h) / 10 ;
+      byte boxh = (yoffsetpercent * h) / 10 ;
       tft.fillRect(x, y, w, boxh, barcolor);
 
       byte xoffsetpercent = percent % 10;
-      if(xoffsetpercent==0) return;
-      byte linew = (xoffsetpercent*w) / 10;
-      tft.drawFastHLine(x, y+boxh, linew, barcolor);
-      
+      if (xoffsetpercent == 0) return;
+      byte linew = (xoffsetpercent * w) / 10;
+      tft.drawFastHLine(x, y + boxh, linew, barcolor);
+
     }
 
 
     static void dbStateIcon(int state) {
       uint16_t color = WROVER_DARKGREY;
-      switch(state) {
+      switch (state) {
         case 2:/*DB OPEN FOR WRITING*/
           color = WROVER_ORANGE;
-        break;
+          break;
         case 1/*DB_OPEN FOR READING*/:
           color = WROVER_YELLOW;
-        break;
+          break;
         case 0/*DB CLOSED*/:
           color = WROVER_DARKGREEN;
-        break;
+          break;
         case -1/*DB BROKEN*/:
           color = WROVER_RED;
-        break;
+          break;
       }
       tft.fillCircle(ICON_DB_X, ICON_DB_Y, ICON_R, color);
     }
@@ -319,20 +325,20 @@ class UIUtils {
 
     static void timeStateIcon() {
       tft.fillCircle(ICON_RTC_X, ICON_RTC_Y, ICON_R, WROVER_GREENYELLOW);
-      if(RTC_is_running) {
+      if (RTC_is_running) {
         tft.drawCircle(ICON_RTC_X, ICON_RTC_Y, ICON_R, WROVER_DARKGREEN);
         tft.drawFastHLine(ICON_RTC_X, ICON_RTC_Y, ICON_R, WROVER_DARKGREY);
-        tft.drawFastVLine(ICON_RTC_X, ICON_RTC_Y, ICON_R-2, WROVER_DARKGREY);
+        tft.drawFastVLine(ICON_RTC_X, ICON_RTC_Y, ICON_R - 2, WROVER_DARKGREY);
       } else {
         tft.drawCircle(ICON_RTC_X, ICON_RTC_Y, ICON_R, WROVER_RED);
         tft.drawFastHLine(ICON_RTC_X, ICON_RTC_Y, ICON_R, WROVER_RED);
-        tft.drawFastVLine(ICON_RTC_X, ICON_RTC_Y, ICON_R-2, WROVER_RED);
+        tft.drawFastVLine(ICON_RTC_X, ICON_RTC_Y, ICON_R - 2, WROVER_RED);
       }
     }
 
 
-    static void bleStateIcon(uint16_t color, bool fill=true) {
-      if(fill) {
+    static void bleStateIcon(uint16_t color, bool fill = true) {
+      if (fill) {
         tft.fillCircle(ICON_BLE_X, ICON_BLE_Y, ICON_R, color);
       } else {
         tft.fillCircle(ICON_BLE_X, ICON_BLE_Y, ICON_R - 1, color);
@@ -349,13 +355,13 @@ class UIUtils {
       uint32_t lastfreeheap;
       uint32_t toleranceheap = min_free_heap + heap_tolerance;
       uint8_t i = 0;
-      uint32_t GRAPH_LINE_WIDTH = HEAPMAP_BUFFLEN-1; 
+      uint32_t GRAPH_LINE_WIDTH = HEAPMAP_BUFFLEN - 1;
       uint32_t GRAPH_LINE_HEIGHT = 35;
       uint16_t GRAPH_X = Out.width - GRAPH_LINE_WIDTH - 2;
       uint16_t GRAPH_Y = 283;
       while (1) {
         // only redraw if the heap changed
-        if(lastfreeheap!=freeheap) {
+        if (lastfreeheap != freeheap) {
           heapmap[heapindex++] = freeheap;
           heapindex = heapindex % HEAPMAP_BUFFLEN;
           lastfreeheap = freeheap;
@@ -381,41 +387,41 @@ class UIUtils {
           }
         }
         /* min anx max lines */
-        if(graphMin!=graphMax) {
+        if (graphMin != graphMax) {
           toleranceline;// = map(toleranceheap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
           minline = map(min_free_heap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
-          if(toleranceheap > graphMax) {
+          if (toleranceheap > graphMax) {
             GRAPH_BG_COLOR = WROVER_ORANGE;
             toleranceline = GRAPH_LINE_HEIGHT;
-          } else if( toleranceheap < graphMin ) {
+          } else if ( toleranceheap < graphMin ) {
             toleranceline = 0;
           } else {
             toleranceline = map(toleranceheap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
           }
         }
         /*
-        Serial.printf("graphMin: %s, graphMax: %s, toleranceheap: %s, toleranceline: %s\n",
+          Serial.printf("graphMin: %s, graphMax: %s, toleranceheap: %s, toleranceline: %s\n",
           graphMin,
           graphMax,
           toleranceheap,
           toleranceline
-        );*/
+          );*/
         // draw graph
         for (i = 0; i < GRAPH_LINE_WIDTH; i++) {
           int thisindex = int(heapindex - GRAPH_LINE_WIDTH + i + HEAPMAP_BUFFLEN) % HEAPMAP_BUFFLEN;
           uint32_t heapval = heapmap[thisindex];
-          if( heapval > toleranceheap ) {
+          if ( heapval > toleranceheap ) {
             // nominal
             GRAPH_COLOR = WROVER_GREEN;
             GRAPH_BG_COLOR = WROVER_DARKGREY;
           } else {
-            if( heapval > min_free_heap ) {
+            if ( heapval > min_free_heap ) {
               // in tolerance zone
               GRAPH_COLOR = WROVER_YELLOW;
               GRAPH_BG_COLOR = WROVER_DARKGREEN;
             } else {
               // under tolerance zone
-              if(heapval > 0) {
+              if (heapval > 0) {
                 GRAPH_COLOR = WROVER_RED;
                 GRAPH_BG_COLOR = WROVER_ORANGE;
               } else {
@@ -431,7 +437,7 @@ class UIUtils {
             tft.drawLine( GRAPH_X + i, GRAPH_Y + GRAPH_LINE_HEIGHT, GRAPH_X + i, GRAPH_Y + GRAPH_LINE_HEIGHT - lineheight, GRAPH_COLOR );
           }
         }
-        if(graphMin!=graphMax) {
+        if (graphMin != graphMax) {
           //uint32_t toleranceline = map(min_free_heap + heap_tolerance, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
           //uint32_t minline = map(min_free_heap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
           tft.drawFastHLine( GRAPH_X, GRAPH_Y + GRAPH_LINE_HEIGHT - toleranceline, GRAPH_LINE_WIDTH, WROVER_LIGHTGREY );
@@ -440,10 +446,18 @@ class UIUtils {
       }
     }
 
+    void createTaskBlink() {
+      blinkit = false;
+      xTaskCreatePinnedToCore(blinkBlueIcon, "BlinkBlueIcon", 1000, NULL, 0, NULL, 0); /* last = Task Core */
+    }
 
     void startTaskBlink() { // runs one and detaches
       blinkit = true;
-      xTaskCreatePinnedToCore(blinkBlueIcon, "BlinkBlueIcon", 1000, NULL, 0, NULL, 0); /* last = Task Core */
+      blinknow = millis();
+      scanTime = SCAN_DURATION * 1000;
+      blinkthen = blinknow + scanTime;
+      lastblink = millis();
+      lastprogress = millis();
     }
 
     static void stopTaskBlink() {
@@ -453,36 +467,48 @@ class UIUtils {
     }
 
     static void blinkBlueIcon( void * parameter ) {
-      unsigned long now = millis();
-      unsigned long scanTime = SCAN_DURATION * 1000;
-      unsigned long then = now + scanTime;
-      unsigned long lastblink = millis();
-      unsigned long lastprogress = millis();
-
+      /*
+        unsigned long blinknow = millis();
+        unsigned long scanTime = SCAN_DURATION * 1000;
+        unsigned long blinkthen = now + scanTime;
+        unsigned long lastblink = millis();
+        unsigned long lastprogress = millis();
+      */
       bool toggler = true;
-      while (now < then && blinkit) {
-        now = millis();
-        if (lastblink + random(333, 666) < now) {
+      while (1/*blinknow < blinkthen*/) {
+        if (!blinkit || blinknow >= blinkthen) {
+          tft.fillRect(0, PROGRESSBAR_Y, Out.width, 2, WROVER_DARKGREY);
+          // clear blue pin
+          bleStateIcon(WROVER_DARKGREY);
+          while(!blinkit) {
+            delay(100);
+            continue;
+          }
+        }
+        blinknow = millis();
+        if (lastblink + random(333, 666) < blinknow) {
           toggler = !toggler;
           if (toggler) {
             bleStateIcon(BLUETOOTH_COLOR);
           } else {
             bleStateIcon(HEADER_BGCOLOR, false);
           }
-          lastblink = now;
+          lastblink = blinknow;
         }
-        if (lastprogress + 1000 < now) {
-          unsigned long remaining = then - now;
+        if (lastprogress + 1000 < blinknow) {
+          unsigned long remaining = blinkthen - blinknow;
           int percent = 100 - ( ( remaining * 100 ) / scanTime );
           tft.fillRect(0, PROGRESSBAR_Y, (Out.width * percent) / 100, 2, BLUETOOTH_COLOR);
-          lastprogress = now;
+          lastprogress = blinknow;
         }
         delay(30);
       }
+      /*
       tft.fillRect(0, PROGRESSBAR_Y, Out.width, 2, WROVER_DARKGREY);
       // clear blue pin
       bleStateIcon(WROVER_DARKGREY);
       blinkit = false;
+      */
       vTaskDelete( NULL );
     }
 
@@ -490,8 +516,8 @@ class UIUtils {
     static bool BLECardIsOnScreen(const char* address) {
       bool onScreen = false;
       //Serial.print("Checking onScreen: "); Serial.println( address );
-      for(int j=0;j<BLECARD_MAC_CACHE_SIZE;j++) {
-        if( strcmp(address, lastPrintedMac[j])==0) {
+      for (int j = 0; j < BLECARD_MAC_CACHE_SIZE; j++) {
+        if ( strcmp(address, lastPrintedMac[j]) == 0) {
           //Serial.println("is onScreen!");
           onScreen = true;
           break;
@@ -510,7 +536,7 @@ class UIUtils {
       hop = Out.println(SPACE);
       pos += hop;
       if (BLEDevCache[cacheindex].address != "" && BLEDevCache[cacheindex].rssi != "") {
-        memcpy(lastPrintedMac[lastPrintedMacIndex++%BLECARD_MAC_CACHE_SIZE], BLEDevCache[cacheindex].address.c_str(), 18);
+        memcpy(lastPrintedMac[lastPrintedMacIndex++ % BLECARD_MAC_CACHE_SIZE], BLEDevCache[cacheindex].address.c_str(), 18);
         hop = Out.println( "  " + BLEDevCache[cacheindex].address );
         pos += hop;
         alignTextAt( BLEDevCache[cacheindex].rssi + " dBm    ", 0, Out.scrollPosY - hop, BLECardTheme.textColor, BLECardTheme.bgColor, ALIGN_RIGHT );
@@ -542,15 +568,15 @@ class UIUtils {
         pos += hop;
         tft.drawJpg( name_jpeg, name_jpeg_len, 12, Out.scrollPosY - hop, 7,  8);
       }
-      if (BLEDevCache[cacheindex].vname != "") {
+      if (BLEDevCache[cacheindex].manufname != "") {
         pos += Out.println(SPACE);
-        hop = Out.println(SPACETABS + BLEDevCache[cacheindex].vname);
+        hop = Out.println(SPACETABS + BLEDevCache[cacheindex].manufname);
         pos += hop;
-        if (BLEDevCache[cacheindex].vname == "Apple, Inc.") {
+        if (BLEDevCache[cacheindex].manufname == "Apple, Inc.") {
           tft.drawJpg( apple16_jpeg, apple16_jpeg_len, 12, Out.scrollPosY - hop, 8,  8);
-        } else if (BLEDevCache[cacheindex].vname == "IBM Corp.") {
+        } else if (BLEDevCache[cacheindex].manufname == "IBM Corp.") {
           tft.drawJpg( ibm8_jpg, ibm8_jpg_len, 10, Out.scrollPosY - hop, 20,  8);
-        } else if (BLEDevCache[cacheindex].vname == "Microsoft") {
+        } else if (BLEDevCache[cacheindex].manufname == "Microsoft") {
           tft.drawJpg( crosoft_jpeg, crosoft_jpeg_len, 12, Out.scrollPosY - hop, 8,  8);
         } else {
           tft.drawJpg( generic_jpeg, generic_jpeg_len, 12, Out.scrollPosY - hop, 8,  8);
@@ -579,21 +605,21 @@ class UIUtils {
         h2 -= 2;; //margin
         int vpos1 = Out.scrollPosY - pos + Out.yArea + 1;
         int vpos2 = Out.scrollPosY - 2;
-        tft.drawFastHLine(1+radius, vpos1, lwidth - 2*radius, color); // upper hline
-        tft.drawFastHLine(1+radius, vpos2, lwidth - 2*radius, color); // lower hline
-        if(h1>radius) {
-          tft.drawFastVLine(1,      vpos1 + radius, h1-radius+1, color); // upper left vline
-          tft.drawFastVLine(lwidth, vpos1 + radius, h1-radius+1, color); // upper right vline
+        tft.drawFastHLine(1 + radius, vpos1, lwidth - 2 * radius, color); // upper hline
+        tft.drawFastHLine(1 + radius, vpos2, lwidth - 2 * radius, color); // lower hline
+        if (h1 > radius) {
+          tft.drawFastVLine(1,      vpos1 + radius, h1 - radius + 1, color); // upper left vline
+          tft.drawFastVLine(lwidth, vpos1 + radius, h1 - radius + 1, color); // upper right vline
         }
-        if(h2>radius) {
-          tft.drawFastVLine(1,      vpos2 - h2, h2-radius+1, color); // lower left vline
-          tft.drawFastVLine(lwidth, vpos2 - h2, h2-radius+1, color); // lower right vline
+        if (h2 > radius) {
+          tft.drawFastVLine(1,      vpos2 - h2, h2 - radius + 1, color); // lower left vline
+          tft.drawFastVLine(lwidth, vpos2 - h2, h2 - radius + 1, color); // lower right vline
         }
         tft.startWrite();//BLEDev.borderColor
-        tft.drawCircleHelper(1+radius,      vpos1+radius, radius, 1, color); // upper left
-        tft.drawCircleHelper(lwidth-radius, vpos1+radius, radius, 2, color); // upper right
-        tft.drawCircleHelper(lwidth-radius, vpos2-radius, radius, 4, color); // lower right
-        tft.drawCircleHelper(1+radius,      vpos2-radius, radius, 8, color); // lower left
+        tft.drawCircleHelper(1 + radius,      vpos1 + radius, radius, 1, color); // upper left
+        tft.drawCircleHelper(lwidth - radius, vpos1 + radius, radius, 2, color); // upper right
+        tft.drawCircleHelper(lwidth - radius, vpos2 - radius, radius, 4, color); // lower right
+        tft.drawCircleHelper(1 + radius,      vpos2 - radius, radius, 8, color); // lower left
         tft.endWrite();
       }
     }
@@ -602,14 +628,14 @@ class UIUtils {
     void drawRSSI(int16_t x, int16_t y, int16_t rssi, uint16_t bgcolor) {
       uint16_t barColors[4];
       if (rssi >= -30) {
-        // -30 dBm and more Amazing    - Max achievable signal strength. The client can only be a few feet 
+        // -30 dBm and more Amazing    - Max achievable signal strength. The client can only be a few feet
         // from the AP to achieve this. Not typical or desirable in the real world.  N/A
         barColors[0] = WROVER_GREEN;
         barColors[1] = WROVER_GREEN;
         barColors[2] = WROVER_GREEN;
         barColors[3] = WROVER_GREEN;
       } else if (rssi >= -67) {
-        // between -67 dBm and 31 dBm  - Very Good   Minimum signal strength for applications that require 
+        // between -67 dBm and 31 dBm  - Very Good   Minimum signal strength for applications that require
         // very reliable, timely delivery of data packets.   VoIP/VoWiFi, streaming video
         barColors[0] = WROVER_GREEN;
         barColors[1] = WROVER_GREEN;

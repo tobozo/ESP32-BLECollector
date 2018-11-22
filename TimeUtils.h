@@ -84,9 +84,9 @@ static char LastSyncTimeString[32] = "YYYY-MM-DD HH:MM:SS";
       timeActivity.epoch.second()
     );
   
-    if(timeActivity.source==0) {
+    if(timeActivity.source==SOURCE_NONE) {
       if(RTC.isrunning()) {
-        Serial.println("[RTC] Can't determine when RTC was last updated, setting to now");
+        Serial.println("[RTC] Forcing source to RTC and rebooting");
         logTimeActivity(SOURCE_RTC);
         ESP.restart();
       } else {
@@ -183,11 +183,13 @@ bool RTCSetup() {
     return false;
   #else
     Wire.begin(RTC_SDA/*26*/, RTC_SCL/*27*/); // RTC wired to SDA, SCL (26,27 on Wrover Kit)
-    if(!RTC.begin()) {
+    /*
+    if(!RTC.begin()) { // because, as usual, Adafruit library doesn't let you choose the pins
       Serial.println("[RTC] begin() failed");
       return false;
-    }
-    if (!RTC.isrunning()) {
+    }*/
+    delay(100); // why the fsck is this needed
+    if (!RTC.isrunning()) { // false positives here, why ??
       Serial.println("[RTC] NOT running, will try to adjust from hardcoded value");
       RTC.adjust(DateTime(__DATE__, __TIME__));
       logTimeActivity(SOURCE_COMPILER);
@@ -299,12 +301,17 @@ bool SDSetup() {
       delay(500);
     }
     Serial.println();
-    Out.println();
-    Out.println("[WiFi] Got an IP Address:" + WiFi.localIP().toString());
+    if(WiFi.status() == WL_CONNECTED) {
+      Out.println();
+      Out.println("[WiFi] Got an IP Address:" + WiFi.localIP().toString());
+    } else {
+      Out.println();
+      Out.println("[WiFi] No IP Address");
+    }
     return WiFi.status() == WL_CONNECTED;
   }
-  
-  
+
+
   void timeSetup() {
     if(!RTCSetup()) {
       // RTC failure ....
@@ -336,7 +343,10 @@ bool SDSetup() {
         ESP.restart();
       }
     } else {
-      Out.println("[WiFi] No NTP Sync");
+      // give up
+      Out.println("[WiFi] No NTP Sync, regressing to ROGUE mode");
+      // regress to ROGUE mode
+      logTimeActivity(SOURCE_NONE);
     }
     rollBackOrUpdateFromFS( SD_MMC, BLE_MENU_FILENAME );
     ESP.restart();

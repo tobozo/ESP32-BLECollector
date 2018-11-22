@@ -50,7 +50,7 @@ String colValue = ""; // search result
 // all DB queries
 // used by showDataSamples()
 #define nameQuery    "SELECT DISTINCT SUBSTR(name,0,32) FROM blemacs where TRIM(name)!=''"
-#define vnameQuery   "SELECT DISTINCT SUBSTR(vname,0,32) FROM blemacs where TRIM(vname)!=''"
+#define manufnameQuery   "SELECT DISTINCT SUBSTR(manufname,0,32) FROM blemacs where TRIM(manufname)!=''"
 #define ouinameQuery "SELECT DISTINCT SUBSTR(ouiname,0,32) FROM blemacs where TRIM(ouiname)!=''"
 // used by getEntries()
 #define BLEMAC_FIELDNAMES " \
@@ -59,8 +59,8 @@ String colValue = ""; // search result
   address, \
   ouiname, \
   rssi, \
-  vdata, \
-  vname, \
+  manufid, \
+  manufname, \
   uuid \
 "
 #define allEntriesQuery "SELECT " BLEMAC_FIELDNAMES " FROM blemacs;"
@@ -74,7 +74,7 @@ String colValue = ""; // search result
 char charToClean = 3; // for some reason (BLE bug?) invalid/empty devices named \3 are inserted
 String cleanTableQueryString = String("DELETE FROM blemacs WHERE TRIM(name) LIKE '%"+String(charToClean)+"%'");
 const char *cleanTableQuery = cleanTableQueryString.c_str();
-#define pruneTableQuery "DELETE FROM blemacs WHERE appearance='' AND name='' AND uuid='' AND ouiname='[private]' AND (vname LIKE 'Apple%' or vname='[unknown]')"
+#define pruneTableQuery "DELETE FROM blemacs WHERE appearance='' AND name='' AND uuid='' AND ouiname='[private]' AND (manufname LIKE 'Apple%' or manufname='[unknown]')"
 // used by testVendorNames()
 #define testVendorNamesQuery "SELECT SUBSTR(vendor,0,32)  FROM 'ble-oui' LIMIT 10"
 // used by testOUI()
@@ -84,7 +84,7 @@ const char *cleanTableQuery = cleanTableQueryString.c_str();
 static char insertQuery[512]; // stack overflow ? pray that 512 is enough :D
 #define searchDeviceTemplate "SELECT " BLEMAC_FIELDNAMES " FROM blemacs WHERE address='%s'"
 static char searchDeviceQuery[132];
-//String requestStr = "SELECT appearance, name, address, ouiname, rssi, vname, uuid FROM blemacs WHERE address='" + bleDeviceAddress + "'";
+//String requestStr = "SELECT appearance, name, address, ouiname, rssi, manufname, uuid FROM blemacs WHERE address='" + bleDeviceAddress + "'";
 
 
 // used by getVendor()
@@ -161,7 +161,7 @@ class DBUtils {
         Out.println();
         Out.println("Testing Database...");
         Out.println();
-        resetDB(); // use this when db is corrupt (shit happens) or filled by ESP32-BLE-BeaconSpam
+        //resetDB(); // use this when db is corrupt (shit happens) or filled by ESP32-BLE-BeaconSpam
         pruneDB(); // remove unnecessary/redundant entries
         delay(2000);
         // initial boot, perform some tests
@@ -390,7 +390,7 @@ class DBUtils {
        //&& bleDevice.spower==""
        && BLEDevCache[cacheindex].uuid=="" 
        && BLEDevCache[cacheindex].ouiname==""
-       && BLEDevCache[cacheindex].vname==""
+       && BLEDevCache[cacheindex].manufname==""
        ) {
         // cowardly refusing to insert empty result
         return INSERTION_IGNORED;
@@ -402,8 +402,8 @@ class DBUtils {
         clean(BLEDevCache[cacheindex].address).c_str(),
         clean(BLEDevCache[cacheindex].ouiname).c_str(),
         clean(BLEDevCache[cacheindex].rssi).c_str(),
-        clean(String(BLEDevCache[cacheindex].vdata)).c_str(),
-        clean(BLEDevCache[cacheindex].vname).c_str(),
+        clean(String(BLEDevCache[cacheindex].manufid)).c_str(),
+        clean(BLEDevCache[cacheindex].manufname).c_str(),
         clean(BLEDevCache[cacheindex].uuid).c_str(),
         ""//clean(bleDevice.spower).c_str()
       );
@@ -507,7 +507,7 @@ class DBUtils {
       tft.setTextColor(WROVER_YELLOW);
       Out.println(" Collected Devices Vendors:");
       tft.setTextColor(WROVER_PINK);
-      db_exec(BLECollectorDB, vnameQuery, true);
+      db_exec(BLECollectorDB, manufnameQuery, true);
       tft.setTextColor(WROVER_YELLOW);
       Out.println(" Collected Devices MAC's Vendors:");
       tft.setTextColor(WROVER_PINK);
