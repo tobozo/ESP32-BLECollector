@@ -58,7 +58,9 @@ class FoundDeviceCallback: public BLEAdvertisedDeviceCallbacks {
       }
       //processedDevicesCount = 0;
       advertisedDevice.getScan()->stop();
+      Serial.println("[Interrupting Scan after "+String(processedDevicesCount)+" feeds]");
       UI.stopTaskBlink();
+      return;
     }
     //UI.headerStats("Found " + String(processedDevicesCount));
     toggler = !toggler;
@@ -109,6 +111,7 @@ class BLEScanUtils {
 
 
     static void dumpStats(uint8_t indent=0) {
+      // updateTimeString();
       if(lastheap > freeheap) {
         // heap decreased
         sprintf(heapsign, "%s", "↘");
@@ -204,10 +207,10 @@ class BLEScanUtils {
       if(BLEDevCache[cacheindex].name!="") return false; // has name, let's collect
       if(BLEDevCache[cacheindex].appearance!="") return false; // has icon, let's collect
       if(BLEDevCache[cacheindex].ouiname=="[unpopulated]") return false; // don't know yet, let's keep
-      if(BLEDevCache[cacheindex].manufname=="[unpopulated]") return false; // don't know yet, let's keep
+      if(strcmp(BLEDevCache[cacheindex].manufname, "[unpopulated]")==0) return false; // don't know yet, let's keep
       if(BLEDevCache[cacheindex].ouiname=="[private]" || BLEDevCache[cacheindex].ouiname=="") return true; // don't care
-      if(BLEDevCache[cacheindex].manufname=="[unknown]" || BLEDevCache[cacheindex].manufname=="") return true; // don't care
-      if(BLEDevCache[cacheindex].manufname!="" && BLEDevCache[cacheindex].ouiname!="") return false; // anonymous but qualified device, let's collect
+      if(strcmp(BLEDevCache[cacheindex].manufname, "[unknown]")==0 || BLEDevCache[cacheindex].manufname[0]=='\0') return true; // don't care
+      if(BLEDevCache[cacheindex].manufname[0]!='\0' && BLEDevCache[cacheindex].ouiname!="") return false; // anonymous but qualified device, let's collect
       return true;
     }
 
@@ -359,7 +362,7 @@ class BLEScanUtils {
         Serial.println("ouiname-populating " + BLEDevCache[cacheIndex].address);
         BLEDevCache[cacheIndex].ouiname = DB.getOUI( BLEDevCache[cacheIndex].address );
       }
-      if(BLEDevCache[cacheIndex].manufname == "[unpopulated]") {
+      if(strcmp(BLEDevCache[cacheIndex].manufname, "[unpopulated]")==0) {
         if(BLEDevCache[cacheIndex].manufid!=-1 /*&& BLEDevCache[cacheIndex].manufid.length()>=4*/) {
           //BLEDevCache[cacheIndex].manufname = DB.getVendor( BLEDevCache[cacheIndex].manufid );
           DB.getVendor( BLEDevCache[cacheIndex].manufid, BLEDevCache[cacheIndex].manufname );
@@ -367,7 +370,7 @@ class BLEScanUtils {
           //Serial.println("  manufname: " + BLEDevCache[BLEDevCacheIndex].manufname);
         } else {
           //Serial.println("manufname-clearing " + BLEDevCache[BLEDevCacheIndex].address);
-          *BLEDevCache[cacheIndex].manufname = '\0';
+          memset( BLEDevCache[cacheIndex].manufname, '\0', MAX_FIELD_LEN+1 );
         }
       }
       
@@ -514,11 +517,10 @@ class BLEScanUtils {
       BLEDevice::init("");
       auto pBLEScan = BLEDevice::getScan(); //create new scan
       auto pDeviceCallback = new FoundDeviceCallback();
-      pBLEScan->setAdvertisedDeviceCallbacks( pDeviceCallback ); // memory leak ?
+      //pBLEScan->setAdvertisedDeviceCallbacks( pDeviceCallback ); // memory leak ?
       pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
       pBLEScan->setInterval(0x50); // 0x50
       pBLEScan->setWindow(0x30); // 0x30
-
       while(1) {
         //updateTimeString();
         UI.headerStats("Scan in progress...");
@@ -532,7 +534,6 @@ class BLEScanUtils {
         //UI.stopTaskBlink();
         delay(1000);
       }
-      
       vTaskDelete( NULL );
     }
 

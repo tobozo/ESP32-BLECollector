@@ -99,6 +99,18 @@ VendorCacheStruct VendorCache[VENDORCACHE_SIZE];
 byte VendorCacheIndex = 0; // index in the circular buffer
 static int VendorCacheHit = 0;
 
+static void VendorCacheSet(byte cacheindex, int devid, const char* manufname) {
+  VendorCache[cacheindex].devid = devid;
+  memset( VendorCache[cacheindex].vendor, '\0', MAX_FIELD_LEN+1);
+  memcpy( VendorCache[cacheindex].vendor, manufname, strlen(manufname) );
+  Serial.println("Copied " + String( manufname) + " (" + String( strlen(manufname) ) + ") / " + VendorCache[cacheindex].vendor);
+}
+static byte getNextVendorCacheIndex() {
+  VendorCacheIndex++;
+  VendorCacheIndex = VendorCacheIndex % VENDORCACHE_SIZE;  
+  return VendorCacheIndex;
+}
+
 // used by getOUI()
 #ifndef OUICACHE_SIZE // override this from Settings.h
 #define OUICACHE_SIZE 32
@@ -390,7 +402,7 @@ class DBUtils {
        //&& bleDevice.spower==""
        && BLEDevCache[cacheindex].uuid=="" 
        && BLEDevCache[cacheindex].ouiname==""
-       && BLEDevCache[cacheindex].manufname==""
+       && BLEDevCache[cacheindex].manufname[0]=='\0'
        ) {
         // cowardly refusing to insert empty result
         return INSERTION_IGNORED;
@@ -455,12 +467,10 @@ class DBUtils {
     void getVendor(uint16_t devid, char *dest) {
       int vendorCacheIdIfExists = vendorExists(devid, dest);
       if(vendorCacheIdIfExists>-1) {
-        memcpy( dest, VendorCache[vendorCacheIdIfExists].vendor, sizeof(VendorCache[vendorCacheIdIfExists].vendor) );
+        memcpy( dest, VendorCache[vendorCacheIdIfExists].vendor, strlen(VendorCache[vendorCacheIdIfExists].vendor) );
         return;
       }
-      VendorCacheIndex++;
-      VendorCacheIndex = VendorCacheIndex % VENDORCACHE_SIZE;
-      VendorCache[VendorCacheIndex].devid = devid;
+      byte vendorcacheindex = getNextVendorCacheIndex();
       open(BLE_VENDOR_NAMES_DB);
       String requestStr = "SELECT vendor FROM 'ble-oui' WHERE id='" + String(devid) + "'";
       db_exec(BLEVendorsDB, requestStr.c_str(), true, (char*)"vendor");
@@ -473,16 +483,12 @@ class DBUtils {
         }
         const char* colValueStr = colValue.c_str();
         colValueLen = strlen( colValueStr );
-        memcpy( VendorCache[VendorCacheIndex].vendor, colValueStr, colValueLen );
-        //VendorCache[VendorCacheIndex].vendor[colValueLen] = '\0'; // null terminate
+        VendorCacheSet(vendorcacheindex, devid, colValueStr);
         //colValueLen++;
-        //VendorCache[VendorCacheIndex].vendor = colValue;
       } else {
-        memcpy( VendorCache[VendorCacheIndex].vendor, "[unknown]", 10 );
-        //VendorCache[VendorCacheIndex].vendor = "[unknown]";
+        VendorCacheSet(vendorcacheindex, devid, "[unknown]");
       }
-      memcpy( dest, VendorCache[VendorCacheIndex].vendor, colValueLen );
-      //dest = VendorCache[VendorCacheIndex].vendor;
+      memcpy( dest, VendorCache[vendorcacheindex].vendor, colValueLen );
       return;
     }
 

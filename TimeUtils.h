@@ -182,9 +182,13 @@ bool RTCSetup() {
     Serial.println("[RTC] Hobo mode, no time to waste :)");
     return false;
   #else
-    Wire.begin(RTC_SDA/*26*/, RTC_SCL/*27*/); // RTC wired to SDA, SCL (26,27 on Wrover Kit)
+    // RTC wired to SDA, SCL (26,27 on Wrover Kit)
+    // using Wire.begin() instead of RTC.begin()
+    // because, as usual, Adafruit library tries to sel
+    // Adafruit hardware by not letting you choose the pins
+    Wire.begin(RTC_SDA/*26*/, RTC_SCL/*27*/);
     /*
-    if(!RTC.begin()) { // because, as usual, Adafruit library doesn't let you choose the pins
+    if(!RTC.begin()) { 
       Serial.println("[RTC] begin() failed");
       return false;
     }*/
