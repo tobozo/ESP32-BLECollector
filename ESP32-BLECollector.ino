@@ -61,5 +61,4 @@ void setup() {
 
 void loop() {
   BLECollector.scan();
-
 }

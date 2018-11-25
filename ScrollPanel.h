@@ -31,12 +31,12 @@
 
 
 static bool isScrolling = false;
+static uint16_t BGCOLOR;
 
 class ScrollableOutput {
   public:
     uint16_t height = tft.height();//ILI9341_HEIGHT (=320)
     uint16_t width  = tft.width();//ILI9341_WIDTH (=240)
-    uint16_t BGCOLOR;
     // scroll control variables
     uint16_t scrollTopFixedArea = 0;
     uint16_t scrollBottomFixedArea = 0;
@@ -55,17 +55,33 @@ class ScrollableOutput {
       va_end (args);
       return print(buf);
     }*/
+    int println() {
+      return println(" ");
+    }
+    int println(const char* str) {
+      char output[512] = {'\0'};
+      sprintf(output, "%s\n", str);
+      return print(output);
+    }
+    /*
     int println(String str = " ") { 
       // force a space to increment scroll on the display
       return print(str + "\n");
+    }*/
+    int print(const char* str) {
+      if(strcmp(str, " \n")!=0) {
+        Serial.print( str );
+      }
+      return scroll(str);
     }
+    /*
     int print(String str) {
       if(str!=" \n") {
         // avoid unnecessary scrolling in the serial console
         Serial.print( str );
       }
       return scroll(str);
-    }
+    }*/
     void setupScrollArea(uint16_t TFA, uint16_t BFA, bool clear = false) {
       tft.setCursor(0, TFA);
       tft.setupScrollArea(TFA, BFA); // driver needs patching for that, see https://github.com/espressif/WROVER_KIT_LCD/pull/3/files
@@ -80,7 +96,11 @@ class ScrollableOutput {
       }
     }
   private:
+    /*
     int scroll(String str) {
+      return scroll( str.c_str() );
+    }*/
+    int scroll(const char* str) {
       if (scrollPosY == -1) {
         scrollPosY = tft.getCursorY();
       }

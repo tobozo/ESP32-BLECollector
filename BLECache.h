@@ -44,17 +44,47 @@ static int AnonymousCacheHit = 0; // cache relative
 struct BlueToothDevice {
   bool in_db = false;
   byte hits = 0; // cache hits
-  String appearance = "";
-  String name = ""; // device name
-  String address = ""; // device mac address
-  String ouiname = ""; // oui vendor name (from mac address, see oui.h)
-  String rssi = "";
+  uint16_t appearance = 0;
+  char name[MAX_FIELD_LEN+1] = {'\0'}; // device name
+  char address[18] = {'\0'}; // device mac address
+  char ouiname[MAX_FIELD_LEN+1] = {'\0'}; // oui vendor name (from mac address, see oui.h)
+  int rssi = 0;
   int manufid = -1; // manufacturer data (or ID)
   char manufname[MAX_FIELD_LEN+1] = {'\0'}; // manufacturer name (from manufacturer data, see ble-oui.db)
-  String uuid = ""; // service uuid
+  char uuid[MAX_FIELD_LEN+1] = {'\0'}; // service uuid
   //String spower = "";
   //time_t created_at;
   //time_t updated_at;
+  void reset() {
+    in_db = false;
+    hits = 0;
+    appearance = 0;
+    memset( name, '\0', MAX_FIELD_LEN+1 );
+    memset( address, '\0', 18); 
+    memset( ouiname, '\0', MAX_FIELD_LEN+1 );
+    rssi = 0;
+    manufid = -1;
+    memset( manufname, '\0', MAX_FIELD_LEN+1 );
+    memset( uuid, '\0', MAX_FIELD_LEN+1 );
+  }
+
+  void set(const char* prop, bool val) {
+    if(strcmp(prop, "in_db")==0) { in_db = val;}
+  }
+  
+  void set(const char* prop, const int val) {
+    if     (strcmp(prop, "appearance")==0) { appearance = val;}
+    else if(strcmp(prop, "rssi")==0)       { rssi = val;}
+    else if(strcmp(prop, "manufid")==0)    { manufid = val;}
+  }
+  void set(const char* prop, const char* val) {
+    if     (strcmp(prop, "name")==0)       { memcpy(name, val, MAX_FIELD_LEN); }
+    else if(strcmp(prop, "address")==0)    { memcpy(address, val, 18); }
+    else if(strcmp(prop, "ouiname")==0)    { memcpy(ouiname, val, MAX_FIELD_LEN); }
+    else if(strcmp(prop, "manufname")==0)  { memcpy(manufname, val, MAX_FIELD_LEN); }
+    else if(strcmp(prop, "uuid")==0)       { memcpy(uuid, val, MAX_FIELD_LEN); }
+    else if(strcmp(prop, "rssi")==0)       { rssi = atoi(val);}
+  }
 };
 
 #ifndef BLEDEVCACHE_SIZE // override this from Settings.h
@@ -62,47 +92,6 @@ struct BlueToothDevice {
 #endif
 static BlueToothDevice BLEDevCache[BLEDEVCACHE_SIZE]; // will store database results here 
 static byte BLEDevCacheIndex = 0; // index in the circular buffer
-
-void BLEDevCacheReset(byte cacheindex) {
-  BLEDevCache[cacheindex].in_db = false;
-  BLEDevCache[cacheindex].hits = 0;
-  BLEDevCache[cacheindex].appearance = "";
-  BLEDevCache[cacheindex].name = ""; 
-  BLEDevCache[cacheindex].address = ""; 
-  BLEDevCache[cacheindex].ouiname = ""; 
-  BLEDevCache[cacheindex].rssi = ""; 
-  BLEDevCache[cacheindex].manufid = -1;// manufid.reserve(32);
-  memset( BLEDevCache[cacheindex].manufname, '\0', MAX_FIELD_LEN+1 );
-  //BLEDevCache[cacheindex].manufname = {'\0'};
-  BLEDevCache[cacheindex].uuid = ""; 
-  
-  BLEDevCache[cacheindex].uuid.reserve(37);
-  //BLEDevCache[cacheindex].manufname.reserve(16);
-  BLEDevCache[cacheindex].rssi.reserve(8);
-  BLEDevCache[cacheindex].ouiname.reserve(32);
-  BLEDevCache[cacheindex].address.reserve(18);
-  BLEDevCache[cacheindex].name.reserve(16);
-  BLEDevCache[cacheindex].appearance.reserve(16);
-  //spower = "";
-  //created_at = RTC.now().unixtime()
-  //updated_at = RTC.now().unixtime()
-}
-
-static void BLEDevCacheSet(byte cacheindex, const char* prop, const char* val) {
-  bool updated = false;
-  if(strcmp(prop, "rowid")==0)           { /*id = val.toInt();*/}
-  else if(strcmp(prop, "appearance")==0) { BLEDevCache[cacheindex].appearance = String(val);}
-  else if(strcmp(prop, "name")==0)       { BLEDevCache[cacheindex].name = String(val);      }
-  else if(strcmp(prop, "address")==0)    { BLEDevCache[cacheindex].address = String(val);   }
-  else if(strcmp(prop, "ouiname")==0)    { BLEDevCache[cacheindex].ouiname = String(val);   }
-  else if(strcmp(prop, "rssi")==0)       { BLEDevCache[cacheindex].rssi = String(val);      }
-  else if(strcmp(prop, "manufid")==0)    { BLEDevCache[cacheindex].manufid = String(val).toInt();}
-  else if(strcmp(prop, "manufname")==0)  { memcpy(BLEDevCache[cacheindex].manufname, val, strlen(val)); }
-  else if(strcmp(prop, "uuid")==0)       { BLEDevCache[cacheindex].uuid = String(val);      }
-  //else if(prop=="spower")     { spower = val;    }
-  //else if(prop=="created_at") { created_at = val;}
-  //else if(prop=="updated_at") { created_at = val;}
-}
 
 static byte getNextBLEDevCacheIndex() {
   byte minCacheValue = 255;
@@ -114,7 +103,7 @@ static byte getNextBLEDevCacheIndex() {
   // find first index with least hits
   for(int i=defaultIndex;i<defaultIndex+BLEDEVCACHE_SIZE;i++) {
     byte tempIndex = i%BLEDEVCACHE_SIZE;
-    if(BLEDevCache[tempIndex].address=="") return tempIndex;
+    if(BLEDevCache[tempIndex].address[0]=='\0') return tempIndex;
     if(BLEDevCache[tempIndex].hits > maxCacheValue) {
       maxCacheValue = BLEDevCache[tempIndex].hits;
     }

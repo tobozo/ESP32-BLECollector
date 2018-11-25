@@ -29,7 +29,7 @@
 
 */
 
-bool RTC_is_running = false;
+static bool RTC_is_running = false;
 static char hhmmString[13] = "--:--"; // %02d:%02d
 static char hhmmssString[13] = "--:--:--"; // %02d:%02d:%02d
 static char UpTimeString[13] = "00:00"; // %02d:%02d
@@ -95,12 +95,10 @@ static char LastSyncTimeString[32] = "YYYY-MM-DD HH:MM:SS";
     } else {
       lastSyncDateTime = timeActivity.epoch;
       nowDateTime = RTC.now();
-      int32_t deltaInSeconds = nowDateTime.unixtime() - lastSyncDateTime.unixtime();
-      Serial.println("[RTC] Last Time Sync: " + String(LastSyncTimeString) 
-                     + " ( " + String(deltaInSeconds) 
-                     + " seconds ago) using source #" + String(timeActivity.source));
-  
+      int64_t deltaInSeconds = (unsigned long)nowDateTime.unixtime() - (unsigned long)lastSyncDateTime.unixtime();
+      Serial.printf("[RTC] Last Time Sync: %s (%d seconds ago) using source #%d\n", LastSyncTimeString, deltaInSeconds, timeActivity.source);
       #if RTC_PROFILE > ROGUE // on NTP_MENU and CHRONOMANIAC SD-mirror themselves
+
         // mirror current binary to SD Card if needed
         char *currentMenuSignature = (char*)malloc(sizeoftrail);
         char *nextMenuSignature = (char*)malloc(sizeoftrail);
@@ -149,19 +147,18 @@ void updateTimeString(bool checkNTP=false) {
   uint32_t minutes_since_boot = seconds_since_boot / 60;
   uint32_t mm = minutes_since_boot % 60;
   uint32_t hh = minutes_since_boot / 60;
+  uint32_t ss = seconds_since_boot % 60;
   
   #if RTC_PROFILE > HOBO
     nowDateTime = RTC.now();
     sprintf(hhmmString, "%02d:%02d", nowDateTime.hour(), nowDateTime.minute());
     sprintf(hhmmssString, "%02d:%02d:%02d", nowDateTime.hour(), nowDateTime.minute(), nowDateTime.second());
     #if RTC_PROFILE == CHRONOMANIAC  // chronomaniac mode
-      if (checkNTP && RTC_is_running) {
-        int32_t deltaInSeconds = nowDateTime.unixtime() - lastSyncDateTime.unixtime();
+      if (checkNTP && RTC.isrunning()) {
+        int64_t deltaInSeconds = nowDateTime.unixtime() - lastSyncDateTime.unixtime();
+        Serial.printf("Comparing %d with %d\n", nowDateTime.unixtime(), lastSyncDateTime.unixtime());
         if ( deltaInSeconds > 86400/*300*/) {
-          Serial.println("[CHRONOMANIAC] Last Time Sync: " 
-           + String(LastSyncTimeString) 
-           + " ( " + String(deltaInSeconds) 
-           + " seconds ago). Time isn't fresh anymore, should reload NTP menu !!");
+          Serial.printf("[CHRONOMANIAC] Last Time Sync: %s (%d seconds ago). Time isn't fresh anymore, should reload NTP menu !!\n", LastSyncTimeString, deltaInSeconds);
           rollBackOrUpdateFromFS( SD_MMC, NTP_MENU_FILENAME );
           ESP.restart();
         }

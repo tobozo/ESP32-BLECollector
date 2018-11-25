@@ -149,16 +149,16 @@ static bool doUpdateToFS(fs::FS &fs, String fileName, const esp_partition_t* cur
   }
 
   if(fs.remove(fileName)){
-    Out.println("Outdated "+fileName+" deleted");
+    Out.println(String("Outdated "+fileName+" deleted").c_str());
   }
 
   File updateBin = fs.open(fileName, FILE_WRITE);
   if(!updateBin) {
-    Out.println("Can't write to " + String(fileName) + " :-(");
+    Out.println(String("Can't write to " + String(fileName) + " :-(").c_str());
     updateBin.close();
     return false;
   }
-  Out.println("Writing "+ String(fileName) +" ...");
+  Out.println(String("Writing "+ String(fileName) +" ...").c_str());
   uint32_t bytescounter = 0;
   for (uint32_t base_addr = currentpartition->address; base_addr < currentpartition->address + currentpartition->size; base_addr += SPI_FLASH_SEC_STEP8) {
     memset(g8_rbuf, 0, SPI_FLASH_SEC_STEP8);
@@ -273,7 +273,7 @@ bool SDUpdater::performUpdate(Stream &updateSource, size_t updateSize, String fi
             return false;
          }
       } else {
-         Out.println(); Out.println("Error Occurred. Error #: " + String(Update.getError())); Out.println();
+         Out.println(); Out.println(String("Error Occurred. Error #: " + String(Update.getError())).c_str()); Out.println();
          return false;
       }
    } else {
@@ -288,20 +288,20 @@ bool SDUpdater::updateFromFS(fs::FS &fs, String fileName) {
   bool ret = false;
   if (updateBin) {
     if(updateBin.isDirectory()){
-      Out.println(); Out.println("Error, "+ fileName +" is a directory"); Out.println();
+      Out.println(); Out.println(String("Error, "+ fileName +" is a directory").c_str()); Out.println();
       updateBin.close();
       return ret;
     }
     size_t updateSize = updateBin.size();
     if (updateSize > 0) {
-      Out.println(); Out.println("Updating from "+ fileName); Out.println();
+      Out.println(); Out.println(String("Updating from "+ fileName).c_str()); Out.println();
       ret = performUpdate(updateBin, updateSize, fileName);
     } else {
-      Out.println(); Out.println("Error, file "+ fileName +" is empty!"); Out.println();
+      Out.println(); Out.println(String("Error, file "+ fileName +" is empty!").c_str()); Out.println();
     }
     updateBin.close();
   } else {
-    Out.println(); Out.println("Could not load "+ fileName); Out.println();
+    Out.println(); Out.println(String("Could not load "+ fileName).c_str()); Out.println();
   }
   return ret;
 }
