@@ -25,6 +25,7 @@ Hardware requirements
   - [mandatory] ESP32 (with or without PSRam)
   - [mandatory] SD Card breakout (or bundled in Wrover-Kit, M5Stack, LoLinD32 Pro)
   - [mandatory] TFT Library [patched](https://github.com/espressif/WROVER_KIT_LCD/pull/3/files) to support vertical scroll definition
+  - [mandatory] BLE Library by @chegewara [patched](https://github.com/tobozo/ESP32-BLECollector/files/2614534/ESP32_ble_library.zip)
   - [mandatory] Micro SD (FAT32 formatted, **max 32GB**)
   - [mandatory] [mac-oui-light.db](https://github.com/tobozo/ESP32-BLECollector/blob/master/SD/mac-oui-light.db) and [ble-oui.db](https://github.com/tobozo/ESP32-BLECollector/blob/master/SD/ble-oui.db) files copied on the Micro SD Card root
   - [mandatory] ILI9341 320x240 TFT (or bundled in Wrover-Kit, M5Stack, LoLinD32 Pro)
@@ -72,4 +73,5 @@ Some ideas I'll try to implement in the upcoming changes:
 Credits/requirements:
 
 - https://github.com/siara-cc/esp32_arduino_sqlite3_lib
-- https://github.com/nkolban/ESP32_BLE_Arduino
+- ~~https://github.com/nkolban/ESP32_BLE_Arduino~~ 
+- https://github.com/chegewara (see [this issue](https://github.com/tobozo/ESP32-BLECollector/issues/2)
