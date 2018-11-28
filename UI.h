@@ -92,6 +92,11 @@ enum BLECardThemes {
   NOT_IN_CACHE_NOT_ANON = 3
 };
 
+
+volatile SemaphoreHandle_t xSemaphore = NULL; // this is needed to prevent rendering collisions 
+                                     // between scrollpanel and heap graph
+
+
 class UIUtils {
   public:
 
@@ -155,6 +160,7 @@ class UIUtils {
       updateTimeString( true );
       timeStateIcon();
       footerStats();
+      //vSemaphoreCreateBinary( xSemaphore );
       taskHeapGraph();
       if ( clearScreen ) {
         playIntro();
@@ -169,7 +175,8 @@ class UIUtils {
         delay(1000);
         ESP.restart();
       }
-      // updateTimeString( );
+      updateTimeString();
+      headerStats("");
     }
 
 
@@ -370,7 +377,22 @@ class UIUtils {
 
 
     void taskHeapGraph() { // always running
-      xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 2000, NULL, 0, NULL, 1); /* last = Task Core */
+      //xTaskCreatePinnedToCore(vATask, "vATask", 10000, (void *)0, 0, NULL, SCAN_MODE); /* last = Task Core */
+      //xSemaphore = xSemaphoreCreateBinary();
+      switch(SCAN_MODE) {
+        case SCAN_TASK:
+          xTaskCreate(heapGraph, "HeapGraph", 2000, NULL, 5, NULL);
+        break;
+        default:
+          xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 2000, (void *)1, 0, NULL, 0); /* last = Task Core */
+        break;
+      }
+    }
+
+
+    static void vATask( void * pvParameters ) {
+       // Create the semaphore to guard a shared resource.
+       //vSemaphoreCreateBinary( xSemaphore );
     }
 
 
@@ -383,8 +405,7 @@ class UIUtils {
       uint16_t GRAPH_X = Out.width - GRAPH_LINE_WIDTH - 2;
       uint16_t GRAPH_Y = 283;
       while (1) {
-        // only redraw if the heap changed
-        if(isScrolling) {
+        if (isScrolling) {
           delay(30);
           continue;
         }
@@ -466,7 +487,7 @@ class UIUtils {
         }
         
         blinkIcon();
-        
+        //xSemaphoreGive( xSemaphore ); 
       }
     }
 
@@ -502,6 +523,9 @@ class UIUtils {
 
 
     int printBLECard(byte cacheindex) {
+
+      //Serial.println("BLECARD got semaphore !");
+      
       uint16_t randomcolor = tft.color565(random(128, 255), random(128, 255), random(128, 255));
       uint16_t pos = 0;
       uint16_t hop;

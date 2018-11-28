@@ -60,5 +60,9 @@ void setup() {
 
 
 void loop() {
-  BLECollector.scan();
+   #if SCAN_MODE==SCAN_TASK_0 || SCAN_MODE==SCAN_TASK_1 || SCAN_MODE==SCAN_TASK
+     vTaskSuspend(NULL);
+   #else 
+     BLECollector.scan();
+   #endif
 }

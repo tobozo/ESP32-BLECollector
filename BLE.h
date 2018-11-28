@@ -42,14 +42,6 @@ class BLEScanUtils {
 #else
 
 
-// scan modes
-#define SCAN_TASK_0 0 // scan as a task on core 0
-#define SCAN_TASK_1 1 // scan as a task on core 1
-#define SCAN_LOOP   2 // scan from loop()
-#define SCAN_MODE SCAN_LOOP
-//#define SCAN_MODE SCAN_TASK_0
-//#define SCAN_MODE SCAN_TASK_1
-
 static byte processedDevicesCount = 0;
 bool foundDeviceToggler = true;
 
@@ -92,11 +84,13 @@ unsigned long lastheap = 0;
 byte lastscanduration = SCAN_DURATION;
 char heapsign[5]; // unicode sign terminated
 char scantimesign[5]; // unicode sign terminated
+BLEScanResults bleresults;
+BLEScan *pBLEScan;
 
 class BLEScanUtils {
 
   public:
-    BLEScanResults bleresults;
+
     //BLEScan *pBLEScan;
     //BLEAdvertisedDeviceCallbacks *pDeviceCallback;// = new FoundDeviceCallback();
 
@@ -126,6 +120,9 @@ class BLEScanUtils {
         break;
         case SCAN_TASK_1:
           xTaskCreatePinnedToCore(scanTask, "scanTask", 10000, NULL, 0, NULL, 1); /* last = Task Core */
+        break;
+        case SCAN_TASK:
+          xTaskCreate(scanTask, "scanTask", 10000, NULL, 5, NULL);
         break;
         case SCAN_LOOP:
         /*
@@ -556,12 +553,20 @@ class BLEScanUtils {
         delay(1000);
         ESP.restart();
       }
+      if( DB.isCorrupt ) {
+        Serial.println("[I/O ERROR] this DB file is too big");
+        Serial.printf("During this session (%d), %d out of %d devices were added to the DB\n", UpTimeString, newDevicesCount-AnonymousCacheHit, sessDevicesCount);
+        DB.moveDB();
+        delay(1000);
+        ESP.restart();
+        
+      }
     }
 
 
     static void scanTask( void * parameter ) {
       BLEDevice::init("");
-      auto pBLEScan = BLEDevice::getScan(); //create new scan
+      pBLEScan = BLEDevice::getScan(); //create new scan
       //auto pDeviceCallback = new FoundDeviceCallback();
       //pBLEScan->setAdvertisedDeviceCallbacks( pDeviceCallback ); // memory leak ?
       pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
@@ -572,12 +577,12 @@ class BLEScanUtils {
         //updateTimeString();
         UI.headerStats("Scan in progress...");
         UI.startBlink();
+        Serial.print("BeforeScan::");dumpStats();
         processedDevicesCount = 0;
         devicesCount = 0;
-        Serial.print("BeforeScan::");dumpStats();
         //pBLEScan->start(SCAN_DURATION, onScanDone);
         pBLEScan->start(SCAN_DURATION);
-        auto bleresults = pBLEScan->getResults();
+        bleresults = pBLEScan->getResults();
         onScanDone( bleresults );
         Serial.print("AfterScan:::");dumpStats();
         scan_rounds++;
@@ -589,7 +594,6 @@ class BLEScanUtils {
 
 
     void scan() {
-      updateTimeString();
       switch(SCAN_MODE) {
         case SCAN_TASK_0:
           // scan is being done on core 0
@@ -599,12 +603,16 @@ class BLEScanUtils {
           // scan is being done on core 1
           delay(SCAN_DURATION*1000);
         break;
+        case SCAN_TASK:
+
+        break;
         case SCAN_LOOP:
+          updateTimeString();
           UI.headerStats("Scan in progress...");
           UI.startBlink();
+          Serial.print("BeforeScan::");dumpStats();
           processedDevicesCount = 0;
           devicesCount = 0;
-          Serial.print("BeforeScan::");dumpStats();
           BLEDevice::init("");
           auto pBLEScan = BLEDevice::getScan(); //create new scan
           //auto pDeviceCallback = new FoundDeviceCallback();

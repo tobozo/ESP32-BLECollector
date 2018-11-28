@@ -151,6 +151,7 @@ class DBUtils {
     };
   
     bool isOOM = false; // for stability
+    bool isCorrupt = false; // for maintenance
     byte BLEDevCacheUsed = 0; // for statistics
     byte VendorCacheUsed = 0; // for statistics
     byte OuiCacheUsed = 0; // for statistics
@@ -392,6 +393,8 @@ class DBUtils {
         resetDB();
       } else if (strcmp(zErrMsg, "out of memory")==0) {
         isOOM = true;
+      } else if(strcmp(zErrMsg, "disk I/O error")==0) {
+        isCorrupt = true; // TODO: rename the DB file and create a new DB
       } else {
         UI.headerStats(zErrMsg);
         delay(1000); 
@@ -619,6 +622,16 @@ class DBUtils {
       db_exec(BLECollectorDB, createTableQuery);
       close(BLE_COLLECTOR_DB);
       ESP.restart();
+    }
+
+    void moveDB() {
+      // TODO: give a timestamp to the destination filename
+      if(SD_MMC.rename("/blemacs.db", "/blemacs.corrupt.db") !=0) {
+        Serial.println("[I/O ERROR] renaming failed, will reset");
+        resetDB();
+      } else {
+        ESP.restart();
+      }
     }
 
 

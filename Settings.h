@@ -62,6 +62,15 @@ byte SCAN_DURATION = 10; // seconds
 #define RTC_SDA 26 // pin number
 #define RTC_SCL 27 // pin number
 
+// scan modes
+#define SCAN_TASK_0 0 // scan as a task on core 0
+#define SCAN_TASK_1 1 // scan as a task on core 1
+#define SCAN_TASK   2
+#define SCAN_LOOP   3 // scan from loop()
+#define SCAN_MODE SCAN_TASK
+//#define SCAN_MODE SCAN_TASK_0
+//#define SCAN_MODE SCAN_TASK_1
+
 // don't edit anything below this
 #if RTC_PROFILE==HOBO // no NTP for Hobo mode
   #define BUILD_TYPE BLE_MENU_NAME
