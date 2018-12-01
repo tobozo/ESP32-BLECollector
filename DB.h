@@ -115,7 +115,7 @@ static int VendorCacheHit = 0;
 #define OUICACHE_SIZE 32
 #endif
 struct OUICacheStruct {
-  char mac[18] = {'\0'}; // todo: to char[18]
+  char mac[MAC_LEN+1] = {'\0'}; // todo: to char[18]
   char assignment[MAX_FIELD_LEN+1] = {'\0'}; // todo: to char[32]
 };
 OUICacheStruct OuiCache[OUICACHE_SIZE];
@@ -128,7 +128,7 @@ static int OuiCacheHit = 0;
 class DBUtils {
   public:
 
-    char currentBLEAddress[18] = "00:00:00:00:00:00"; // used to proxy BLE search term to DB query
+    char currentBLEAddress[MAC_LEN+1] = "00:00:00:00:00:00"; // used to proxy BLE search term to DB query
 
     sqlite3 *BLECollectorDB; // read/write
     sqlite3 *BLEVendorsDB; // readonly
@@ -175,13 +175,13 @@ class DBUtils {
         Out.println();
         Out.println("Testing Database...");
         Out.println();
-        // resetDB(); // use this when db is corrupt (shit happens) or filled by ESP32-BLE-BeaconSpam
+        resetDB(); // use this when db is corrupt (shit happens) or filled by ESP32-BLE-BeaconSpam
         pruneDB(); // remove unnecessary/redundant entries
         delay(2000);
         // initial boot, perform some tests
         testOUI(); // test oui database
         testVendorNames(); // test vendornames database
-        showDataSamples(); // print some of the collected values (WARN: memory hungry)
+        //showDataSamples(); // print some of the collected values (WARN: memory hungry)
         // let the BLE.init() handle the restart
         //ESP.restart();
       }
@@ -207,7 +207,7 @@ class DBUtils {
     }
 
     static void OUICacheSet(byte cacheindex, const char* shortmac, const char* assignment) {
-      memset( OuiCache[cacheindex].mac, '\0', 18);
+      memset( OuiCache[cacheindex].mac, '\0', MAC_LEN+1);
       memcpy( OuiCache[cacheindex].mac, shortmac, strlen(shortmac) );
       memset( OuiCache[cacheindex].assignment, '\0', MAX_FIELD_LEN+1);
       memcpy( OuiCache[cacheindex].assignment, assignment, strlen(assignment) );
@@ -223,7 +223,7 @@ class DBUtils {
     void cacheState() {
       BLEDevCacheUsed = 0;
       for(int i=0;i<BLEDEVCACHE_SIZE;i++) {
-        if( BLEDevCache[i].address[0] != '\0') {
+        if( BLEDevCache[i].address && BLEDevCache[i].address[0] != '\0') {
           BLEDevCacheUsed++;
         }
       }
@@ -304,7 +304,7 @@ class DBUtils {
     // checks if a BLE Device exists, returns its cache index if found
     int deviceExists(const char* address) {
       results = 0;
-      if( (address && !address[0]) || strlen( address ) > 18 || strlen( address ) < 17 || address[0]==3) {
+      if( (address && !address[0]) || strlen( address ) > MAC_LEN+1 || strlen( address ) < 17 || address[0]==3) {
         Serial.printf("Cowardly refusing to perform an empty or invalid request : %s / %s\n", address, currentBLEAddress);
         return -1;
       }
@@ -331,7 +331,7 @@ class DBUtils {
         BLEDevCacheIndex = getNextBLEDevCacheIndex();
         BLEDevCache[BLEDevCacheIndex].reset(); // avoid mixing new and old data
         for (int i = 0; i < argc; i++) {
-          BLEDevCache[BLEDevCacheIndex].set(azColName[i], argv[i] ? argv[i] : "");
+          BLEDevCache[BLEDevCacheIndex].set(azColName[i], argv[i] ? argv[i] : '\0');
           //Serial.printf("BLEDev Set cb %s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
         }
         BLEDevCache[BLEDevCacheIndex].hits = 1;
@@ -551,7 +551,7 @@ class DBUtils {
         }
       }
       if(bytepos!=6) {
-        Serial.printf("Bad getOUI query with only %d chars for %s vs %s\n", bytepos, mac, shortmac);
+        Serial.printf("Bad getOUI query with %d chars instead of %s vs %s\n", bytepos, mac, shortmac);
       }
       int OUICacheIdIfExists = OUIExists( shortmac );
       if(OUICacheIdIfExists>-1) {

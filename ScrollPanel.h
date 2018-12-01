@@ -32,6 +32,9 @@
 
 static bool isScrolling = false;
 static uint16_t BGCOLOR;
+volatile xSemaphoreHandle displayWrite = NULL; // this is needed to prevent rendering collisions 
+                                     // between scrollpanel and heap graph
+static xSemaphoreHandle mux = NULL;
 
 class ScrollableOutput {
   public:
@@ -101,6 +104,11 @@ class ScrollableOutput {
       return scroll( str.c_str() );
     }*/
     int scroll(const char* str) {
+      #if SCAN_MODE==SCAN_TASK_0 || SCAN_MODE==SCAN_TASK_1 || SCAN_MODE==SCAN_TASK
+        while( xSemaphoreTake(mux, portMAX_DELAY)!=pdTRUE ) {
+          vTaskDelay(100);
+        }
+      #endif
       if (scrollPosY == -1) {
         scrollPosY = tft.getCursorY();
       }
@@ -119,6 +127,9 @@ class ScrollableOutput {
       scroll_slow(h_tmp, 5); // Scroll lines, 5ms per line
       tft.print(str);
       scrollPosY = tft.getCursorY();
+      #if SCAN_MODE==SCAN_TASK_0 || SCAN_MODE==SCAN_TASK_1 || SCAN_MODE==SCAN_TASK
+        xSemaphoreGive(mux);
+      #endif
       return h_tmp;
     }
     /* change this function if your TFT does not handle hardware scrolling */
