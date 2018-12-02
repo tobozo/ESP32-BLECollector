@@ -2,7 +2,7 @@
 
 struct AmigaBallConfig {
   float BGColor = tft.color565(0x22, 0x22, 0x44);
-  float Framelength = 33;
+  float Framelength = 25;
   float ScreenWidth = tft.width();
   float ScreenHeight = tft.height();
   float VCentering = 245.0;
@@ -181,17 +181,6 @@ class AmigaRulez {
         }
       }
     }
-    /*
-    def drawShadow(screen, points):
-        ps = []
-        for i in range(9):
-            x, y = points[0][i]
-            ps.append((x + 50, y))
-        for i in range(8):
-            x, y = points[9][7-i]
-            ps.append((x + 50, y))
-        pygame.draw.polygon(screen, GRAY, ps)
-    */
 
     void drawWireFrame() {
       for( int i=0; i<=AmigaBallWires; i++ ) {
@@ -225,7 +214,7 @@ class AmigaRulez {
       float a = ( ( r0*r0 ) - ( r1*r1 ) + ( d*d ) ) / ( 2*d );
       float h = sqrt( ( r0*r0 ) - ( a*a ) );
       /*
-      // circle intersection points
+      // circle intersection points (not needed here)
       float x2 = x0 + a * vectorx / d;   
       float y2 = y0 + a * vectory / d;  
       float x3 = x2 + h * vectory / d;       // also x3=x2-h*(y1-y0)/d
@@ -234,69 +223,47 @@ class AmigaRulez {
       float mobAngleRadians = atan2(h, a);
       float angleRad0 = vectAngleRadians-mobAngleRadians;
       float angleRad1 = vectAngleRadians+mobAngleRadians;
-      float lastxx = 0;
-      float lastyy = 0;
-      tft.drawCircle(x0, y0, r0, AmigaBallBGColor);
-      if( angleRad0 < angleRad1 ) {
-        lastxx = 0;
-        lastyy = 0;
-        for( float angle=angleRad0; angle<angleRad1; angle+=0.01 ) {
-          float ct = sin(angle);
-          float st = cos(angle);
-          float xx = x0 + st * r0-1;
-          float yy = y0 + ct * r0-1;
-          float xxx = x1 + st * r1+1;
-          float yyy = y1 + ct * r1+1;
-          if((int)lastxx!=(int)xx || (int)lastyy!=(int)yy) {
-            if( lastxx != 0 && lastyy != 0 ) {
-              tft.fillTriangle(xx, yy, xxx, yyy, lastxx, lastyy, AmigaBallBGColor);
-            } else {
-              tft.drawLine(xx, yy, xxx, yyy, AmigaBallBGColor);
-            }
-            lastxx = xx;
-            lastyy = yy;
-          }
-        }
-      } else {
-        lastxx = 0;
-        lastyy = 0;
-        for( float angle=angleRad1; angle<angleRad0; angle+=0.01 ) {
-          float st = sin(angle);
-          float ct = cos(angle);
-          float xx = x0 + st * r0-1;
-          float yy = y0 + ct * r0-1;
-          float xxx = x1 + st * r1+1;
-          float yyy = y1 + ct * r1+1;
-          if((int)lastxx!=(int)xx || (int)lastyy!=(int)yy) {
-            if( lastxx != 0 && lastyy !=0 ) {
-              tft.fillTriangle(xx, yy, xxx, yyy, lastxx, lastyy, AmigaBallBGColor);
-            } else {
-              tft.drawLine(xx, yy, xxx, yyy, AmigaBallBGColor);
-            }
-            lastxx = xx;
-            lastyy = yy;
-          }
-        }
+      if( angleRad0 > angleRad1 ) {
+        angleRad0 = vectAngleRadians+mobAngleRadians;
+        angleRad1 = vectAngleRadians-mobAngleRadians;
       }
-    //Serial.printf("%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n", vectorx, vectory, vectAngleDeg, vectAngleRadians, d, mobAngleDeg, x2, y2, x3, y3);
-    }
-
-    void clearLastBall(float scale, float x, float y) {
-      //clearCrescent(scale, scale+2, x, y, oldx, oldy);
-      if(oldx!=0 && oldy!=0) {
-        tft.fillCircle(oldx, oldy, scale+2, AmigaBallBGColor);
+      float angleStep = mobAngleRadians/4.5;
+      
+      float xx2 = 0;
+      float yy2 = 0;
+      float xx3 = 0;
+      float yy3 = 0;
+      
+      for( float angle=angleRad0; angle<angleRad1; angle+=angleStep ) {
+        float ct = sin(angle);
+        float st = cos(angle);
+        float xx0 = x0 + st * r0;
+        float yy0 = y0 + ct * r0;
+        float xx1 = x1 + st * r1;
+        float yy1 = y1 + ct * r1;
+        if( xx2 != 0 && yy2 != 0 ) {
+          tft.fillTriangle(xx0, yy0, xx1, yy1, xx2, yy2, AmigaBallBGColor );
+          tft.fillTriangle(xx2, yy2, xx3, yy3, xx1, yy1, AmigaBallBGColor );
+        } else {
+          tft.drawLine(xx0, yy0, xx1, yy1, AmigaBallBGColor );
+        }
+        xx2 = xx0;
+        yy2 = yy0;
+        xx3 = xx1;
+        yy3 = yy1;
       }
-      oldx = x;
-      oldy = y;
     }
 
     void draw(float phase, float scale, float x, float y) {
       calcPoints( fmod(phase, phase8Rad) );
       transform(scale, x, y);
-      //drawShadow()
-      clearLastBall(scale, x, y);
       if(bytecounter++%4==0) drawWireFrame();
       fillTiles(phase >= phase8Rad);
+      if(oldx!=0 && oldy!=0) {
+        clearCrescent(scale, scale+2, x, y, oldx, oldy);
+      }
+      oldx = x;
+      oldy = y;
     }
 
     void animate( long duration = 5000 ) {
