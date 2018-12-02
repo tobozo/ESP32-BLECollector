@@ -203,7 +203,7 @@ class UIUtils {
         Out.println();
       }
       AmigaBall.init();
-      AmigaBall.animate( 15000 );
+      AmigaBall.animate( 5000 );
     }
 
 
