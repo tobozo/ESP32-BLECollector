@@ -48,7 +48,7 @@
 //#define RTC_PROFILE CHRONOMANIAC // to build the BLEMenu.bin with RTC support and NTP Sync
 //#define RTC_PROFILE ROGUE // to build the BLEMenu.bin with RTC support, but *without* NTP sync
 //#define RTC_PROFILE HOBO // to build the NTPMenu.bin *without* RTC/NTP support
-byte SCAN_DURATION = 60; // seconds 
+byte SCAN_DURATION = 10; // seconds 
 #define MIN_SCAN_DURATION 10 // seconds min
 #define MAX_SCAN_DURATION 120 // seconds max
 #define BLEDEVCACHE_SIZE 64 // use some heap to cache BLECards, min = 5, max = 64, higher value = smaller uptime
@@ -169,6 +169,7 @@ static bool print_tabular = true;
 
 // load stack
 #include "Assets.h" // bitmaps
+#include "AmigaBall.h"
 #include "BLECache.h" // data struct
 #include "ScrollPanel.h" // scrolly methods
 #if RTC_PROFILE == CHRONOMANIAC ||  RTC_PROFILE == NTP_MENU

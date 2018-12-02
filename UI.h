@@ -129,7 +129,7 @@ class UIUtils {
     BLECardStyle BLECardTheme;
 
     void init() {
-
+      
       bool clearScreen = true;
       if (resetReason == 12) { // SW Reset
         clearScreen = false;
@@ -162,7 +162,12 @@ class UIUtils {
       //vSemaphoreCreateBinary( xSemaphore );
       
       //taskHeapGraph();
+      
       xTaskCreate(taskHeapGraph, "taskHeapGraph", 4096, NULL, 5, NULL);
+
+      //if (resetReason != 12) {
+        
+      //}
       
       if ( clearScreen ) {
         playIntro();
@@ -197,7 +202,8 @@ class UIUtils {
       for (int i = 0; i < 5; i++) {
         Out.println();
       }
-      delay(5000);
+      AmigaBall.init();
+      AmigaBall.animate( 15000 );
     }
 
 
