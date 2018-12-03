@@ -293,6 +293,7 @@ class DBUtils {
     
     // replaces any needle from haystack (defaults to double=>single quotes)
     static void clean(char *haystack, const char needle = '"', const char replacewith='\'') {
+      if( !haystack ) return;
       int len = strlen( haystack );
       for( int i=0;i<len;i++ ) {
         if( haystack[i] == needle ) {
