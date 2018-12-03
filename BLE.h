@@ -227,10 +227,10 @@ class BLEScanUtils {
     static bool isAnonymousDevice(byte cacheindex) {
       if(BLEDevCache[cacheindex].uuid && BLEDevCache[cacheindex].uuid[0]!='\0') return false; // uuid's are interesting, let's collect
       if(BLEDevCache[cacheindex].name && BLEDevCache[cacheindex].name[0]!='\0') return false; // has name, let's collect
-      if(BLEDevCache[cacheindex].appearance && BLEDevCache[cacheindex].appearance!=0) return false; // has icon, let's collect
-      if(BLEDevCache[cacheindex].ouiname=="[unpopulated]") return false; // don't know yet, let's keep
+      if(BLEDevCache[cacheindex].appearance!=0) return false; // has icon, let's collect
+      if(strcmp(BLEDevCache[cacheindex].ouiname, "[unpopulated]")==0) return false; // don't know yet, let's keep
       if(strcmp(BLEDevCache[cacheindex].manufname, "[unpopulated]")==0) return false; // don't know yet, let's keep
-      if(BLEDevCache[cacheindex].ouiname=="[private]" || !BLEDevCache[cacheindex].ouiname || BLEDevCache[cacheindex].ouiname[0]=='\0') return true; // don't care
+      if(strcmp(BLEDevCache[cacheindex].ouiname, "[private]")==0 || !BLEDevCache[cacheindex].ouiname || BLEDevCache[cacheindex].ouiname[0]=='\0') return true; // don't care
       if(strcmp(BLEDevCache[cacheindex].manufname, "[unknown]")==0 || !BLEDevCache[cacheindex].manufname || BLEDevCache[cacheindex].manufname[0]=='\0') return true; // don't care
       if(BLEDevCache[cacheindex].manufname && BLEDevCache[cacheindex].manufname[0]!='\0' && BLEDevCache[cacheindex].ouiname && BLEDevCache[cacheindex].ouiname[0]!='\0') return false; // anonymous but qualified device, let's collect
       return true;
@@ -251,7 +251,7 @@ class BLEScanUtils {
       if (advertisedDevice.haveName()) {
         BLEDevCache[BLEDevCacheIndex].set("name", advertisedDevice.getName().c_str());
       } else {
-        BLEDevCache[BLEDevCacheIndex].set("name", "");
+        BLEDevCache[BLEDevCacheIndex].set("name", '\0');
       }
       if (advertisedDevice.haveAppearance()) {
         BLEDevCache[BLEDevCacheIndex].set("appearance", advertisedDevice.getAppearance());
