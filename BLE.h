@@ -224,19 +224,19 @@ class BLEScanUtils {
     }
 
     /* determines whether a device is worth saving or not */
-    static bool isAnonymousDevice(byte cacheindex) {
-      if(cacheindex>=BLEDEVCACHE_SIZE) {
-        Serial.printf("[!!!] Ignored Invalid Cache Index :%d\n", cacheindex);        
+    static bool isAnonymousDevice(byte _index) {
+      if(_index>=BLEDEVCACHE_SIZE) {
+        Serial.printf("[!!!] Ignored Invalid Cache Index :%d\n", _index);        
         return false;
       }
-      if(BLEDevCache[cacheindex].uuid && strlen(BLEDevCache[cacheindex].uuid)>=0) return false; // uuid's are interesting, let's collect
-      if(BLEDevCache[cacheindex].name && strlen(BLEDevCache[cacheindex].name)>0) return false; // has name, let's collect
-      if(BLEDevCache[cacheindex].appearance!=0) return false; // has icon, let's collect
-      if(strcmp(BLEDevCache[cacheindex].ouiname, "[unpopulated]")==0) return false; // don't know yet, let's keep
-      if(strcmp(BLEDevCache[cacheindex].manufname, "[unpopulated]")==0) return false; // don't know yet, let's keep
-      if(strcmp(BLEDevCache[cacheindex].ouiname, "[private]")==0 || !BLEDevCache[cacheindex].ouiname || BLEDevCache[cacheindex].ouiname[0]=='\0') return true; // don't care
-      if(strcmp(BLEDevCache[cacheindex].manufname, "[unknown]")==0 || !BLEDevCache[cacheindex].manufname || BLEDevCache[cacheindex].manufname[0]=='\0') return true; // don't care
-      if(BLEDevCache[cacheindex].manufname && BLEDevCache[cacheindex].manufname[0]!='\0' && BLEDevCache[cacheindex].ouiname && BLEDevCache[cacheindex].ouiname[0]!='\0') return false; // anonymous but qualified device, let's collect
+      if(BLEDevCache[_index].uuid && strlen(BLEDevCache[_index].uuid)>=0) return false; // uuid's are interesting, let's collect
+      if(BLEDevCache[_index].name && strlen(BLEDevCache[_index].name)>0) return false; // has name, let's collect
+      if(BLEDevCache[_index].appearance!=0) return false; // has icon, let's collect
+      if(strcmp(BLEDevCache[_index].ouiname, "[unpopulated]")==0) return false; // don't know yet, let's keep
+      if(strcmp(BLEDevCache[_index].manufname, "[unpopulated]")==0) return false; // don't know yet, let's keep
+      if(strcmp(BLEDevCache[_index].ouiname, "[private]")==0 || !BLEDevCache[_index].ouiname || BLEDevCache[_index].ouiname[0]=='\0') return true; // don't care
+      if(strcmp(BLEDevCache[_index].manufname, "[unknown]")==0 || !BLEDevCache[_index].manufname || BLEDevCache[_index].manufname[0]=='\0') return true; // don't care
+      if(BLEDevCache[_index].manufname && BLEDevCache[_index].manufname[0]!='\0' && BLEDevCache[_index].ouiname && BLEDevCache[_index].ouiname[0]!='\0') return false; // anonymous but qualified device, let's collect
       return true;
     }
 
@@ -432,7 +432,7 @@ class BLEScanUtils {
     }
 
     /* process+persist device data in 6 steps to determine if worthy to display or not */
-    static bool processDevice( BLEAdvertisedDevice &advertisedDevice, byte &cacheIndex, int deviceNum ) {
+    static bool processDevice( BLEAdvertisedDevice &advertisedDevice, byte &_cacheIndex, int deviceNum ) {
       const char* currentBLEAddress = advertisedDevice.getAddress().toString().c_str();
       memcpy( DB.currentBLEAddress, currentBLEAddress, MAC_LEN+1 );
       // 1) return if BLECard is already on screen
@@ -447,9 +447,9 @@ class BLEScanUtils {
       int deviceIndexIfExists = getDeviceCacheIndex( DB.currentBLEAddress );
       if( deviceIndexIfExists > -1 ) { // load from cache
         inCacheCount++;
-        cacheIndex = deviceIndexIfExists;
-        UI.BLECardTheme.setTheme( (isAnonymousDevice( cacheIndex ) ? IN_CACHE_ANON : IN_CACHE_NOT_ANON) );
-        sprintf( processMessage, processTemplateLong, "Cache ", cacheIndex, "#", deviceNum );
+        _cacheIndex = deviceIndexIfExists;
+        UI.BLECardTheme.setTheme( (isAnonymousDevice( _cacheIndex ) ? IN_CACHE_ANON : IN_CACHE_NOT_ANON) );
+        sprintf( processMessage, processTemplateLong, "Cache ", _cacheIndex, "#", deviceNum );
         return true;
       }
       // 3) return if BLEDevCache will explode
@@ -467,38 +467,38 @@ class BLEScanUtils {
       // 4) return if device is in DB
       //Serial.print("processDevice:4:");dumpStats();
       if( deviceIndexIfExists > -1 ) {
-        cacheIndex = deviceIndexIfExists;
+        _cacheIndex = deviceIndexIfExists;
         UI.BLECardTheme.setTheme( IN_CACHE_NOT_ANON );
-        sprintf( processMessage, processTemplateLong, "DB Seen ", cacheIndex, "#", deviceNum );
+        sprintf( processMessage, processTemplateLong, "DB Seen ", _cacheIndex, "#", deviceNum );
         return true;
       }
       // 5) return if data frozen
       //Serial.print("processDevice:5:");dumpStats();
       newDevicesCount++;
       if( DB.isOOM ) { // newfound but OOM, gather what's left of data without DB
-        cacheIndex = store( advertisedDevice, false ); // store data in cache but don't populate
+        _cacheIndex = store( advertisedDevice, false ); // store data in cache but don't populate
         // freeze it partially ...
-        BLEDevCache[cacheIndex].in_db = false;
+        BLEDevCache[_cacheIndex].in_db = false;
         #ifdef USE_NVS
-          byte prefIndex = freeze( cacheIndex );
-          sprintf( processMessage, processTemplateLong, "Frozen ", cacheIndex, "#", deviceNum );
+          byte prefIndex = freeze( _cacheIndex );
+          sprintf( processMessage, processTemplateLong, "Frozen ", _cacheIndex, "#", deviceNum );
         #endif
         return false; // don't render it (will be thawed, populated, inserted and rendered on reboot)
       }
       // 6) return insertion/freeze state if nonanonymous
       //Serial.print("processDevice:6:");dumpStats();
-      cacheIndex = store( advertisedDevice ); // store data in cache
-      if(!isAnonymousDevice( cacheIndex )) {
-        if(DB.insertBTDevice( cacheIndex ) == DBUtils::INSERTION_SUCCESS) {
+      _cacheIndex = store( advertisedDevice ); // store data in cache
+      if(!isAnonymousDevice( _cacheIndex )) {
+        if(DB.insertBTDevice( _cacheIndex ) == DBUtils::INSERTION_SUCCESS) {
           entries++;
           prune_trigger++;
           UI.BLECardTheme.setTheme( NOT_IN_CACHE_NOT_ANON );
-          sprintf( processMessage, processTemplateLong, "Inserted ", cacheIndex, "#", deviceNum );
+          sprintf( processMessage, processTemplateLong, "Inserted ", _cacheIndex, "#", deviceNum );
           return true;
         }
         #ifdef USE_NVS // DB Insert Error, freeze it in NVS!
-          byte prefIndex = freeze( cacheIndex );
-          sprintf( processMessage, processTemplateLong, "Frozen ", cacheIndex, "#", deviceNum );
+          byte prefIndex = freeze( _cacheIndex );
+          sprintf( processMessage, processTemplateLong, "Frozen ", _cacheIndex, "#", deviceNum );
         #endif
         return false; // don't render it (will be thawed, rendered and inserted on reboot)
       }
@@ -506,7 +506,7 @@ class BLEScanUtils {
       //Serial.print("processDevice:7:");dumpStats();
       AnonymousCacheHit++;
       UI.BLECardTheme.setTheme( IN_CACHE_ANON );
-      sprintf( processMessage, processTemplateLong, "Anon ", cacheIndex, "#", deviceNum );
+      sprintf( processMessage, processTemplateLong, "Anon ", _cacheIndex, "#", deviceNum );
       return true;
     }
 
@@ -525,13 +525,13 @@ class BLEScanUtils {
           SCAN_DURATION++;
           //Serial.println("[SCAN_DURATION] increased to " + String(SCAN_DURATION));
         }
-      } else if(devicesCount > BLEDEVCACHE_SIZE) {
+      } else if(devicesCount >= BLEDEVCACHE_SIZE) {
         if( SCAN_DURATION-1 >= MIN_SCAN_DURATION ) {
           SCAN_DURATION--;
           //#Serial.println("[SCAN_DURATION] decreased to " + String(SCAN_DURATION));
         }
         Serial.printf("Cache overflow (%d results vs %d slots), truncating results...\n", devicesCount, BLEDEVCACHE_SIZE);
-        devicesCount = BLEDEVCACHE_SIZE;
+        devicesCount = BLEDEVCACHE_SIZE-1;
       }
       sessDevicesCount += devicesCount;
       for (int i = 0; i < devicesCount; i++) {

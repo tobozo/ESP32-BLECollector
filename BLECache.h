@@ -115,12 +115,14 @@ static byte getNextBLEDevCacheIndex() {
   byte maxCacheValue = 0;
   byte defaultIndex = BLEDevCacheIndex;
   defaultIndex++;
-  defaultIndex=defaultIndex%BLEDEVCACHE_SIZE;
+  defaultIndex = defaultIndex%BLEDEVCACHE_SIZE;
   byte outIndex = defaultIndex;
   // find first index with least hits
   for(int i=defaultIndex;i<defaultIndex+BLEDEVCACHE_SIZE;i++) {
     byte tempIndex = i%BLEDEVCACHE_SIZE;
-    if(BLEDevCache[tempIndex].address && BLEDevCache[tempIndex].address[0]=='\0') return tempIndex;
+    if(BLEDevCache[tempIndex].address && BLEDevCache[tempIndex].address[0]=='\0') {
+      return tempIndex;
+    }
     if(BLEDevCache[tempIndex].hits > maxCacheValue) {
       maxCacheValue = BLEDevCache[tempIndex].hits;
     }
@@ -129,5 +131,5 @@ static byte getNextBLEDevCacheIndex() {
       outIndex = tempIndex;
     }
   }
-  return defaultIndex;      
+  return defaultIndex;
 }

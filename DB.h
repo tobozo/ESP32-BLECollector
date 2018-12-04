@@ -101,7 +101,7 @@ static char searchDeviceQuery[132];
 #endif
 struct VendorCacheStruct {
   int devid = -1;
-  char vendor[MAX_FIELD_LEN+1] = {'\0'};
+  char *vendor = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));// = {'\0'};
 };
 VendorCacheStruct VendorCache[VENDORCACHE_SIZE];
 byte VendorCacheIndex = 0; // index in the circular buffer
@@ -115,13 +115,12 @@ static int VendorCacheHit = 0;
 #define OUICACHE_SIZE 32
 #endif
 struct OUICacheStruct {
-  char mac[MAC_LEN+1] = {'\0'}; // todo: to char[18]
-  char assignment[MAX_FIELD_LEN+1] = {'\0'}; // todo: to char[32]
+  char *mac = (char*)calloc(MAC_LEN+1, sizeof(char));// = {'\0'}; // todo: to char[18]
+  char *assignment = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));// = {'\0'}; // todo: to char[32]
 };
 OUICacheStruct OuiCache[OUICACHE_SIZE];
 byte OuiCacheIndex = 0; // index in the circular buffer
 static int OuiCacheHit = 0;
-
 
 
 
@@ -165,6 +164,7 @@ class DBUtils {
         delay(300);
       }
       sqlite3_initialize();
+      cacheWarmup();
       initial_free_heap = freeheap;
       entries = getEntries();
       if ( resetReason == 12)  { // =  SW_CPU_RESET
@@ -184,6 +184,20 @@ class DBUtils {
         //showDataSamples(); // print some of the collected values (WARN: memory hungry)
         // let the BLE.init() handle the restart
         //ESP.restart();
+      }
+    }
+
+
+    void cacheWarmup() {
+      for(byte i=0; i<BLEDEVCACHE_SIZE; i++) {
+        BLEDevCache[i].reset();
+      }
+      for(byte i=0; i<VENDORCACHE_SIZE; i++) {
+        memset( VendorCache[i].vendor, 0, MAX_FIELD_LEN+1 );
+      }
+      for(byte i=0; i<OUICACHE_SIZE; i++) {
+        memset( OuiCache[i].mac,        0, MAC_LEN+1 );
+        memset( OuiCache[i].assignment, 0, MAX_FIELD_LEN+1 );
       }
     }
 
