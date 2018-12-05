@@ -44,7 +44,7 @@ const char* dataBLE = 0; // for some reason sqlite3 db callback needs this
 char *zErrMsg = 0; // holds DB Error message
 const char BACKSLASH = '\\'; // used to clean() slashes
 static char *colNeedle = 0; // search criteria
-static char colValue[MAX_FIELD_LEN+1] = {'\0'}; // search result
+static char colValue[1024] = {'\0'}; // search result
 
 
 // all DB queries
@@ -237,7 +237,7 @@ class DBUtils {
     void cacheState() {
       BLEDevCacheUsed = 0;
       for(int i=0;i<BLEDEVCACHE_SIZE;i++) {
-        if( BLEDevCache[i].address && BLEDevCache[i].address[0] != '\0') {
+        if( !isEmpty( BLEDevCache[i].address ) /*&& BLEDevCache[i].address[0] != '\0'*/) {
           BLEDevCacheUsed++;
         }
       }
@@ -249,7 +249,7 @@ class DBUtils {
       }
       OuiCacheUsed = 0;
       for(int i=0;i<OUICACHE_SIZE;i++) {
-        if( OuiCache[i].assignment[0]!= '\0') {
+        if( !isEmpty( OuiCache[i].assignment )/*[0]!= '\0'*/) {
           OuiCacheUsed++;
         }
       }
@@ -307,11 +307,11 @@ class DBUtils {
     
     // replaces any needle from haystack (defaults to double=>single quotes)
     static void clean(char *haystack, const char needle = '"', const char replacewith='\'') {
-      if( !haystack ) return;
-      int len = strlen( haystack );
-      for( int i=0;i<len;i++ ) {
-        if( haystack[i] == needle ) {
-          haystack[i] = replacewith;
+      if( isEmpty( haystack ) ) return;
+      int len = strlen( (const char*) haystack );
+      for( int _i=0;_i<len;_i++ ) {
+        if( haystack[_i] == needle ) {
+          haystack[_i] = replacewith;
         }
       }
     }
@@ -406,6 +406,8 @@ class DBUtils {
       Serial.printf("SQL error: %s\n", zErrMsg);
       if (strcmp(zErrMsg, "database disk image is malformed")==0) {
         resetDB();
+      } else if (strcmp(zErrMsg, "no such table: blemacs")==0) {
+        resetDB();        
       } else if (strcmp(zErrMsg, "out of memory")==0) {
         isOOM = true;
       } else if(strcmp(zErrMsg, "disk I/O error")==0) {
@@ -436,36 +438,36 @@ class DBUtils {
     }
 
 
-    DBMessage insertBTDevice(byte cacheindex) {
+    DBMessage insertBTDevice(byte _index) {
       if(isOOM) {
         // cowardly refusing to use DB when OOM
         return DB_IS_OOM;
       }
-      if( BLEDevCache[cacheindex].appearance==0 
-       && BLEDevCache[cacheindex].name[0]=='\0' 
-       && BLEDevCache[cacheindex].uuid[0]=='\0' 
-       && BLEDevCache[cacheindex].ouiname[0]=='\0'
-       && BLEDevCache[cacheindex].manufname[0]=='\0'
+      if( BLEDevCache[_index].appearance==0 
+       && isEmpty( BLEDevCache[_index].name )//[0]=='\0' 
+       && isEmpty( BLEDevCache[_index].uuid )//[0]=='\0' 
+       && isEmpty( BLEDevCache[_index].ouiname )//[0]=='\0'
+       && isEmpty( BLEDevCache[_index].manufname )//[0]=='\0'
        ) {
         // cowardly refusing to insert empty result
         return INSERTION_IGNORED;
       }
       open(BLE_COLLECTOR_DB, false);
 
-      clean( BLEDevCache[cacheindex].name );
-      clean( BLEDevCache[cacheindex].ouiname );
-      clean( BLEDevCache[cacheindex].manufname );
-      clean( BLEDevCache[cacheindex].uuid );
+      clean( BLEDevCache[_index].name );
+      clean( BLEDevCache[_index].ouiname );
+      clean( BLEDevCache[_index].manufname );
+      clean( BLEDevCache[_index].uuid );
       
       sprintf(insertQuery, insertQueryTemplate,
-        BLEDevCache[cacheindex].appearance,
-        BLEDevCache[cacheindex].name,
-        BLEDevCache[cacheindex].address,
-        BLEDevCache[cacheindex].ouiname,
-        BLEDevCache[cacheindex].rssi,
-        BLEDevCache[cacheindex].manufid,
-        BLEDevCache[cacheindex].manufname,
-        BLEDevCache[cacheindex].uuid,
+        BLEDevCache[_index].appearance,
+        BLEDevCache[_index].name,
+        BLEDevCache[_index].address,
+        BLEDevCache[_index].ouiname,
+        BLEDevCache[_index].rssi,
+        BLEDevCache[_index].manufid,
+        BLEDevCache[_index].manufname,
+        BLEDevCache[_index].uuid,
         ""//clean(bleDevice.spower).c_str()
       );
       //Serial.println( insertQuery );
@@ -474,12 +476,12 @@ class DBUtils {
         Serial.print("SQlite Error occured when heap level was at:"); Serial.println(freeheap);
         Serial.println(insertQuery);
         close(BLE_COLLECTOR_DB);
-        BLEDevCache[cacheindex].in_db = false;
+        BLEDevCache[_index].in_db = false;
         return INSERTION_FAILED;
       }
 
       close(BLE_COLLECTOR_DB);
-      BLEDevCache[cacheindex].in_db = true;
+      BLEDevCache[_index].in_db = true;
       return INSERTION_SUCCESS;
       /*
       if (RTC_is_running) {
@@ -514,11 +516,13 @@ class DBUtils {
 
 
     void getVendor(uint16_t devid, char *dest) {
-      *dest = {'\0'};
+      //dest = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char)); // zerofill
       int vendorCacheIdIfExists = vendorExists( devid );
       if(vendorCacheIdIfExists>-1) {
         memcpy( dest, VendorCache[vendorCacheIdIfExists].vendor, strlen(VendorCache[vendorCacheIdIfExists].vendor) );
         return;
+      } else {
+        *dest = {'\0'};
       }
       byte vendorcacheindex = getNextVendorCacheIndex();
       open(BLE_VENDOR_NAMES_DB);
@@ -528,7 +532,7 @@ class DBUtils {
       db_exec(BLEVendorsDB, vendorRequestStr, true, (char*)"vendor");
       close(BLE_VENDOR_NAMES_DB);
       uint16_t colValueLen = 10; // sizeof("[unknown]")
-      if (colValue[0] != '\0') {
+      if ( !isEmpty(colValue) /*[0] != '\0'*/) {
         colValueLen = strlen( colValue );
         if(colValueLen > MAX_FIELD_LEN) {
           colValue[MAX_FIELD_LEN] = '\0';
@@ -557,6 +561,7 @@ class DBUtils {
 
     void getOUI(const char* mac, char *dest) {
       *dest = {'\0'};
+      //dest =  (char*)calloc(MAX_FIELD_LEN+1, sizeof(char)); // zerofill // {'\0'};
       char shortmac[7] = {'\0'};
       byte bytepos =  0;
       for(byte i=0;i<9;i++) {
@@ -581,7 +586,7 @@ class DBUtils {
       db_exec(OUIVendorsDB, OUIRequestStr, true, (char*)"Organization Name");
       close(MAC_OUI_NAMES_DB);
       uint16_t colValueLen = 10; // sizeof("[private]")
-      if (colValue[0] != '\0') {
+      if ( !isEmpty( colValue )/*[0] != '\0'*/) {
         colValueLen = strlen( colValue );
         if(colValueLen > MAX_FIELD_LEN) {
           colValue[MAX_FIELD_LEN] = '\0';
@@ -675,7 +680,7 @@ class DBUtils {
       tft.setTextColor(WROVER_GREENYELLOW);
       db_exec(BLEVendorsDB, testVendorNamesQuery, true);
       close(BLE_VENDOR_NAMES_DB);
-      char vendorname[32] = {'\0'};
+      char *vendorname /*[32]*/ = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));//{'\0'};
       getVendor( 0x001D /*Qualcomm*/, vendorname );
       if (strcmp(vendorname, "Qualcomm")!=0) {
         tft.setTextColor(WROVER_RED);
@@ -698,8 +703,8 @@ class DBUtils {
       tft.setTextColor(WROVER_GREENYELLOW);
       db_exec(OUIVendorsDB, testOUIQuery, true);
       close(MAC_OUI_NAMES_DB);
-      char ouiname[32] = {'\0'};
-      getOUI("B499BA" /*Hewlett Packard */, ouiname);
+      char *ouiname/*[32]*/ = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char)); // {'\0'};
+      getOUI( "B499BA" /*Hewlett Packard */, ouiname );
       if ( strcmp(ouiname, "Hewlett Packard")!=0 ) {
         tft.setTextColor(WROVER_RED);
         Out.println(ouiname);

@@ -29,6 +29,19 @@
 
 */
 
+
+bool isEmpty(const char* str ) {
+  if ( !str ) return true;
+  //if ( str[0] == {'\0'} ) return true;
+  return ( strcmp( str, "" ) == 0 );
+}
+
+void unset( char* str) {
+  str[0] = {'\0'};
+}
+
+
+
 #define BLECARD_MAC_CACHE_SIZE 5
 //#define BLECARD_MAC_CACHE_SIZE 5 // "virtual" BLE Card circular cache size, keeps mac addresses to avoid duplicate rendering
 static char lastPrintedMac[BLECARD_MAC_CACHE_SIZE][MAC_LEN+1]; // BLECard circular screen cache
@@ -87,11 +100,11 @@ struct BlueToothDevice {
   }
   void set(const char* prop, const char* val) {
     if(!prop) return;
-    if     (strcmp(prop, "name")==0)       { copy(name, val, MAX_FIELD_LEN); }
-    else if(strcmp(prop, "address")==0)    { copy(address, val, MAC_LEN); }
-    else if(strcmp(prop, "ouiname")==0)    { copy(ouiname, val, MAX_FIELD_LEN); }
-    else if(strcmp(prop, "manufname")==0)  { copy(manufname, val, MAX_FIELD_LEN); }
-    else if(strcmp(prop, "uuid")==0)       { copy(uuid, val, MAX_FIELD_LEN); }
+    if     (strcmp(prop, "name")==0)       { copy( name, val, MAX_FIELD_LEN ); }
+    else if(strcmp(prop, "address")==0)    { copy( address, val, MAC_LEN ); }
+    else if(strcmp(prop, "ouiname")==0)    { copy( ouiname, val, MAX_FIELD_LEN ); }
+    else if(strcmp(prop, "manufname")==0)  { copy( manufname, val, MAX_FIELD_LEN ); }
+    else if(strcmp(prop, "uuid")==0)       { copy( uuid, val, MAX_FIELD_LEN ); }
     else if(strcmp(prop, "rssi")==0)       { rssi = atoi(val);} // coming from BLE
   }
   void copy(char* dest, const char* source, byte maxlen) {
@@ -120,7 +133,7 @@ static byte getNextBLEDevCacheIndex() {
   // find first index with least hits
   for(int i=defaultIndex;i<defaultIndex+BLEDEVCACHE_SIZE;i++) {
     byte tempIndex = i%BLEDEVCACHE_SIZE;
-    if(BLEDevCache[tempIndex].address && BLEDevCache[tempIndex].address[0]=='\0') {
+    if( isEmpty( BLEDevCache[tempIndex].address ) /*&& BLEDevCache[tempIndex].address[0]=='\0'*/) {
       return tempIndex;
     }
     if(BLEDevCache[tempIndex].hits > maxCacheValue) {

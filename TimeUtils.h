@@ -217,16 +217,24 @@ static bool sd_mounted = false;
 bool SDSetup() {
   if(sd_mounted) return true;
   unsigned long max_wait = 500;
-  byte attempts = 10;
+  byte attempts = 100;
   while ( sd_mounted == false && attempts>0) {
     if (SD_MMC.begin() ) {
       sd_mounted = true;
     } else {
       Serial.println("[SD] Mount Failed");
-      delay(max_wait);
+      //delay(max_wait);
+      if(attempts%2==0) {
+        tft.drawJpg( disk00_jpg, disk00_jpg_len, (tft.width()-30)/2, 100, 30, 30);
+      } else {
+        tft.drawJpg( disk01_jpg, disk00_jpg_len, (tft.width()-30)/2, 100, 30, 30);
+      }
+      AmigaBall.animate( max_wait, false );
     }
     attempts--;
   }
+  AmigaBall.animate( 1 );
+  tft.fillRect( (tft.width()-30)/2, 100, 30, 30, BGCOLOR );
   return sd_mounted;
 }
 
@@ -252,7 +260,7 @@ bool SDSetup() {
       }
       if(!SDSetup()) {
         // SD Card failure
-        Out.println("SD Card Failure, insert SD or check wiring, halting");
+        Out.println("SD Card Failure, insert SD or check wiring");
         while(1) { ; }
       }
       TimeActivity lastTimeSync = getTimeActivity();

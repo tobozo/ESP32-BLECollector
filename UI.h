@@ -147,6 +147,8 @@ class UIUtils {
       tft.fillRect(0, Out.height - FOOTER_HEIGHT, Out.width, FOOTER_HEIGHT, FOOTER_BGCOLOR);
       tft.fillRect(0, PROGRESSBAR_Y, Out.width, 2, WROVER_GREENYELLOW);
 
+      AmigaBall.init();
+
       alignTextAt( "BLE Collector", 6, 4, WROVER_YELLOW, HEADER_BGCOLOR, ALIGN_FREE );
       if (resetReason == 12) { // SW Reset
         headerStats("Heap heap heap...");
@@ -159,15 +161,8 @@ class UIUtils {
       updateTimeString( true );
       timeStateIcon();
       footerStats();
-      //vSemaphoreCreateBinary( xSemaphore );
-      
-      //taskHeapGraph();
       
       xTaskCreate(taskHeapGraph, "taskHeapGraph", 4096, NULL, 5, NULL);
-
-      //if (resetReason != 12) {
-        
-      //}
       
       if ( clearScreen ) {
         playIntro();
@@ -202,7 +197,6 @@ class UIUtils {
       for (int i = 0; i < 5; i++) {
         Out.println();
       }
-      AmigaBall.init();
       AmigaBall.animate( 5000 );
     }
 
@@ -242,7 +236,7 @@ class UIUtils {
       //String s_heap = " Heap: " + String(freeheap) + " ";
       //String s_entries = " Entries: " + String(entries) + " ";
       alignTextAt( heapStr, 128, 4, WROVER_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
-      if (status && status[0] != '\0') {
+      if ( !isEmpty( status ) /* && status[0] != '\0'*/) {
         tft.fillRect(0, 18, Out.width, 8, HEADER_BGCOLOR); // clear whole message status area
         byte alignoffset = 5;
         if (strstr(status, "Inserted")) {
@@ -574,7 +568,7 @@ class UIUtils {
       BGCOLOR = BLECardTheme.bgColor;
       hop = Out.println(SPACE);
       pos += hop;
-      if (BLEDevCache[cacheindex].address && BLEDevCache[cacheindex].address[0] != '\0') {
+      if ( !isEmpty( BLEDevCache[cacheindex].address ) /*&& BLEDevCache[cacheindex].address[0] != '\0'*/) {
         memcpy(lastPrintedMac[lastPrintedMacIndex++ % BLECARD_MAC_CACHE_SIZE], BLEDevCache[cacheindex].address, MAC_LEN+1);
         const char *addressTpl = "  %s";
         char addressStr[24] = {'\0'};
@@ -592,11 +586,11 @@ class UIUtils {
         } else { // 'just inserted this' icon
           tft.drawJpg( insert_jpeg, insert_jpeg_len, 138, Out.scrollPosY - hop, 8,  8);
         }
-        if (BLEDevCache[cacheindex].uuid[0] != '\0') { // 'has service UUID' Icon
+        if ( !isEmpty( BLEDevCache[cacheindex].uuid ) /*[0] != '\0'*/) { // 'has service UUID' Icon
           tft.drawJpg( service_jpeg, service_jpeg_len, 128, Out.scrollPosY - hop, 8,  8);
         }
       }
-      if (BLEDevCache[cacheindex].ouiname[0] != '\0') {
+      if ( !isEmpty( BLEDevCache[cacheindex].ouiname ) /*[0] != '\0'*/) {
         pos += Out.println(SPACE);
         const char* ouiTpl = "      %s";
         char ouiStr[38] = {'\0'};
@@ -613,7 +607,7 @@ class UIUtils {
         hop = Out.println( appearanceStr );
         pos += hop;
       }
-      if (BLEDevCache[cacheindex].name[0] != '\0') {
+      if ( !isEmpty( BLEDevCache[cacheindex].name ) /*[0] != '\0'*/) {
         const char* nameTpl = "      %s";
         char nameStr[38] = {'\0'};
         sprintf(nameStr, nameTpl, BLEDevCache[cacheindex].name);
@@ -622,7 +616,7 @@ class UIUtils {
         pos += hop;
         tft.drawJpg( name_jpeg, name_jpeg_len, 12, Out.scrollPosY - hop, 7,  8);
       }
-      if (BLEDevCache[cacheindex].manufname[0] != '\0') {
+      if ( !isEmpty( BLEDevCache[cacheindex].manufname ) /*[0] != '\0'*/) {
         pos += Out.println(SPACE);
         const char* manufTpl = "      %s";
         char manufStr[38] = {'\0'};

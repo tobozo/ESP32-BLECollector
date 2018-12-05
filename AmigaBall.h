@@ -63,6 +63,19 @@ class AmigaRulez {
     int AmigaBallBounceMargin;
     long AmigaBallFramelength;
 
+    bool done;
+    float phase;
+    float phase_velocity;
+    float x;
+    float y;
+    float x_velocity;
+    bool right;
+    float y_ang;
+    float y_velocity;
+    long started = millis();
+    long last = millis();
+    long processtime = 0;
+
     void init( AmigaBallConfig conf=amigaBallConfig ) {
       AmigaBallBGColor      = amigaBallConfig.BGColor;//tft.color565(0x22, 0x22, 0x44);
       AmigaBallFramelength  = amigaBallConfig.Framelength;//33; // millis
@@ -106,6 +119,15 @@ class AmigaRulez {
       perspective[1] = AmigaBallScale/8;
       perspective[2] = AmigaBallScale/4;
       perspective[3] = AmigaBallScale/2;
+
+      phase = 0.0;
+      phase_velocity = 2.5 * deg2rad;
+      x = AmigaBallScreenWidth/2;
+      y;
+      x_velocity = 2.1;
+      right = true;
+      y_ang = 0.0;
+      y_velocity = 0.07;
     }
 
     float getLat(float phase, int i) {
@@ -126,12 +148,12 @@ class AmigaRulez {
       }
       for(int j=0;j<9;j++) {
         float lon = -phase2Rad + j * phase8Rad;
-        float y = sin( lon );
-        float l = cos( lon );
+        float _y = sin( lon );
+        float _l = cos( lon );
         for(int i=0;i<10;i++) {
-          float x = sin_lat[i] * l;
-          points[i][j].x = x;
-          points[i][j].y = y;
+          float _x = sin_lat[i] * _l;
+          points[i][j].x = _x;
+          points[i][j].y = _y;
         }
       }
     }
@@ -141,10 +163,10 @@ class AmigaRulez {
       float ct = cos( ang );
       for( int i=0; i<10; i++) {
         for( int j=0; j<9; j++) {
-          float x = points[i][j].x * ct - points[i][j].y * st;
-          float y = points[i][j].x * st + points[i][j].y * ct;
-          points[i][j].x = x;
-          points[i][j].y = y;
+          float _x = points[i][j].x * ct - points[i][j].y * st;
+          float _y = points[i][j].x * st + points[i][j].y * ct;
+          points[i][j].x = _x;
+          points[i][j].y = _y;
         }
       }
     }
@@ -152,10 +174,10 @@ class AmigaRulez {
     float scaleTranslate(float s, float tx, float ty) {
       for( int i=0; i<10; i++) {
         for( int j=0; j<9; j++ ) {
-          float x = points[i][j].x * s + tx;
-          float y = points[i][j].y * s + ty;
-          points[i][j].x = x;
-          points[i][j].y = y;
+          float _x = points[i][j].x * s + tx;
+          float _y = points[i][j].y * s + ty;
+          points[i][j].x = _x;
+          points[i][j].y = _y;
         }
       }
     }
@@ -168,14 +190,16 @@ class AmigaRulez {
     void fillTiles(bool alter) {
       for( int j=0; j<8; j++ ) {
         for( int i=0; i<9; i++) {
+          /*
           Points p1 = points[i][j];
           Points p2 = points[i+1][j];
           Points p3 = points[i+1][j+1];
           Points p4 = points[i][j+1];
+          */
           uint16_t color = alter ? WROVER_RED : WROVER_WHITE;
-          tft.fillTriangle(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, color);
+          tft.fillTriangle(points[i][j].x, points[i][j].y, points[i+1][j].x, points[i+1][j].y, points[i+1][j+1].x, points[i+1][j+1].y, color);
           //tft.fillTriangle(p2.x, p2.y, p3.x, p3.y, p4.x, p4.y, color);
-          tft.fillTriangle(p3.x, p3.y, p4.x, p4.y, p1.x, p1.y, color);
+          tft.fillTriangle(points[i+1][j+1].x, points[i+1][j+1].y, points[i][j+1].x, points[i][j+1].y, points[i][j].x, points[i][j].y, color);
           //tft.fillTriangle(p4.x, p4.y, p1.x, p1.y, p2.x, p2.y, color);
           alter = !alter;
         }
@@ -192,13 +216,13 @@ class AmigaRulez {
         tft.drawLine(boxHstart + i*hSteps, boxVend, canvasHstart + i*cHsteps, canvasVend, WROVER_PURPLE);
       }
       for( int i=0; i<4; i++ ) {
-        float y = perspective[i]+vSteps/2;
-        float x =  ((AmigaBallScale/2) - (y * ytoxratio))*2;
-        tft.drawFastHLine(x, boxVstart - y, canvasWidth-(x*2), WROVER_PURPLE);
-        tft.drawFastHLine(x, boxVend   + y, canvasWidth-(x*2), WROVER_PURPLE);
-        float boxH = (boxVend   + y) - (boxVstart - y);
-        tft.drawFastVLine(x,             boxVstart - y, boxH, WROVER_PURPLE);
-        tft.drawFastVLine(canvasWidth-x, boxVstart - y, boxH, WROVER_PURPLE);
+        float _y = perspective[i]+vSteps/2;
+        float _x =  ((AmigaBallScale/2) - (_y * ytoxratio))*2;
+        tft.drawFastHLine(_x, boxVstart - _y, canvasWidth-(_x*2), WROVER_PURPLE);
+        tft.drawFastHLine(_x, boxVend   + _y, canvasWidth-(_x*2), WROVER_PURPLE);
+        float boxH = (boxVend   + _y) - (boxVstart - _y);
+        tft.drawFastVLine(_x,               boxVstart - _y, boxH, WROVER_PURPLE);
+        tft.drawFastVLine(canvasWidth - _x, boxVstart - _y, boxH, WROVER_PURPLE);
       }
     }
 
@@ -206,20 +230,20 @@ class AmigaRulez {
       float vectorx = x1 - x0;
       float vectory = y1 - y0;
       float vectAngleRadians = atan2(vectory, vectorx); // angle in radians
-      float d = sqrt( vectorx*vectorx + vectory*vectory );
+      float d = sqrt( vectorx*vectorx + vectory*vectory ); // hypothenuse length
       // https://stackoverflow.com/questions/3349125/circle-circle-intersection-points
       if( d > r0+r1 ) return; // If d > r0 + r1 then there are no solutions, the circles are separate.
       if( d < abs(r0-r1) ) return; // If d < |r0 - r1| then there are no solutions because one circle is contained within the other.
       if( d == 0.0 && r0 == r1 ) return; // If d = 0 and r0 = r1 then the circles are coincident and there are an infinite number of solutions.
       float a = ( ( r0*r0 ) - ( r1*r1 ) + ( d*d ) ) / ( 2*d );
       float h = sqrt( ( r0*r0 ) - ( a*a ) );
-      /*
-      // circle intersection points (not needed here)
-      float x2 = x0 + a * vectorx / d;   
-      float y2 = y0 + a * vectory / d;  
-      float x3 = x2 + h * vectory / d;       // also x3=x2-h*(y1-y0)/d
-      float y3 = y2 - h * vectorx / d;       // also y3=y2+h*(x1-x0)/d
-      */
+
+      // circle intersection points (only the first one is needed here)
+      float xx2 = x0 + a * vectorx / d;
+      float yy2 = y0 + a * vectory / d;
+      float xx3 = 0; // x2 + h * vectory / d;  // also x3=x2-h*(y1-y0)/d;
+      float yy3 = 0; // y2 - h * vectorx / d;  // also y3=y2+h*(x1-x0)/d;
+      
       float mobAngleRadians = atan2(h, a);
       float angleRad0 = vectAngleRadians-mobAngleRadians;
       float angleRad1 = vectAngleRadians+mobAngleRadians;
@@ -228,11 +252,6 @@ class AmigaRulez {
         angleRad1 = vectAngleRadians-mobAngleRadians;
       }
       float angleStep = mobAngleRadians/4.5;
-      
-      float xx2 = 0;
-      float yy2 = 0;
-      float xx3 = 0;
-      float yy3 = 0;
       
       for( float angle=angleRad0; angle<angleRad1; angle+=angleStep ) {
         float ct = sin(angle);
@@ -243,10 +262,15 @@ class AmigaRulez {
         float yy1 = y1 + ct * r1;
         if( xx2 != 0 && yy2 != 0 ) {
           tft.fillTriangle(xx0, yy0, xx1, yy1, xx2, yy2, AmigaBallBGColor );
+        }
+        if( xx3!= 0 && xx3 != 0 ) {
           tft.fillTriangle(xx2, yy2, xx3, yy3, xx1, yy1, AmigaBallBGColor );
-        } else {
+        }
+        /*
+        {
           tft.drawLine(xx0, yy0, xx1, yy1, AmigaBallBGColor );
         }
+        */
         xx2 = xx0;
         yy2 = yy0;
         xx3 = xx1;
@@ -257,7 +281,7 @@ class AmigaRulez {
     void draw(float phase, float scale, float x, float y) {
       calcPoints( fmod(phase, phase8Rad) );
       transform(scale, x, y);
-      if(bytecounter++%4==0) drawWireFrame();
+      if(bytecounter++%8==0) drawWireFrame();
       fillTiles(phase >= phase8Rad);
       if(oldx!=0 && oldy!=0) {
         clearCrescent(scale, scale+2, x, y, oldx, oldy);
@@ -266,19 +290,12 @@ class AmigaRulez {
       oldy = y;
     }
 
-    void animate( long duration = 5000 ) {
-      bool done = false;
-      float phase = 0.0;
-      float phase_velocity = 2.5 * deg2rad;
-      float x = AmigaBallScreenWidth/2;
-      float y;
-      float x_velocity = 2.1;
-      bool right = true;
-      float y_ang = 0.0;
-      float y_velocity = 0.07;
-      long started = millis();
-      long last = millis();
-      long processtime = 0;
+    void animate( long duration = 5000, bool clearAfter = true ) {
+
+      done = false;
+      started = millis();
+      last = millis();
+      processtime = 0;
 
       while( !done ) {
         last = millis();
@@ -302,7 +319,9 @@ class AmigaRulez {
           delay( AmigaBallFramelength - processtime );
         }
         if( millis() - started > duration ) {
-          tft.fillRect( 0, canvasVstart, AmigaBallScreenWidth, canvasHeight, AmigaBallBGColor );
+          if( clearAfter ) {
+            tft.fillRect( 0, canvasVstart, AmigaBallScreenWidth, canvasHeight, AmigaBallBGColor );
+          }
           done = true;
         }
       }
