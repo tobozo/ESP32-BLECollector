@@ -230,11 +230,13 @@ bool SDSetup() {
         tft.drawJpg( disk01_jpg, disk00_jpg_len, (tft.width()-30)/2, 100, 30, 30);
       }
       AmigaBall.animate( max_wait, false );
+      attempts--;
     }
-    attempts--;
   }
-  AmigaBall.animate( 1 );
-  tft.fillRect( (tft.width()-30)/2, 100, 30, 30, BGCOLOR );
+  if( attempts != 100 ) {
+    AmigaBall.animate( 1 );
+    tft.fillRect( (tft.width()-30)/2, 100, 30, 30, BGCOLOR );
+  }
   return sd_mounted;
 }
 
