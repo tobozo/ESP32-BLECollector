@@ -60,7 +60,7 @@ static bool updateFromFS(fs::FS &fs, String fileName = MENU_BIN ) {
 
 #define SPI_FLASH_SEC_STEP8 SPI_FLASH_SEC_SIZE / 4
 static uint8_t g8_rbuf[SPI_FLASH_SEC_STEP8];
-static uint8_t g32_rbuf[SPI_FLASH_SEC_STEP8];
+//static uint8_t g32_rbuf[SPI_FLASH_SEC_STEP8];
 
 uint32_t sizeofneedle = strlen(needle);
 uint32_t sizeoftrail = strlen(welcomeMessage) - sizeofneedle;

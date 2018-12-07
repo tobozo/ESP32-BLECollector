@@ -48,10 +48,11 @@
 //#define RTC_PROFILE CHRONOMANIAC // to build the BLEMenu.bin with RTC support and NTP Sync
 //#define RTC_PROFILE ROGUE // to build the BLEMenu.bin with RTC support, but *without* NTP sync
 //#define RTC_PROFILE HOBO // to build the NTPMenu.bin *without* RTC/NTP support
-byte SCAN_DURATION = 10; // seconds 
+byte SCAN_DURATION = 60; // seconds 
 #define MIN_SCAN_DURATION 10 // seconds min
 #define MAX_SCAN_DURATION 120 // seconds max
-#define BLEDEVCACHE_SIZE 32 // use some heap to cache BLECards, min = 5, max = 64, higher value = smaller uptime
+#define MAX_DEVICES_PER_SCAN 64 // will adjust scan duration accordingly
+#define BLEDEVCACHE_SIZE 64 // use some heap to cache BLECards. Without psram, min = 5, max = 64, higher value = smaller uptime
 #define VENDORCACHE_SIZE 32 // use some heap to cache vendor query responses, min = 5, max = 32
 #define OUICACHE_SIZE 32 // use some heap to cache mac query responses, min = 16, max = 64
 #define MAX_FIELD_LEN 32 // max chars returned by field
@@ -154,6 +155,7 @@ Preferences preferences;
 // because ESP.getFreeHeap() is inconsistent across SDK versions
 // use the primitive... eats 25Kb memory
 #define freeheap heap_caps_get_free_size(MALLOC_CAP_INTERNAL)
+#define freepsheap ESP.getFreePsram()
 #define resetReason (int)rtc_get_reset_reason(0)
 
 // statistical values

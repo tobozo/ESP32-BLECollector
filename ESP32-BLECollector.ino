@@ -51,6 +51,11 @@
 
 #include "Settings.h"
 
+#ifndef CONFIG_SPIRAM_SUPPORT
+  #error "NO SPIRAM DEFINED"
+#endif
+
+
 void setup() {
   Serial.begin(115200);
   Serial.println(welcomeMessage);

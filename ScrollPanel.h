@@ -62,7 +62,7 @@ class ScrollableOutput {
       return println(" ");
     }
     int println(const char* str) {
-      char output[512] = {'\0'};
+      char output[64] = {'\0'};
       sprintf(output, "%s\n", str);
       return print(output);
     }
@@ -106,7 +106,7 @@ class ScrollableOutput {
     int scroll(const char* str) {
       #if SCAN_MODE==SCAN_TASK_0 || SCAN_MODE==SCAN_TASK_1 || SCAN_MODE==SCAN_TASK
         while( xSemaphoreTake(mux, portMAX_DELAY)!=pdTRUE ) {
-          vTaskDelay(100);
+          vTaskDelay( portMAX_DELAY );
         }
       #endif
       if (scrollPosY == -1) {

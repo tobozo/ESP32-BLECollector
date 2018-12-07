@@ -62,7 +62,7 @@ static unsigned long blinkthen = blinknow + scanTime; // task blinker end time
 static unsigned long lastblink = millis(); // task blinker last blink
 static unsigned long lastprogress = millis(); // task blinker progress
 
-#define SPACETABS "      "
+//#define SPACETABS "      "
 #define SPACE " "
 
 enum TextDirections {
@@ -179,6 +179,7 @@ class UIUtils {
       }
       updateTimeString();
       headerStats("");
+      footerStats();
     }
 
 
@@ -413,9 +414,9 @@ class UIUtils {
     static void taskHeapGraph( void * pvParameters ) { // always running
       #if SCAN_MODE==SCAN_TASK_0 || SCAN_MODE==SCAN_TASK_1 || SCAN_MODE==SCAN_TASK
         mux = xSemaphoreCreateMutex();
-        xTaskCreate(heapGraph, "HeapGraph", 2000, NULL, 5, NULL);
+        xTaskCreate(heapGraph, "HeapGraph", 1024, NULL, 5, NULL);
       #else
-        xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 2000, (void *)1, 0, NULL, 0); /* last = Task Core */
+        xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 1024, (void *)1, 0, NULL, 0); /* last = Task Core */
       #endif
       vTaskDelete(NULL);
     }
@@ -557,87 +558,94 @@ class UIUtils {
     }
 
 
-    int printBLECard(byte cacheindex) {
+    int printBLECard( BlueToothDevice *_BLEDevCache, byte cacheindex ) {
 
       //Serial.println("BLECARD got semaphore !");
       
-      uint16_t randomcolor = tft.color565(random(128, 255), random(128, 255), random(128, 255));
+      uint16_t randomcolor = tft.color565( random(128, 255), random(128, 255), random(128, 255) );
       uint16_t pos = 0;
       uint16_t hop;
-      tft.setTextColor(BLECardTheme.textColor, BLECardTheme.bgColor);
+
+      if( _BLEDevCache[cacheindex].is_anonymous ) {
+        BLECardTheme.setTheme( IN_CACHE_ANON );
+      } else {
+        BLECardTheme.setTheme( IN_CACHE_NOT_ANON );
+      }
+      
+      tft.setTextColor( BLECardTheme.textColor, BLECardTheme.bgColor );
       BGCOLOR = BLECardTheme.bgColor;
-      hop = Out.println(SPACE);
+      hop = Out.println( SPACE );
       pos += hop;
-      if ( !isEmpty( BLEDevCache[cacheindex].address ) /*&& BLEDevCache[cacheindex].address[0] != '\0'*/) {
-        memcpy(lastPrintedMac[lastPrintedMacIndex++ % BLECARD_MAC_CACHE_SIZE], BLEDevCache[cacheindex].address, MAC_LEN+1);
+      if ( !isEmpty( _BLEDevCache[cacheindex].address ) ) {
+        memcpy( lastPrintedMac[lastPrintedMacIndex++ % BLECARD_MAC_CACHE_SIZE], _BLEDevCache[cacheindex].address, MAC_LEN+1 );
         const char *addressTpl = "  %s";
         char addressStr[24] = {'\0'};
-        sprintf( addressStr, addressTpl, BLEDevCache[cacheindex].address);
+        sprintf( addressStr, addressTpl, _BLEDevCache[cacheindex].address );
         hop = Out.println( addressStr );
         pos += hop;
         char dbmStr[16];
         const char* dbmTpl = "%d dBm    ";
-        sprintf(dbmStr, dbmTpl, BLEDevCache[cacheindex].rssi);
+        sprintf( dbmStr, dbmTpl, _BLEDevCache[cacheindex].rssi );
         alignTextAt( dbmStr, 0, Out.scrollPosY - hop, BLECardTheme.textColor, BLECardTheme.bgColor, ALIGN_RIGHT );
-        tft.setCursor(0, Out.scrollPosY);
-        drawRSSI(Out.width - 18, Out.scrollPosY - hop - 1, BLEDevCache[cacheindex].rssi, BLECardTheme.textColor);
-        if (BLEDevCache[cacheindex].in_db) { // 'already seen this' icon
+        tft.setCursor( 0, Out.scrollPosY );
+        drawRSSI( Out.width - 18, Out.scrollPosY - hop - 1, _BLEDevCache[cacheindex].rssi, BLECardTheme.textColor );
+        if ( _BLEDevCache[cacheindex].in_db ) { // 'already seen this' icon
           tft.drawJpg( update_jpeg, update_jpeg_len, 138, Out.scrollPosY - hop, 8,  8);
         } else { // 'just inserted this' icon
           tft.drawJpg( insert_jpeg, insert_jpeg_len, 138, Out.scrollPosY - hop, 8,  8);
         }
-        if ( !isEmpty( BLEDevCache[cacheindex].uuid ) /*[0] != '\0'*/) { // 'has service UUID' Icon
+        if ( !isEmpty( _BLEDevCache[cacheindex].uuid ) ) { // 'has service UUID' Icon
           tft.drawJpg( service_jpeg, service_jpeg_len, 128, Out.scrollPosY - hop, 8,  8);
         }
       }
-      if ( !isEmpty( BLEDevCache[cacheindex].ouiname ) /*[0] != '\0'*/) {
-        pos += Out.println(SPACE);
+      if ( !isEmpty( _BLEDevCache[cacheindex].ouiname ) ) {
+        pos += Out.println( SPACE );
         const char* ouiTpl = "      %s";
         char ouiStr[38] = {'\0'};
-        sprintf( ouiStr, ouiTpl, BLEDevCache[cacheindex].ouiname );
+        sprintf( ouiStr, ouiTpl, _BLEDevCache[cacheindex].ouiname );
         hop = Out.println( ouiStr );
         pos += hop;
-        tft.drawJpg( nic16_jpeg, nic16_jpeg_len, 10, Out.scrollPosY - hop, 13, 8);
+        tft.drawJpg( nic16_jpeg, nic16_jpeg_len, 10, Out.scrollPosY - hop, 13, 8 );
       }
-      if (BLEDevCache[cacheindex].appearance != 0) {
+      if ( _BLEDevCache[cacheindex].appearance != 0 ) {
         pos += Out.println(SPACE);
         const char* appearanceTpl = "  Appearance: %d";
         char appearanceStr[48];
-        sprintf(appearanceStr, appearanceTpl, BLEDevCache[cacheindex].appearance);
+        sprintf( appearanceStr, appearanceTpl, _BLEDevCache[cacheindex].appearance );
         hop = Out.println( appearanceStr );
         pos += hop;
       }
-      if ( !isEmpty( BLEDevCache[cacheindex].name ) /*[0] != '\0'*/) {
+      if ( !isEmpty( _BLEDevCache[cacheindex].name ) ) {
         const char* nameTpl = "      %s";
         char nameStr[38] = {'\0'};
-        sprintf(nameStr, nameTpl, BLEDevCache[cacheindex].name);
+        sprintf(nameStr, nameTpl, _BLEDevCache[cacheindex].name);
         pos += Out.println(SPACE);
         hop = Out.println( nameStr );
         pos += hop;
         tft.drawJpg( name_jpeg, name_jpeg_len, 12, Out.scrollPosY - hop, 7,  8);
       }
-      if ( !isEmpty( BLEDevCache[cacheindex].manufname ) /*[0] != '\0'*/) {
+      if ( !isEmpty( _BLEDevCache[cacheindex].manufname ) ) {
         pos += Out.println(SPACE);
         const char* manufTpl = "      %s";
         char manufStr[38] = {'\0'};
-        sprintf(manufStr, manufTpl, BLEDevCache[cacheindex].manufname);
+        sprintf( manufStr, manufTpl, _BLEDevCache[cacheindex].manufname );
         hop = Out.println( manufStr );
         pos += hop;
-        if (strstr(BLEDevCache[cacheindex].manufname, "Apple")) {
-          tft.drawJpg( apple16_jpeg, apple16_jpeg_len, 12, Out.scrollPosY - hop, 8,  8);
-        } else if (strstr(BLEDevCache[cacheindex].manufname, "IBM")) {
+        if ( strstr( _BLEDevCache[cacheindex].manufname, "Apple" ) ) {
+          tft.drawJpg( apple16_jpeg, apple16_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
+        } else if ( strstr( _BLEDevCache[cacheindex].manufname, "IBM" ) ) {
           tft.drawJpg( ibm8_jpg, ibm8_jpg_len, 10, Out.scrollPosY - hop, 20,  8);
-        } else if (strstr(BLEDevCache[cacheindex].manufname, "Microsoft")) {
-          tft.drawJpg( crosoft_jpeg, crosoft_jpeg_len, 12, Out.scrollPosY - hop, 8,  8);
-        } else if (strstr(BLEDevCache[cacheindex].manufname, "Bose")) {
-          tft.drawJpg( speaker_icon_jpg, speaker_icon_jpg_len, 12, Out.scrollPosY - hop, 6,  8);
+        } else if ( strstr (_BLEDevCache[cacheindex].manufname, "Microsoft" ) ) {
+          tft.drawJpg( crosoft_jpeg, crosoft_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
+        } else if ( strstr( _BLEDevCache[cacheindex].manufname, "Bose" ) ) {
+          tft.drawJpg( speaker_icon_jpg, speaker_icon_jpg_len, 12, Out.scrollPosY - hop, 6,  8 );
         } else {
-          tft.drawJpg( generic_jpeg, generic_jpeg_len, 12, Out.scrollPosY - hop, 8,  8);
+          tft.drawJpg( generic_jpeg, generic_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
         }
       }
-      hop = Out.println(SPACE);
+      hop = Out.println( SPACE) ;
       pos += hop;
-      drawRoundRect(pos, 4, BLECardTheme.borderColor);
+      drawRoundRect( pos, 4, BLECardTheme.borderColor );
       return pos;
     }
 

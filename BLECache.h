@@ -56,30 +56,53 @@ static int AnonymousCacheHit = 0; // cache relative
 // TODO: store this in psram
 struct BlueToothDevice {
   bool in_db          = false;
+  bool is_anonymous   = true;
   byte hits           = 0; // cache hits
   uint16_t appearance = 0;
   int rssi            = 0;
   int manufid         = -1; // manufacturer data (or ID)
-  char* name      = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));// = {'\0'}; // device name
-  char* address   = (char*)calloc(MAC_LEN+1, sizeof(char));// device mac address
-  char* ouiname   = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));// = {'\0'}; // oui vendor name (from mac address, see oui.h)
-  char* manufname = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));// = {'\0'}; // manufacturer name (from manufacturer data, see ble-oui.db)
-  char* uuid      = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));// = {'\0'}; // service uuid
+  char* name      = NULL;//(char*)calloc(MAX_FIELD_LEN+1, sizeof(char));// = {'\0'}; // device name
+  char* address   = NULL;//(char*)calloc(MAC_LEN+1, sizeof(char));// device mac address
+  char* ouiname   = NULL;//(char*)calloc(MAX_FIELD_LEN+1, sizeof(char));// = {'\0'}; // oui vendor name (from mac address, see oui.h)
+  char* manufname = NULL;//(char*)calloc(MAX_FIELD_LEN+1, sizeof(char));// = {'\0'}; // manufacturer name (from manufacturer data, see ble-oui.db)
+  char* uuid      = NULL;//(char*)calloc(MAX_FIELD_LEN+1, sizeof(char));// = {'\0'}; // service uuid
   //String spower = "";
   //time_t created_at;
   //time_t updated_at;
+  void init( bool hasPsram=false ) {
+    in_db      = false;
+    is_anonymous = true;
+    hits       = 0;
+    appearance = 0;
+    rssi       = 0;
+    manufid    = -1;
+    if( hasPsram ) {    
+      name      = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));// = {'\0'}; // device name
+      address   = (char*)ps_calloc(MAC_LEN+1, sizeof(char));// device mac address
+      ouiname   = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));// = {'\0'}; // oui vendor name (from mac address, see oui.h)
+      manufname = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));// = {'\0'}; // manufacturer name (from manufacturer data, see ble-oui.db)
+      uuid      = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));// = {'\0'}; // service uuid
+    } else {
+      name      = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));// = {'\0'}; // device name
+      address   = (char*)calloc(MAC_LEN+1, sizeof(char));// device mac address
+      ouiname   = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));// = {'\0'}; // oui vendor name (from mac address, see oui.h)
+      manufname = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));// = {'\0'}; // manufacturer name (from manufacturer data, see ble-oui.db)
+      uuid      = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));// = {'\0'}; // service uuid      
+    }
+  }
   void reset() {
     in_db      = false;
+    is_anonymous = true;
     hits       = 0;
     appearance = 0;
     rssi       = 0;
     manufid    = -1;
     /*
-    name      = (char*)"";
-    address   = (char*)"";
-    ouiname   = (char*)"";
-    manufname = (char*)"";
-    uuid      = (char*)"";
+    name      = (char*)0;
+    address   = (char*)0;
+    ouiname   = (char*)0;
+    manufname = (char*)0;
+    uuid      = (char*)0;
     */
     memset( name,      0, MAX_FIELD_LEN+1 );
     memset( address,   0, MAC_LEN+1 );
@@ -121,26 +144,31 @@ struct BlueToothDevice {
 #define BLEDEVCACHE_SIZE 10
 #endif
 static BlueToothDevice BLEDevCache[BLEDEVCACHE_SIZE]; // will store database results here 
+static BlueToothDevice BLEDevTmpCache[BLEDEVCACHE_SIZE]; // will store temporary database results here 
 static byte BLEDevCacheIndex = 0; // index in the circular buffer
+static byte BLEDevTmpCacheIndex = 0; // index in the circular buffer
 
-static byte getNextBLEDevCacheIndex() {
+
+
+
+static byte getNextBLEDevCacheIndex(BlueToothDevice *_BLEDevCache, byte _BLEDevCacheIndex) {
   byte minCacheValue = 255;
   byte maxCacheValue = 0;
-  byte defaultIndex = BLEDevCacheIndex;
+  byte defaultIndex = _BLEDevCacheIndex;
   defaultIndex++;
   defaultIndex = defaultIndex%BLEDEVCACHE_SIZE;
   byte outIndex = defaultIndex;
   // find first index with least hits
   for(int i=defaultIndex;i<defaultIndex+BLEDEVCACHE_SIZE;i++) {
     byte tempIndex = i%BLEDEVCACHE_SIZE;
-    if( isEmpty( BLEDevCache[tempIndex].address ) /*&& BLEDevCache[tempIndex].address[0]=='\0'*/) {
+    if( isEmpty( _BLEDevCache[tempIndex].address ) ) {
       return tempIndex;
     }
-    if(BLEDevCache[tempIndex].hits > maxCacheValue) {
-      maxCacheValue = BLEDevCache[tempIndex].hits;
+    if( _BLEDevCache[tempIndex].hits > maxCacheValue ) {
+      maxCacheValue = _BLEDevCache[tempIndex].hits;
     }
-    if(BLEDevCache[tempIndex].hits < minCacheValue) {
-      minCacheValue = BLEDevCache[tempIndex].hits;
+    if( _BLEDevCache[tempIndex].hits < minCacheValue ) {
+      minCacheValue = _BLEDevCache[tempIndex].hits;
       outIndex = tempIndex;
     }
   }

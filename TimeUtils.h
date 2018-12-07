@@ -142,7 +142,7 @@ static char LastSyncTimeString[32] = "YYYY-MM-DD HH:MM:SS";
 
 #endif
 
-void updateTimeString(bool checkNTP=false) {
+static void updateTimeString(bool checkNTP=false) {
   unsigned long seconds_since_boot = millis() / 1000;
   uint32_t minutes_since_boot = seconds_since_boot / 60;
   uint32_t mm = minutes_since_boot % 60;
