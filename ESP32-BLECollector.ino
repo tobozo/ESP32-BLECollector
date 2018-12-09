@@ -67,7 +67,9 @@ void setup() {
 void loop() {
    #if SCAN_MODE==SCAN_TASK_0 || SCAN_MODE==SCAN_TASK_1 || SCAN_MODE==SCAN_TASK
      vTaskSuspend(NULL);
-   #else 
-     BLECollector.scanLoop();
+   #else
+     #if RTC_PROFILE!=NTP_MENU
+       BLECollector.scanLoop();
+     #endif
    #endif
 }

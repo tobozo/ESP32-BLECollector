@@ -111,10 +111,17 @@ static char searchDeviceQuery[132];
 #endif
 struct VendorCacheStruct {
   int devid = -1;
-  char *vendor = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));// = {'\0'};
+  char *vendor = NULL;//(char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
+  void init( bool hasPsram=false ) {
+    if( hasPsram ) {  
+      vendor = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
+    } else {
+      vendor = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
+    }
+  }
 };
 VendorCacheStruct VendorCache[VENDORCACHE_SIZE];
-byte VendorCacheIndex = 0; // index in the circular buffer
+uint16_t VendorCacheIndex = 0; // index in the circular buffer
 static int VendorCacheHit = 0;
 
 
@@ -125,14 +132,25 @@ static int VendorCacheHit = 0;
 #define OUICACHE_SIZE 32
 #endif
 struct OUICacheStruct {
-  char *mac = (char*)calloc(MAC_LEN+1, sizeof(char));// = {'\0'}; // todo: to char[18]
-  char *assignment = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));// = {'\0'}; // todo: to char[32]
+  char *mac = NULL;
+  char *assignment = NULL;
+  void init( bool hasPsram=false ) {
+    if( hasPsram ) {  
+      mac =        (char*)ps_calloc(MAC_LEN+1, sizeof(char));
+      assignment = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
+    } else {
+      mac =        (char*)calloc(MAC_LEN+1, sizeof(char));
+      assignment = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
+    }
+  }
 };
 OUICacheStruct OuiCache[OUICACHE_SIZE];
-byte OuiCacheIndex = 0; // index in the circular buffer
+uint16_t OuiCacheIndex = 0; // index in the circular buffer
 static int OuiCacheHit = 0;
 
-
+static uint16_t BLEDevCacheUsed = 0; // for statistics
+static uint16_t VendorCacheUsed = 0; // for statistics
+static uint16_t OuiCacheUsed = 0; // for statistics
 
 class DBUtils {
   public:
@@ -161,10 +179,6 @@ class DBUtils {
   
     bool isOOM = false; // for stability
     bool isCorrupt = false; // for maintenance
-    byte BLEDevCacheUsed = 0; // for statistics
-    byte VendorCacheUsed = 0; // for statistics
-    byte OuiCacheUsed = 0; // for statistics
-
     
     void init() {
       while(SDSetup()==false) {
@@ -205,17 +219,22 @@ class DBUtils {
       } else {
         Serial.println("PSRAM FAIL");
       }
-      
-      for(byte i=0; i<BLEDEVCACHE_SIZE; i++) {
-        BLEDevCache[i].init( hasPsram );
-        BLEDevTmpCache[i].init( hasPsram );
+     
+      for(uint16_t i=0; i<BLEDEVCACHE_SIZE; i++) {
+        BLEDevHelper.init( BLEDevCache[i], hasPsram );
+        //BLEDevCache[i].init( hasPsram );
+        BLEDevHelper.init( BLEDevTmpCache[i], hasPsram );
+        Serial.printf("PSRam Free heap after init #%2d: %d\n", i, freepsheap);
+        //BLEDevTmpCache[i].init( hasPsram );
       }
-      for(byte i=0; i<VENDORCACHE_SIZE; i++) {
-        memset( VendorCache[i].vendor, 0, MAX_FIELD_LEN+1 );
+      for(uint16_t i=0; i<VENDORCACHE_SIZE; i++) {
+        VendorCache[i].init( hasPsram );
+        //memset( VendorCache[i].vendor, 0, MAX_FIELD_LEN+1 );
       }
-      for(byte i=0; i<OUICACHE_SIZE; i++) {
-        memset( OuiCache[i].mac,        0, MAC_LEN+1 );
-        memset( OuiCache[i].assignment, 0, MAX_FIELD_LEN+1 );
+      for(uint16_t i=0; i<OUICACHE_SIZE; i++) {
+        OuiCache[i].init( hasPsram );
+        //memset( OuiCache[i].mac,        0, MAC_LEN+1 );
+        //memset( OuiCache[i].assignment, 0, MAX_FIELD_LEN+1 );
       }
     }
 
@@ -236,47 +255,47 @@ class DBUtils {
     }
 
 
-    static void VendorCacheSet(byte cacheindex, int devid, const char* manufname) {
+    static void VendorCacheSet(uint16_t cacheindex, int devid, const char* manufname) {
       VendorCache[cacheindex].devid = devid;
       memset( VendorCache[cacheindex].vendor, '\0', MAX_FIELD_LEN+1);
       memcpy( VendorCache[cacheindex].vendor, manufname, strlen(manufname) );
       //Serial.print("[+] VendorCacheSet: "); Serial.println( manufname );
     }
-    static byte getNextVendorCacheIndex() {
+    static uint16_t getNextVendorCacheIndex() {
       VendorCacheIndex++;
       VendorCacheIndex = VendorCacheIndex % VENDORCACHE_SIZE;  
       return VendorCacheIndex;
     }
 
-    static void OUICacheSet(byte cacheindex, const char* shortmac, const char* assignment) {
+    static void OUICacheSet(uint16_t cacheindex, const char* shortmac, const char* assignment) {
       memset( OuiCache[cacheindex].mac, '\0', MAC_LEN+1);
       memcpy( OuiCache[cacheindex].mac, shortmac, strlen(shortmac) );
       memset( OuiCache[cacheindex].assignment, '\0', MAX_FIELD_LEN+1);
       memcpy( OuiCache[cacheindex].assignment, assignment, strlen(assignment) );
       //Serial.print("[+] OUICacheSet: "); Serial.println( assignment );
     }
-    static byte getNextOUICacheIndex() {
+    static uint16_t getNextOUICacheIndex() {
       OuiCacheIndex++;
       OuiCacheIndex = OuiCacheIndex % OUICACHE_SIZE;  
       return OuiCacheIndex;
     }
 
 
-    void cacheState() {
+    static void cacheState() {
       BLEDevCacheUsed = 0;
-      for(int i=0;i<BLEDEVCACHE_SIZE;i++) {
+      for( uint16_t i=0; i<BLEDEVCACHE_SIZE; i++) {
         if( !isEmpty( BLEDevCache[i].address ) ) {
           BLEDevCacheUsed++;
         }
       }
       VendorCacheUsed = 0;
-      for(int i=0;i<VENDORCACHE_SIZE;i++) {
+      for( uint16_t i=0; i<VENDORCACHE_SIZE; i++) {
         if( VendorCache[i].devid > -1 ) {
           VendorCacheUsed++;
         }
       }
       OuiCacheUsed = 0;
-      for(int i=0;i<OUICACHE_SIZE;i++) {
+      for( uint16_t i=0; i<OUICACHE_SIZE; i++) {
         if( !isEmpty( OuiCache[i].assignment ) ) {
           OuiCacheUsed++;
         }
@@ -347,7 +366,7 @@ class DBUtils {
     // checks if a BLE Device exists, returns its cache index if found
     int deviceExists(const char* address) {
       results = 0;
-      if( (address && !address[0]) || strlen( address ) > MAC_LEN+1 || strlen( address ) < 17 || address[0]==3) {
+      if( isEmpty( address ) || strlen( address ) > MAC_LEN+1 || strlen( address ) < 17 || address[0]==3) {
         Serial.printf("Cowardly refusing to perform an empty or invalid request : %s / %s\n", address, currentBLEAddress);
         return -1;
       }
@@ -372,12 +391,13 @@ class DBUtils {
       results++;
       if(results < BLEDEVCACHE_SIZE) {
         BLEDevCacheIndex = getNextBLEDevCacheIndex(BLEDevCache, BLEDevCacheIndex);
-        BLEDevCache[BLEDevCacheIndex].reset(); // avoid mixing new and old data
+        BLEDevHelper.reset( BLEDevCache[BLEDevCacheIndex] ); // avoid mixing new and old data
         for (int i = 0; i < argc; i++) {
-          BLEDevCache[BLEDevCacheIndex].set(azColName[i], argv[i] ? argv[i] : '\0');
+          BLEDevHelper.set( BLEDevCache[BLEDevCacheIndex], azColName[i], argv[i] ? argv[i] : '\0');
           //Serial.printf("BLEDev Set cb %s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
         }
         BLEDevCache[BLEDevCacheIndex].hits = 1;
+        BLEDevCache[BLEDevCacheIndex].in_db = true;
       } else {
         Serial.print("Device Pool Size Exceeded, ignoring: ");
         for (int i = 0; i < argc; i++) {
@@ -466,7 +486,7 @@ class DBUtils {
     }
 
 
-    DBMessage insertBTDevice( BlueToothDevice *_BLEDevCache, byte _index) {
+    DBMessage insertBTDevice( BlueToothDevice *_BLEDevCache, uint16_t _index) {
       if(isOOM) {
         // cowardly refusing to use DB when OOM
         return DB_IS_OOM;
@@ -546,14 +566,14 @@ class DBUtils {
     void getVendor(uint16_t devid, char *dest) {
       int vendorCacheIdIfExists = vendorExists( devid );
       if(vendorCacheIdIfExists>-1) {
-        byte vendorCacheLen = strlen( VendorCache[vendorCacheIdIfExists].vendor );
+        uint16_t vendorCacheLen = strlen( VendorCache[vendorCacheIdIfExists].vendor );
         memcpy( dest, VendorCache[vendorCacheIdIfExists].vendor, vendorCacheLen );
         dest[vendorCacheLen] = '\0';
         return;
       } else {
         *dest = {'\0'};
       }
-      byte vendorcacheindex = getNextVendorCacheIndex();
+      uint16_t vendorcacheindex = getNextVendorCacheIndex();
       open(BLE_VENDOR_NAMES_DB);
       const char * vendorRequestTpl = "SELECT vendor FROM 'ble-oui' WHERE id='%d'";
       char vendorRequestStr[64] = {'\0'};
@@ -610,7 +630,7 @@ class DBUtils {
         dest[OUICacheLen] = '\0';
         return;
       }
-      byte assignmentcacheindex = getNextOUICacheIndex();
+      uint16_t assignmentcacheindex = getNextOUICacheIndex();
       open(MAC_OUI_NAMES_DB);
       const char *OUIRequestTpl = "SELECT * FROM 'oui-light' WHERE Assignment=UPPER('%s');";
       char OUIRequestStr[76];

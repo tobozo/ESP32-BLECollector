@@ -42,30 +42,44 @@ class BLEScanUtils {
 #else
 
 
-static byte processedDevicesCount = 0;
+const char* processTemplateLong = "%s%d%s%d";
+const char* processTemplateShort = "%s%d";
+static char processMessage[20];
+
+static bool onScanProcessed = true;
+static bool onScanPopulated = true;
+static bool onScanPropagated = true;
+
+unsigned long lastheap = 0;
+uint16_t lastscanduration = SCAN_DURATION;
+char heapsign[5]; // unicode sign terminated
+char scantimesign[5]; // unicode sign terminated
+BLEScanResults bleresults;
+BLEScan *pBLEScan;
+BLEAdvertisedDevice advertisedDevice;
+
+
+static uint16_t processedDevicesCount = 0;
 bool foundDeviceToggler = true;
 
 class FoundDeviceCallback: public BLEAdvertisedDeviceCallbacks {
 
   //byte processedDevicesCount = 0;
   void onResult(BLEAdvertisedDevice advertisedDevice) {
-    //Serial.printf("Found %s \n", advertisedDevice.toString().c_str()); // <<< memory leak
-    processedDevicesCount++;
-    /*
-    if( processedDevicesCount+1 > BLEDEVCACHE_SIZE ) {
-      // too many devices found can't fit in cache, stop scan
+    //Serial.printf("Found %s \n", advertisedDevice.toString().c_str());
+    if( onScanProcessed  ) return;
+
+    if( scan_cursor < MAX_DEVICES_PER_SCAN ) {
+      BLEDevHelper.store( BLEDevTmpCache[scan_cursor], advertisedDevice );
+      scan_cursor++;
+      processedDevicesCount++;
+    } else {
+      advertisedDevice.getScan()->stop();
+      onScanProcessed = true;
       if( SCAN_DURATION-1 >= MIN_SCAN_DURATION ) {
         SCAN_DURATION--;
-        //#Serial.println("[SCAN_DURATION] decreased to " + String(SCAN_DURATION));
       }
-      //processedDevicesCount = 0;
-      advertisedDevice.getScan()->stop();
-      Serial.println("[Interrupting Scan after "+String(processedDevicesCount)+" feeds]");
-      UI.stopBlink();
-      return;
     }
-    */
-    //UI.headerStats("Found " + String(processedDevicesCount));
     foundDeviceToggler = !foundDeviceToggler;
     if(foundDeviceToggler) {
       UI.bleStateIcon(WROVER_GREEN);
@@ -75,22 +89,7 @@ class FoundDeviceCallback: public BLEAdvertisedDeviceCallbacks {
   }
 };
 
-const char* processTemplateLong = "%s%d%s%d";
-const char* processTemplateShort = "%s%d";
-static char processMessage[20];
-static int scan_rounds = 0;
-static byte scan_cursor = 0;
-static bool onScanProcessed = true;
-static bool onScanPopulated = true;
-static bool onScanPropagated = true;
 
-unsigned long lastheap = 0;
-byte lastscanduration = SCAN_DURATION;
-char heapsign[5]; // unicode sign terminated
-char scantimesign[5]; // unicode sign terminated
-BLEScanResults bleresults;
-BLEScan *pBLEScan;
-BLEAdvertisedDevice advertisedDevice;
 
 class BLEScanUtils {
 
@@ -121,7 +120,7 @@ class BLEScanUtils {
       #elif SCAN_MODE==SCAN_TASK_1
         xTaskCreatePinnedToCore(scanTask, "scanTask", 10000, NULL, 0, NULL, 1); /* last = Task Core */
       #elif SCAN_MODE==SCAN_TASK
-        xTaskCreate(scanTask, "scanTask", 6000, NULL, 5, NULL);
+        xTaskCreate(scanTask, "scanTask", 8000, NULL, 1, NULL);
       #elif SCAN_MODE==SCAN_LOOP
         BLEDevice::init("");
         pBLEScan = BLEDevice::getScan(); //create new scan
@@ -175,10 +174,11 @@ class BLEScanUtils {
       );
     }
 
-    /*
+
     static int getDeviceCacheIndex(const char* address) {
-      for(int i=0;i<BLEDEVCACHE_SIZE;i++) {
-        if( strcmp(address, (char*)BLEDevCache[i].address)==0  ) {
+      if( isEmpty( address ) )  return -1;
+      for(int i=0; i<BLEDEVCACHE_SIZE; i++) {
+        if( strcmp(address, BLEDevCache[i].address)==0  ) {
           BLEDevCache[i].hits++;
           BLEDevCacheHit++;
           //Serial.printf("[CACHE HIT] BLEDevCache ID #%s has %d cache hits\n", address, BLEDevCache[i].hits);
@@ -186,13 +186,13 @@ class BLEScanUtils {
         }
       }
       return -1;
-    }*/
+    }
 
 
     /* determines whether a device is worth saving or not */
-    static bool isAnonymousDevice( BlueToothDevice *_BLEDevCache, byte _index) {
-      if(_index>=BLEDEVCACHE_SIZE) {
-        Serial.printf("[!!!] Ignored Invalid Cache Index :%d\n", _index);        
+    static bool isAnonymousDevice( BlueToothDevice *_BLEDevCache, uint16_t _index) {
+      if( _index>=BLEDEVCACHE_SIZE ) {
+        Serial.printf("[!!!isAnonymousDevice!!!] Ignored Invalid Cache Index :%d\n", _index);        
         return false;
       }
       if(_BLEDevCache[_index].uuid && strlen(_BLEDevCache[_index].uuid)>=0) return false; // uuid's are interesting, let's collect
@@ -206,67 +206,60 @@ class BLEScanUtils {
       return true;
     }
 
-    /* stores BLEDevice info in memory cache after retrieving complementary data */
-    static byte store( BLEAdvertisedDevice &advertisedDevice, BlueToothDevice *_BLEDevCache, byte _BLEDevCacheIndex, bool populate=true ) {
+    /* stores BLEDevice info in memory cache after optionnaly retrieving complementary data */
+    static uint16_t store( BLEAdvertisedDevice &advertisedDevice, BlueToothDevice *_BLEDevCache, uint16_t _BLEDevCacheIndex, bool populate=true ) {
+      if( _BLEDevCacheIndex>=BLEDEVCACHE_SIZE ) {
+        Serial.printf("[!!!store!!!] Ignored Invalid Cache Index :%d\n", _BLEDevCacheIndex);        
+        return _BLEDevCacheIndex;
+      }
       //_BLEDevCache = getNextBLEDevCacheIndex();
-      //Serial.printf("Generated index : %d\n", _BLEDevCacheIndex);
-      _BLEDevCache[_BLEDevCacheIndex].reset();// avoid mixing new and old data
-      _BLEDevCache[_BLEDevCacheIndex].set("in_db", false);
-      _BLEDevCache[_BLEDevCacheIndex].set("address", advertisedDevice.getAddress().toString().c_str());
-      _BLEDevCache[_BLEDevCacheIndex].set("rssi", advertisedDevice.getRSSI());
-      if(populate) {
+      BLEDevHelper.reset( _BLEDevCache[_BLEDevCacheIndex]);//.reset();// avoid mixing new and old data
+      BLEDevHelper.set( _BLEDevCache[_BLEDevCacheIndex], "in_db", false);
+      BLEDevHelper.set( _BLEDevCache[_BLEDevCacheIndex], "address", advertisedDevice.getAddress().toString().c_str());
+      BLEDevHelper.set( _BLEDevCache[_BLEDevCacheIndex], "rssi", advertisedDevice.getRSSI());
+      if( populate ) {
         DB.getOUI( _BLEDevCache[_BLEDevCacheIndex].address, _BLEDevCache[_BLEDevCacheIndex].ouiname );
       } else {
-        _BLEDevCache[_BLEDevCacheIndex].set("ouiname", "[unpopulated]");
+        BLEDevHelper.set( _BLEDevCache[_BLEDevCacheIndex], "ouiname", "[unpopulated]");
       }
-      //Serial.printf("Generated index : %d\n", _BLEDevCacheIndex);
-      if (advertisedDevice.haveName()) {
-        _BLEDevCache[_BLEDevCacheIndex].set("name", advertisedDevice.getName().c_str());
+      if ( advertisedDevice.haveName() ) {
+        BLEDevHelper.set( _BLEDevCache[_BLEDevCacheIndex], "name", advertisedDevice.getName().c_str());
       } else {
-        _BLEDevCache[_BLEDevCacheIndex].set("name", '\0');
+        BLEDevHelper.set( _BLEDevCache[_BLEDevCacheIndex], "name", '\0');
       }
-      //Serial.printf("Generated index : %d\n", BLEDevCacheIndex);
-      if (advertisedDevice.haveAppearance()) {
-        _BLEDevCache[_BLEDevCacheIndex].set("appearance", advertisedDevice.getAppearance());
+      if ( advertisedDevice.haveAppearance() ) {
+        BLEDevHelper.set( _BLEDevCache[_BLEDevCacheIndex], "appearance", advertisedDevice.getAppearance());
       } else {
-        _BLEDevCache[_BLEDevCacheIndex].set("appearance", 0);
+        BLEDevHelper.set( _BLEDevCache[_BLEDevCacheIndex], "appearance", 0);
       }
-      if (advertisedDevice.haveManufacturerData()) {
+      if ( advertisedDevice.haveManufacturerData() ) {
         uint8_t* mdp = (uint8_t*)advertisedDevice.getManufacturerData().data();
         //std::string md = advertisedDevice.getManufacturerData();
         //char *pHex = BLEUtils::buildHexData(nullptr, mdp, md.length());
         uint8_t vlsb = mdp[0];
         uint8_t vmsb = mdp[1];
         uint16_t vint = vmsb * 256 + vlsb;
-        if(populate) {
-          //Serial.printf("Generated index : %d (haveManufacturerData==true,populate=true)\n", _BLEDevCacheIndex);
+        if( populate ) {
           DB.getVendor( vint, _BLEDevCache[_BLEDevCacheIndex].manufname );
-          //Serial.printf("Generated index : %d (haveManufacturerData==true,populate=true;after getVendor)\n", _BLEDevCacheIndex);
         } else {
-          //Serial.printf("Generated index : %d (haveManufacturerData==true,populate=false)\n", _BLEDevCacheIndex);
-          _BLEDevCache[_BLEDevCacheIndex].set("manufname", "[unpopulated]");
+          BLEDevHelper.set( _BLEDevCache[_BLEDevCacheIndex], "manufname", "[unpopulated]");
         }
-        _BLEDevCache[_BLEDevCacheIndex].set("manufid", vint);
+        BLEDevHelper.set( _BLEDevCache[_BLEDevCacheIndex], "manufid", vint);
       } else {
-        //Serial.printf("Generated index : %d (haveManufacturerData==false)\n", _BLEDevCacheIndex);
-        _BLEDevCache[_BLEDevCacheIndex].set("manufname", '\0');
-        _BLEDevCache[_BLEDevCacheIndex].set("manufid", -1);
+        BLEDevHelper.set( _BLEDevCache[_BLEDevCacheIndex], "manufname", '\0');
+        BLEDevHelper.set( _BLEDevCache[_BLEDevCacheIndex], "manufid", -1);
       }
-      //Serial.printf("Generated index : %d\n", _BLEDevCacheIndex);
-      if (advertisedDevice.haveServiceUUID()) {
-        _BLEDevCache[_BLEDevCacheIndex].set("uuid", advertisedDevice.getServiceUUID().toString().c_str());
-        //connectToService( cacheIndex );
+      if ( advertisedDevice.haveServiceUUID() ) {
+        BLEDevHelper.set( _BLEDevCache[_BLEDevCacheIndex], "uuid", advertisedDevice.getServiceUUID().toString().c_str());
       } else {
-        //*BLEDevCache[_BLEDevCacheIndex].uuid = '\0';
-        _BLEDevCache[_BLEDevCacheIndex].set("uuid", '\0');
+        BLEDevHelper.set( _BLEDevCache[_BLEDevCacheIndex], "uuid", '\0');
       }
-      //Serial.printf("Returned index : %d\n", _BLEDevCacheIndex);
       return _BLEDevCacheIndex;          
     }
 
     /* cleanup NVS cache data */
     void clearNVS() {
-      for(byte i=0;i<MAX_ITEMS_IN_PREFS;i++) {
+      for( byte i=0; i<MAX_ITEMS_IN_PREFS; i++ ) {
         const char* freezenameTpl = "cache-%d";
         char freezenameStr[12] = {'\0'};
         sprintf(freezenameStr, freezenameTpl, i);
@@ -279,7 +272,7 @@ class BLEScanUtils {
     }
 
     /* store BLECache device in nvram */
-    static byte freeze(byte cacheindex) {
+    static byte freeze(uint16_t cacheindex) {
       preferences.begin("BLECollector", false);
       unsigned int freezecounter = preferences.getUInt("freezecounter", 0);
       // Increase counter by 1
@@ -312,13 +305,13 @@ class BLEScanUtils {
     }
 
     /* extract one BLECache device from nvram into cache */
-    static void thaw(byte freezeindex, byte cacheindex) {
+    static void thaw(byte freezeindex, uint16_t cacheindex) {
       const char* freezenameTpl = "cache-%d";
       char freezenameStr[12] = {'\0'};
       sprintf(freezenameStr, freezenameTpl, freezeindex);
       preferences.begin(freezenameStr, true);
       //BLEDevCache[cacheindex].reset(); // avoid mixing new and old data
-      BLEDevCache[cacheindex].reset();
+      BLEDevHelper.reset( BLEDevCache[cacheindex] );
       BLEDevCache[cacheindex].in_db       = preferences.getBool("in_db", false);
       BLEDevCache[cacheindex].hits        = preferences.getUChar("hits", 0);
       BLEDevCache[cacheindex].appearance  = preferences.getInt("appearance", 0);
@@ -329,7 +322,7 @@ class BLEScanUtils {
       BLEDevCache[cacheindex].manufid     = preferences.getInt("manufid", -1);
       preferences.getString("manufname", BLEDevCache[cacheindex].manufname, 32);
       preferences.getString("uuid", BLEDevCache[cacheindex].uuid, 32);
-      if( !isEmpty( BLEDevCache[cacheindex].address ) /*&& BLEDevCache[cacheindex].address[0] != '\0'*/) {
+      if( !isEmpty( BLEDevCache[cacheindex].address ) ) {
         Serial.printf("****** Thawing pref index %d into cache index %d : %s\n", freezeindex, cacheindex, BLEDevCache[cacheindex].address);
       }
       preferences.end();
@@ -341,10 +334,10 @@ class BLEScanUtils {
       UI.BLECardTheme.borderColor = WROVER_CYAN;
       UI.BLECardTheme.bgColor = BLECARD_BGCOLOR;
       for(byte i=0;i<MAX_ITEMS_IN_PREFS;i++) {
-        byte oldCacheIndex = BLEDevCacheIndex;
+        uint16_t oldCacheIndex = BLEDevCacheIndex;
         BLEDevCacheIndex = getNextBLEDevCacheIndex(BLEDevCache, BLEDevCacheIndex);
         thaw(i, BLEDevCacheIndex);
-        if( !isEmpty( BLEDevCache[BLEDevCacheIndex].address )/*&& BLEDevCache[BLEDevCacheIndex].address[0]!='\0'*/) {
+        if( !isEmpty( BLEDevCache[BLEDevCacheIndex].address ) ) {
           populate(BLEDevCache, BLEDevCacheIndex);
           const char* headerTpl = "Defrosted %d#%d";
           char headerStr[32] = {'\0'};
@@ -357,8 +350,12 @@ class BLEScanUtils {
     }
 
     /* complete unpopulated fields of a given entry */
-    static void populate(BlueToothDevice *_BLEDevCache, byte _BLEDevCacheIndex/*, byte oldCacheIndex*/) {
-      //byte currentCacheIndex = _BLEDevCacheIndex;
+    static void populate( BlueToothDevice *_BLEDevCache, uint16_t _BLEDevCacheIndex ) {
+      if( _BLEDevCacheIndex>=BLEDEVCACHE_SIZE ) {
+        Serial.printf("[!!!populate!!!] Ignored Invalid Cache Index :%d\n", _BLEDevCacheIndex);        
+        return;
+      }
+      Serial.printf("[populating :%d]\n", _BLEDevCacheIndex);        
       /*
       _BLEDevCacheIndex = oldCacheIndex;
       int deviceIndexIfExists = DB.deviceExists( _BLEDevCache[currentCacheIndex].address ); // will load from DB if necessary
@@ -369,38 +366,34 @@ class BLEScanUtils {
         _BLEDevCacheIndex = currentCacheIndex;
       }*/
       if( strcmp( _BLEDevCache[_BLEDevCacheIndex].ouiname, "[unpopulated]" )==0 ){
-        //Serial.print("ouiname-populating "); Serial.println( BLEDevCache[currentCacheIndex].address );
+        //Serial.printf("[populating OUI :%d]\n", _BLEDevCacheIndex);
         DB.getOUI( _BLEDevCache[_BLEDevCacheIndex].address, _BLEDevCache[_BLEDevCacheIndex].ouiname );
       }
       if( strcmp( _BLEDevCache[_BLEDevCacheIndex].manufname, "[unpopulated]" )==0 ) {
-        if(_BLEDevCache[_BLEDevCacheIndex].manufid!=-1 /*&& _BLEDevCache[currentCacheIndex].manufid.length()>=4*/) {
-          //_BLEDevCache[cacheIndex].manufname = DB.getVendor( _BLEDevCache[currentCacheIndex].manufid );
+        if( _BLEDevCache[_BLEDevCacheIndex].manufid!=-1 ) {
+          //Serial.printf("[populating Vendor :%d]\n", _BLEDevCacheIndex);
           DB.getVendor( _BLEDevCache[_BLEDevCacheIndex].manufid, _BLEDevCache[_BLEDevCacheIndex].manufname );
-          //Serial.println("manufname-populating " + _BLEDevCache[_BLEDevCacheIndex].address);
-          //Serial.println("  manufname: " + _BLEDevCache[_BLEDevCacheIndex].manufname);
         } else {
-          //Serial.println("manufname-clearing " + _BLEDevCache[_BLEDevCacheIndex].address);
-          _BLEDevCache[_BLEDevCacheIndex].set("manufname", '\0');
-          //memset( _BLEDevCache[cacheIndex].manufname, '\0', MAX_FIELD_LEN+1 );
+          BLEDevHelper.set( _BLEDevCache[_BLEDevCacheIndex], "manufname", '\0');
         }
       }
-
+      //Serial.printf("[populating anon state :%d]\n", _BLEDevCacheIndex);
       _BLEDevCache[_BLEDevCacheIndex].is_anonymous = isAnonymousDevice( _BLEDevCache, _BLEDevCacheIndex );
-      
+      //Serial.printf("[populatied :%d]\n", _BLEDevCacheIndex);
     }
 
     /* inserts thawed entry into DB */
     bool feed() {
       bool fed = false;
-      for(int i=0;i<BLEDEVCACHE_SIZE;i++) {
+      for( int i=0; i<BLEDEVCACHE_SIZE; i++ ) {
         if( isEmpty( BLEDevCache[i].address ) /*&& BLEDevCache[i].address[0] == '\0'*/) continue;
-        if(BLEDevCache[i].in_db == true) continue;
-        if(isAnonymousDevice( BLEDevCache, i )) continue;
+        if( BLEDevCache[i].in_db == true ) continue;
+        if( isAnonymousDevice( BLEDevCache, i ) ) continue;
         DB.clean( BLEDevCache[i].name );
         DB.clean( BLEDevCache[i].ouiname );
         DB.clean( BLEDevCache[i].manufname );
         DB.clean( BLEDevCache[i].uuid );
-        if(DB.insertBTDevice( BLEDevCache, i ) == DBUtils::INSERTION_SUCCESS) {
+        if( DB.insertBTDevice( BLEDevCache, i ) == DBUtils::INSERTION_SUCCESS ) {
           fed = true;
           BLEDevCache[i].in_db == true;
           Serial.println("####### Feeding thawed "); Serial.print( BLEDevCache[i].address ); Serial.println(" to DB");
@@ -490,13 +483,14 @@ class BLEScanUtils {
 
     static bool onScanProcess( BLEScanResults foundDevices ) {
       if( onScanProcessed ) return false;
-      if( scan_cursor >= devicesCount || scan_cursor >= MAX_DEVICES_PER_SCAN) {
+      if( scan_cursor >= devicesCount || scan_cursor >= MAX_DEVICES_PER_SCAN ) {
         BLEDevice::getScan()->clearResults(); // release some memory
         onScanProcessed = true;
         return false;
       }
       advertisedDevice = foundDevices.getDevice( scan_cursor );
-      store( advertisedDevice, BLEDevTmpCache, scan_cursor, false ); // store data in cache but don't populate
+      BLEDevHelper.store( BLEDevTmpCache[scan_cursor], advertisedDevice );
+      //store( advertisedDevice, BLEDevTmpCache, scan_cursor, false ); // store data in cache but don't populate
       sprintf( processMessage, processTemplateLong, "Stored ", scan_cursor, " / ", devicesCount );
       UI.headerStats( processMessage );
       scan_cursor++;
@@ -506,11 +500,11 @@ class BLEScanUtils {
 
     static bool onScanPropagate() {
       if( onScanPropagated ) return false;
-      for( byte i=0;i<devicesCount;i++ ) {
+      for( uint16_t i=0; i<devicesCount; i++ ) {
         BLEDevTmpCacheIndex = i;
-        if( isEmpty( BLEDevTmpCache[i].address ) ) continue; // end of cache
-        if( BLEDevTmpCache[i].is_anonymous ) {
-          sprintf( processMessage, processTemplateLong, "Dumped ", i+1, " / ", devicesCount );
+        if( isEmpty( BLEDevTmpCache[i].address ) ) continue; // unfilled cache, shouldn't be reached
+        if( BLEDevTmpCache[i].is_anonymous || BLEDevTmpCache[i].in_db ) { // don't DB-insert anon or duplicates
+          sprintf( processMessage, processTemplateLong, "Released ", i+1, " / ", devicesCount );
           AnonymousCacheHit++;
         } else {
           if( DB.insertBTDevice( BLEDevTmpCache, BLEDevTmpCacheIndex ) == DBUtils::INSERTION_SUCCESS ) {
@@ -520,7 +514,7 @@ class BLEScanUtils {
             sprintf( processMessage, processTemplateLong, "Failed ", i+1, " / ", devicesCount );
           }
         }
-        BLEDevTmpCache[i].reset(); // discard
+        BLEDevHelper.reset( BLEDevTmpCache[i] ); // discard
         UI.headerStats( processMessage );
         return true;
       }
@@ -531,18 +525,45 @@ class BLEScanUtils {
 
     static bool onScanPopulate() {
       if( onScanPopulated ) return false;
-      for( byte i=0;i<devicesCount;i++ ) {
+      int deviceIndexIfExists = -1;
+      for( uint16_t i=0; i<devicesCount; i++ ) {
         BLEDevTmpCacheIndex = i;
         if( isEmpty( BLEDevTmpCache[i].address ) ) continue; // end of cache
         if( strcmp( BLEDevTmpCache[i].ouiname, "[unpopulated]")!=0 ) continue; // already populated
         if( strcmp( BLEDevTmpCache[i].manufname, "[unpopulated]")!=0 ) continue; // already populated
         populate( BLEDevTmpCache, BLEDevTmpCacheIndex );
-        UI.BLECardTheme.setTheme( IN_CACHE_ANON );
-        UI.printBLECard( BLEDevTmpCache, BLEDevTmpCacheIndex ); // render
+
+        deviceIndexIfExists = getDeviceCacheIndex( BLEDevTmpCache[i].address );
+        if( deviceIndexIfExists > -1 ) {
+          inCacheCount++;
+          BLEDevCache[deviceIndexIfExists].hits++;
+          BLEDevTmpCache[i].hits = BLEDevCache[deviceIndexIfExists].hits;
+          BLEDevTmpCache[i].in_db = BLEDevCache[deviceIndexIfExists].in_db;
+          Serial.printf( "Device %d exists in cache, copied %d hits\n", i, BLEDevTmpCache[i].hits );
+        } else {
+          if( BLEDevTmpCache[i].is_anonymous ) {
+            // won't land in DB but can land in cache
+            uint16_t nextCacheIndex = getNextBLEDevCacheIndex( BLEDevCache, BLEDevCacheIndex );
+            BLEDevTmpCache[i].hits = 1;
+            BLEDevCache[nextCacheIndex] = BLEDevTmpCache[i]; // TODO: copy properly
+            Serial.printf( "Device %d is anonymous, won't be inserted, set %d hits to 1 and copied\n", i, BLEDevTmpCache[i].hits );
+          } else {
+            deviceIndexIfExists = DB.deviceExists( BLEDevTmpCache[i].address ); // will load returning devices from DB if necessary
+            if(deviceIndexIfExists>-1) {
+              BLEDevTmpCache[i].in_db = true;
+              BLEDevCache[deviceIndexIfExists].hits++; // increase hits
+              BLEDevTmpCache[i].hits = BLEDevCache[deviceIndexIfExists].hits;
+              Serial.printf( "Device %d is already in DB, increed hits to %d\n", i, BLEDevTmpCache[i].hits );
+            } else {
+              Serial.printf( "Device %d is not in DB\n", i );
+            }
+          }
+        }
+
         // TODO : post process
-        //sprintf( processMessage, processTemplateShort, "Rendered #", i );
+        UI.BLECardTheme.setTheme( IN_CACHE_ANON );
+        UI.printBLECard( BLEDevTmpCache, i ); // render
         sprintf( processMessage, processTemplateLong, "Rendered ", i+1, " / ", devicesCount );
-        Serial.println( processMessage );
         UI.headerStats( processMessage );
         UI.footerStats();
         return true;
@@ -552,29 +573,41 @@ class BLEScanUtils {
     }
 
 
+   static void onBeforeScan() {
+      processedDevicesCount = 0;
+      scan_cursor = 0;
+      onScanProcessed = false;
+      onScanPopulated = false;
+      onScanPropagated = false;
+   }
+
     /* process scan data */
     static void onScanDone( BLEScanResults foundDevices  ) {
       UI.stopBlink();
       //UI.footerStats();
       UI.headerStats("Showing results ...");
-      scan_cursor = 0;
-      onScanProcessed = false;
-      onScanPopulated = false;
-      onScanPropagated = false;
-      devicesCount = foundDevices.getCount();
+
+      if( processedDevicesCount == 0 ) { // sync scan
+        devicesCount = foundDevices.getCount();
+      } else { // async scan
+        devicesCount = processedDevicesCount;
+        Serial.println("Clearing scan results");
+        BLEDevice::getScan()->clearResults();
+      }
+
       if( devicesCount < MAX_DEVICES_PER_SCAN ) {
         if( SCAN_DURATION+1 < MAX_SCAN_DURATION ) {
           SCAN_DURATION++;
-          //Serial.println("[SCAN_DURATION] increased to " + String(SCAN_DURATION));
         }
       } else if( devicesCount >= MAX_DEVICES_PER_SCAN ) {
         if( SCAN_DURATION-1 >= MIN_SCAN_DURATION ) {
           SCAN_DURATION--;
-          //#Serial.println("[SCAN_DURATION] decreased to " + String(SCAN_DURATION));
         }
-        Serial.printf("Cache overflow (%d results vs %d slots), truncating results...\n", devicesCount, BLEDEVCACHE_SIZE);
+        Serial.printf("Cache overflow (%d results vs %d slots), truncating results...\n", devicesCount, MAX_DEVICES_PER_SCAN);
         devicesCount = MAX_DEVICES_PER_SCAN;
       }
+
+
       sessDevicesCount += devicesCount;
       notInCacheCount = 0;
       inCacheCount = 0;
@@ -589,7 +622,7 @@ class BLEScanUtils {
         pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
         pBLEScan->setInterval(0x50); // 0x50
         pBLEScan->setWindow(0x30); // 0x30
-        while(1) {
+        while( 1 ) {
           // flattened logic tree saves memory
           if( onScanProcess( bleresults ) ) continue; // fast-store without populating
           if( onScanPopulate() ) continue;
@@ -600,6 +633,7 @@ class BLEScanUtils {
           processedDevicesCount = 0;
           devicesCount = 0;
           //pBLEScan->start(SCAN_DURATION, onScanDone);
+          onBeforeScan();
           pBLEScan->start(SCAN_DURATION);
           bleresults = pBLEScan->getResults();
           onScanDone( bleresults );

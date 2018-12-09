@@ -62,7 +62,7 @@ class ScrollableOutput {
       return println(" ");
     }
     int println(const char* str) {
-      char output[64] = {'\0'};
+      char output[256] = {'\0'};
       sprintf(output, "%s\n", str);
       return print(output);
     }
@@ -104,11 +104,7 @@ class ScrollableOutput {
       return scroll( str.c_str() );
     }*/
     int scroll(const char* str) {
-      #if SCAN_MODE==SCAN_TASK_0 || SCAN_MODE==SCAN_TASK_1 || SCAN_MODE==SCAN_TASK
-        while( xSemaphoreTake(mux, portMAX_DELAY)!=pdTRUE ) {
-          vTaskDelay( portMAX_DELAY );
-        }
-      #endif
+      isScrolling = true;
       if (scrollPosY == -1) {
         scrollPosY = tft.getCursorY();
       }
@@ -127,23 +123,19 @@ class ScrollableOutput {
       scroll_slow(h_tmp, 5); // Scroll lines, 5ms per line
       tft.print(str);
       scrollPosY = tft.getCursorY();
-      #if SCAN_MODE==SCAN_TASK_0 || SCAN_MODE==SCAN_TASK_1 || SCAN_MODE==SCAN_TASK
-        xSemaphoreGive(mux);
-      #endif
+      isScrolling = false;
       return h_tmp;
     }
     /* change this function if your TFT does not handle hardware scrolling */
     int scroll_slow(int lines, int wait) {
-      isScrolling = true;
       int yTemp = yStart;
       scrollPosY = -1;
       for (int i = 0; i < lines; i++) {
         yStart++;
         if (yStart == height - scrollBottomFixedArea) yStart = scrollTopFixedArea;
-        tft.scrollTo(yStart); // driver needs patching for that, see https://github.com/espressif/WROVER_KIT_LCD/pull/3/files
+        tft.scrollTo(yStart);
         delay(wait);
       }
-      isScrolling = false;
       return  yTemp;
     }
 

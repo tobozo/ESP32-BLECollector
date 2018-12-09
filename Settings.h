@@ -51,10 +51,10 @@
 byte SCAN_DURATION = 60; // seconds 
 #define MIN_SCAN_DURATION 10 // seconds min
 #define MAX_SCAN_DURATION 120 // seconds max
-#define MAX_DEVICES_PER_SCAN 64 // will adjust scan duration accordingly
+#define MAX_DEVICES_PER_SCAN 32 // will adjust scan duration accordingly
 #define BLEDEVCACHE_SIZE 64 // use some heap to cache BLECards. Without psram, min = 5, max = 64, higher value = smaller uptime
-#define VENDORCACHE_SIZE 32 // use some heap to cache vendor query responses, min = 5, max = 32
-#define OUICACHE_SIZE 32 // use some heap to cache mac query responses, min = 16, max = 64
+#define VENDORCACHE_SIZE 255 // use some heap to cache vendor query responses, min = 5, max = 256
+#define OUICACHE_SIZE 512 // use some heap to cache mac query responses, min = 16, max = 4096
 #define MAX_FIELD_LEN 32 // max chars returned by field
 #define MAC_LEN 17 // chars used by a mac address
 #define USE_NVS // comment this out if you have NVS problems (or just do an erase_flash)
@@ -84,6 +84,7 @@ byte SCAN_DURATION = 60; // seconds
   // building 'NTPMenu.bin'
   #define BUILD_NTPMENU_BIN
   #define BUILD_TYPE NTP_MENU_NAME
+  #define SCAN_MODE SCAN_LOOP
   //#define WIFI_SSID "my-router-ssid"
   //#define WIFI_PASSWD "my-router-passwd"
 #else
@@ -102,7 +103,7 @@ const char* welcomeMessage = WELCOME_MESSAGE;
 const char* buildSignature = BUILD_SIGNATURE;
 
 #include <Adafruit_GFX.h>    // Core graphics library
-#include "WROVER_KIT_LCD.h" // Must have the VScroll def patch: https://github.com/espressif/WROVER_KIT_LCD/pull/3/files
+#include "WROVER_KIT_LCD.h" // Latest version must have the VScroll def patch: https://github.com/espressif/WROVER_KIT_LCD/pull/3/files
 WROVER_KIT_LCD tft;
 
 #if RTC_PROFILE > HOBO
@@ -111,7 +112,7 @@ WROVER_KIT_LCD tft;
   // SDA = GPIO26 (SIO_D / SCCB Data)
   #include <RTClib.h>
   #include <Wire.h>
-  RTC_DS1307 RTC; // or your own RTC module
+  static RTC_DS1307 RTC; // or your own RTC module
 #endif
 
 #ifndef BUILD_NTPMENU_BIN 
@@ -157,6 +158,8 @@ Preferences preferences;
 #define freeheap heap_caps_get_free_size(MALLOC_CAP_INTERNAL)
 #define freepsheap ESP.getFreePsram()
 #define resetReason (int)rtc_get_reset_reason(0)
+#define takeMuxSemaphore() if( mux ) { xSemaphoreTake(mux, portMAX_DELAY); }
+#define giveMuxSemaphore() if( mux ) { xSemaphoreGive(mux); }
 
 // statistical values
 static int devicesCount = 0; // devices count per scan

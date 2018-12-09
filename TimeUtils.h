@@ -38,43 +38,44 @@ static char LastSyncTimeString[32] = "YYYY-MM-DD HH:MM:SS";
 
 #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
 
-  static DateTime nowDateTime;
+  //static DateTime nowDateTime;
   static DateTime lastSyncDateTime;
-  
+
   void logTimeActivity(byte source) {
-    preferences.begin("BLECollector", false);
+    preferences.begin("BLEClock", false);
+    preferences.clear();
     DateTime epoch = RTC.now();
     preferences.putUInt("epoch", epoch.unixtime());
     preferences.putUChar("source", source);
     preferences.end();
   }
-  
+
   enum OTAPartitionNames {
     NO_PARTITION = -1,
     CURRENT_PARTITION = 0,
     NEXT_PARTITION = 1
   };
-  
+
   enum TimeUpdateSources {
     SOURCE_NONE = 0,
     SOURCE_COMPILER = 1,
     SOURCE_RTC = 2,
     SOURCE_NTP = 3
   };
-  
+
   struct TimeActivity {
     DateTime epoch;
     byte source;
   };
-  
-  
+
+
   TimeActivity getTimeActivity() {
     TimeActivity timeActivity;
-    preferences.begin("BLECollector", true);
-    timeActivity.epoch  = preferences.getUInt("epoch", 0);
+    preferences.begin("BLEClock", true);
+    timeActivity.epoch  = preferences.getUInt("epoch", millis());
     timeActivity.source = preferences.getUChar("source", 0);
     preferences.end();
-  
+
     sprintf(LastSyncTimeString, "%04d-%02d-%02d %02d:%02d:%02d", 
       timeActivity.epoch.year(),
       timeActivity.epoch.month(),
@@ -83,7 +84,7 @@ static char LastSyncTimeString[32] = "YYYY-MM-DD HH:MM:SS";
       timeActivity.epoch.minute(),
       timeActivity.epoch.second()
     );
-  
+
     if(timeActivity.source==SOURCE_NONE) {
       if(RTC.isrunning()) {
         Serial.println("[RTC] Forcing source to RTC and rebooting");
@@ -94,7 +95,7 @@ static char LastSyncTimeString[32] = "YYYY-MM-DD HH:MM:SS";
       }
     } else {
       lastSyncDateTime = timeActivity.epoch;
-      nowDateTime = RTC.now();
+      DateTime nowDateTime = RTC.now();
       int64_t deltaInSeconds = (unsigned long)nowDateTime.unixtime() - (unsigned long)lastSyncDateTime.unixtime();
       Serial.printf("[RTC] Last Time Sync: %s (%d seconds ago) using source #%d\n", LastSyncTimeString, deltaInSeconds, timeActivity.source);
       #if RTC_PROFILE > ROGUE // on NTP_MENU and CHRONOMANIAC SD-mirror themselves
@@ -133,9 +134,9 @@ static char LastSyncTimeString[32] = "YYYY-MM-DD HH:MM:SS";
         Out.println();
         Out.println("[SD!=FLASH]"); // mirror current flash partition to SD
         updateToFS(SD_MMC, MENU_FILENAME, CURRENT_PARTITION);
-  
+
       #endif
-  
+
     }
     return timeActivity;
   }
@@ -144,13 +145,14 @@ static char LastSyncTimeString[32] = "YYYY-MM-DD HH:MM:SS";
 
 static void updateTimeString(bool checkNTP=false) {
   unsigned long seconds_since_boot = millis() / 1000;
-  uint32_t minutes_since_boot = seconds_since_boot / 60;
-  uint32_t mm = minutes_since_boot % 60;
-  uint32_t hh = minutes_since_boot / 60;
-  uint32_t ss = seconds_since_boot % 60;
-  
+  unsigned long  minutes_since_boot = seconds_since_boot / 60;
+  unsigned long  mm = minutes_since_boot % 60;
+  unsigned long  hh = minutes_since_boot / 60;
+  unsigned long  ss = seconds_since_boot % 60;
+
   #if RTC_PROFILE > HOBO
-    nowDateTime = RTC.now();
+    DateTime nowDateTime = RTC.now();
+
     sprintf(hhmmString, "%02d:%02d", nowDateTime.hour(), nowDateTime.minute());
     sprintf(hhmmssString, "%02d:%02d:%02d", nowDateTime.hour(), nowDateTime.minute(), nowDateTime.second());
     #if RTC_PROFILE == CHRONOMANIAC  // chronomaniac mode
@@ -165,7 +167,6 @@ static void updateTimeString(bool checkNTP=false) {
       }
     #endif
   #else
-    //sprintf(hhmmString, "%02d:%02d", hh, mm);
     sprintf(hhmmssString, "%02d:%02d:%02d", hh, mm, ss);
   #endif
 
@@ -304,7 +305,7 @@ bool SDSetup() {
       if( last_attempt + max_wait < millis() ) {
         attempts--;            
         last_attempt = millis();
-        Out.println("[WiFi] Restarting ("+String(attempts)+" attempts left)");
+        Out.println( String("[WiFi] Restarting ("+String(attempts)+" attempts left)").c_str() );
         WiFi.mode(WIFI_OFF);
         WiFi_Begin();
       }
@@ -314,7 +315,7 @@ bool SDSetup() {
     Serial.println();
     if(WiFi.status() == WL_CONNECTED) {
       Out.println();
-      Out.println("[WiFi] Got an IP Address:" + WiFi.localIP().toString());
+      Out.println( String("[WiFi] Got an IP Address:" + WiFi.localIP().toString()).c_str() );
     } else {
       Out.println();
       Out.println("[WiFi] No IP Address");
@@ -336,8 +337,8 @@ bool SDSetup() {
     }
     TimeActivity lastTimeSync = getTimeActivity();
     
-    configTzTime(TZ_INFO, NTP_SERVER);
     if(WiFiConnect()) {
+      configTzTime(TZ_INFO, NTP_SERVER);
       WiFiConnected = true;
       if (getLocalTime(&timeinfo, 10000)) {  // wait up to 10sec to sync
         Serial.println(&timeinfo, "Time set: %B %d %Y %H:%M:%S (%A)");
