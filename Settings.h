@@ -124,6 +124,8 @@ WROVER_KIT_LCD tft;
   // used to disable brownout detector
   #include "soc/soc.h"
   #include "soc/rtc_cntl_reg.h"
+  #include "esp_task_wdt.h"
+
   #include <stdio.h>
   #include <stdlib.h>
   #include <sqlite3.h> // https://github.com/siara-cc/esp32_arduino_sqlite3_lib
@@ -158,8 +160,8 @@ Preferences preferences;
 #define freeheap heap_caps_get_free_size(MALLOC_CAP_INTERNAL)
 #define freepsheap ESP.getFreePsram()
 #define resetReason (int)rtc_get_reset_reason(0)
-#define takeMuxSemaphore() if( mux ) { xSemaphoreTake(mux, portMAX_DELAY); }
-#define giveMuxSemaphore() if( mux ) { xSemaphoreGive(mux); }
+#define takeMuxSemaphore() if( mux ) { xSemaphoreTake(mux, portMAX_DELAY); Serial.println("[" + String(__func__)+ "] Took semaphore"); }
+#define giveMuxSemaphore() if( mux ) { xSemaphoreGive(mux); Serial.println("[" + String(__func__)+ "] Gave semaphore"); }
 
 // statistical values
 static int devicesCount = 0; // devices count per scan

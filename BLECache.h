@@ -300,6 +300,7 @@ static uint16_t getNextBLEDevCacheIndex(BlueToothDevice *_BLEDevCache, uint16_t 
       minCacheValue = _BLEDevCache[tempIndex].hits;
       outIndex = tempIndex;
     }
+    delay(1);
   }
   return outIndex;
 }

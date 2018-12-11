@@ -430,10 +430,8 @@ class UIUtils {
       #if SCAN_MODE==SCAN_TASK_0 || SCAN_MODE==SCAN_TASK_1 || SCAN_MODE==SCAN_TASK
         mux = xSemaphoreCreateMutex();
         //xTaskCreate(heapGraph, "HeapGraph", 2048, NULL, 0, NULL);
-        xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 2048, (void *)1, 0, NULL, 0); /* last = Task Core */
-      #else
-        xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 2048, (void *)1, 0, NULL, 0); /* last = Task Core */
       #endif
+      xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 2048, NULL, 0, NULL, 0); /* last = Task Core */
       xTaskCreatePinnedToCore(clockSync, "clockSync", 2048, NULL, 0, NULL, 1); // RTC wants to run on core 1 or it fails
       vTaskDelete(NULL);
     }
@@ -448,9 +446,9 @@ class UIUtils {
           continue;
         }
 
-        takeMuxSemaphore();
+        //takeMuxSemaphore();
         updateTimeString();
-        giveMuxSemaphore();
+        //giveMuxSemaphore();
      
         lastClockTick = millis();
         //Serial.printf("[%s]\n", hhmmssString);
@@ -470,6 +468,7 @@ class UIUtils {
 
         if (isScrolling) {
           vTaskDelay( 30 );
+          //esp_task_wdt_reset();
           continue;
         }
 
@@ -480,11 +479,10 @@ class UIUtils {
         } else {
           //blinkIcon();
           vTaskDelay( 100 );
+          //esp_task_wdt_reset();
           continue;
         }
 
-        takeMuxSemaphore();
-        
         uint16_t GRAPH_COLOR = WROVER_WHITE;
         uint32_t graphMin = min_free_heap;
         uint32_t graphMax = graphMin;
@@ -503,18 +501,24 @@ class UIUtils {
           }
         }
         /* min anx max lines */
-        if (graphMin != graphMax) {
-          toleranceline;// = map(toleranceheap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
-          minline = map(min_free_heap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
-          if (toleranceheap > graphMax) {
-            GRAPH_BG_COLOR = WROVER_ORANGE;
-            toleranceline = GRAPH_LINE_HEIGHT;
-          } else if ( toleranceheap < graphMin ) {
-            toleranceline = 0;
-          } else {
-            toleranceline = map(toleranceheap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
-          }
+        if (graphMin == graphMax) {
+          //esp_task_wdt_reset();
+          continue; 
         }
+        
+        toleranceline;// = map(toleranceheap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
+        minline = map(min_free_heap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
+        if (toleranceheap > graphMax) {
+          GRAPH_BG_COLOR = WROVER_ORANGE;
+          toleranceline = GRAPH_LINE_HEIGHT;
+        } else if ( toleranceheap < graphMin ) {
+          toleranceline = 0;
+        } else {
+          toleranceline = map(toleranceheap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
+        }
+
+        takeMuxSemaphore();
+
         // draw graph
         for (i = 0; i < GRAPH_LINE_WIDTH; i++) {
           int thisindex = int(heapindex - GRAPH_LINE_WIDTH + i + HEAPMAP_BUFFLEN) % HEAPMAP_BUFFLEN;
@@ -545,16 +549,16 @@ class UIUtils {
             uint32_t lineheight = map(heapval, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
             tft.drawFastVLine( GRAPH_X + i, GRAPH_Y + GRAPH_LINE_HEIGHT-lineheight, lineheight, GRAPH_COLOR );
           }
-        }
-        if (graphMin != graphMax) {
-          //uint32_t toleranceline = map(min_free_heap + heap_tolerance, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
-          //uint32_t minline = map(min_free_heap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
-          tft.drawFastHLine( GRAPH_X, GRAPH_Y + GRAPH_LINE_HEIGHT - toleranceline, GRAPH_LINE_WIDTH, WROVER_LIGHTGREY );
-          tft.drawFastHLine( GRAPH_X, GRAPH_Y + GRAPH_LINE_HEIGHT - minline, GRAPH_LINE_WIDTH, WROVER_RED );
+          delay(1);
         }
 
+        //uint32_t toleranceline = map(min_free_heap + heap_tolerance, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
+        //uint32_t minline = map(min_free_heap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
+        tft.drawFastHLine( GRAPH_X, GRAPH_Y + GRAPH_LINE_HEIGHT - toleranceline, GRAPH_LINE_WIDTH, WROVER_LIGHTGREY );
+        tft.drawFastHLine( GRAPH_X, GRAPH_Y + GRAPH_LINE_HEIGHT - minline, GRAPH_LINE_WIDTH, WROVER_RED );
+
         giveMuxSemaphore();
-        vTaskDelay(100);
+        vTaskDelay(30);
       }
     }
 
@@ -589,6 +593,7 @@ class UIUtils {
           onScreen = true;
           break;
         }
+        delay(1);
       }
       Serial.printf("[BLECardIsOnScreen] %s is NOT onScreen!\n", _BLEDevCache[_BLEDevCacheIndex].address);
       return onScreen;
@@ -596,7 +601,6 @@ class UIUtils {
 
 
     void printBLECard( BlueToothDevice *_BLEDevCache, uint16_t _BLEDevCacheIndex ) {
-
       // don't render if already on screen
       if( BLECardIsOnScreen( _BLEDevCache, _BLEDevCacheIndex ) ) {
         Serial.println("[printBLECard] Already on screen");
@@ -612,8 +616,9 @@ class UIUtils {
         Serial.printf("[printBLECard] Will render %s\n", _BLEDevCache[_BLEDevCacheIndex].address);
       }
 
+      esp_task_wdt_reset();
       takeMuxSemaphore();
-      Serial.printf("[printBLECard] #%d took semaphore\n", _BLEDevCacheIndex);
+      //Serial.printf("[printBLECard] #%d took semaphore\n", _BLEDevCacheIndex);
 
       uint16_t randomcolor = tft.color565( random(128, 255), random(128, 255), random(128, 255) );
       uint16_t pos = 0;
@@ -712,7 +717,7 @@ class UIUtils {
       pos += hop;
       drawRoundRect( pos, 4, BLECardTheme.borderColor );
       giveMuxSemaphore();
-      Serial.printf("[printBLECard] #%d gave semaphore back\n", _BLEDevCacheIndex);
+      //Serial.printf("[printBLECard] #%d gave semaphore back\n", _BLEDevCacheIndex);
     }
 
 

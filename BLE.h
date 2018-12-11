@@ -120,7 +120,8 @@ class BLEScanUtils {
       #elif SCAN_MODE==SCAN_TASK_1
         xTaskCreatePinnedToCore(scanTask, "scanTask", 10000, NULL, 0, NULL, 1); /* last = Task Core */
       #elif SCAN_MODE==SCAN_TASK
-        xTaskCreate(scanTask, "scanTask", 8000, NULL, 1, NULL);
+        //xTaskCreate(scanTask, "scanTask", 8000, NULL, 1, NULL);
+        xTaskCreatePinnedToCore(scanTask, "scanTask", 12000, NULL, 1, NULL, 0); /* last = Task Core */
       #elif SCAN_MODE==SCAN_LOOP
         BLEDevice::init("");
         pBLEScan = BLEDevice::getScan(); //create new scan
@@ -184,6 +185,7 @@ class BLEScanUtils {
           //Serial.printf("[CACHE HIT] BLEDevCache ID #%s has %d cache hits\n", address, BLEDevCache[i].hits);
           return i;
         }
+        delay(1);
       }
       return -1;
     }
@@ -400,6 +402,7 @@ class BLEScanUtils {
         } else {
           Serial.print("####### Showing thawed "); Serial.println( BLEDevCache[i].address );
         }
+        delay(1);
       }
       return fed;
     }
@@ -559,9 +562,10 @@ class BLEScanUtils {
             }
           }
         }
-
         // TODO : post process
         UI.BLECardTheme.setTheme( IN_CACHE_ANON );
+        delay(10);
+        esp_task_wdt_reset();
         UI.printBLECard( BLEDevTmpCache, i ); // render
         sprintf( processMessage, processTemplateLong, "Rendered ", i+1, " / ", devicesCount );
         UI.headerStats( processMessage );

@@ -226,6 +226,7 @@ class DBUtils {
         BLEDevHelper.init( BLEDevTmpCache[i], hasPsram );
         Serial.printf("PSRam Free heap after init #%2d: %d\n", i, freepsheap);
         //BLEDevTmpCache[i].init( hasPsram );
+        delay(1);
       }
       for(uint16_t i=0; i<VENDORCACHE_SIZE; i++) {
         VendorCache[i].init( hasPsram );
@@ -287,6 +288,7 @@ class DBUtils {
         if( !isEmpty( BLEDevCache[i].address ) ) {
           BLEDevCacheUsed++;
         }
+        delay(1);
       }
       VendorCacheUsed = 0;
       for( uint16_t i=0; i<VENDORCACHE_SIZE; i++) {
