@@ -300,9 +300,11 @@ class UIUtils {
 
 
     void cacheStats(uint16_t BLEDevCacheUsed, uint16_t VendorCacheUsed, uint16_t OuiCacheUsed) {
+      takeMuxSemaphore();
       percentBox(164, 284, 10, 10, BLEDevCacheUsed, WROVER_CYAN, WROVER_BLACK);
       percentBox(164, 296, 10, 10, VendorCacheUsed, WROVER_ORANGE, WROVER_BLACK);
       percentBox(164, 308, 10, 10, OuiCacheUsed, WROVER_GREENYELLOW, WROVER_BLACK);
+      giveMuxSemaphore();
     }
 
 
@@ -347,7 +349,9 @@ class UIUtils {
           color = WROVER_RED;
           break;
       }
+      takeMuxSemaphore();
       tft.fillCircle(ICON_DB_X, ICON_DB_Y, ICON_R, color);
+      giveMuxSemaphore();
     }
 
 
@@ -431,8 +435,8 @@ class UIUtils {
         mux = xSemaphoreCreateMutex();
         //xTaskCreate(heapGraph, "HeapGraph", 2048, NULL, 0, NULL);
       #endif
-      xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 2048, NULL, 0, NULL, 0); /* last = Task Core */
-      xTaskCreatePinnedToCore(clockSync, "clockSync", 2048, NULL, 0, NULL, 1); // RTC wants to run on core 1 or it fails
+      xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 2048, NULL, 1, NULL, 0); /* last = Task Core */
+      xTaskCreatePinnedToCore(clockSync, "clockSync", 2048, NULL, 1, NULL, 1); // RTC wants to run on core 1 or it fails
       vTaskDelete(NULL);
     }
 
@@ -586,12 +590,12 @@ class UIUtils {
         Serial.print("[BLECardIsOnScreen] Empty address !!");
         return false;
       }
-      Serial.printf("[BLECardIsOnScreen] Checking if %s is onScreen\n", _BLEDevCache[_BLEDevCacheIndex].address);
+      //Serial.printf("[BLECardIsOnScreen] Checking if %s is onScreen\n", _BLEDevCache[_BLEDevCacheIndex].address);
       for (uint16_t j = 0; j < BLECARD_MAC_CACHE_SIZE; j++) {
         if ( strcmp(_BLEDevCache[_BLEDevCacheIndex].address, lastPrintedMac[j]) == 0) {
           Serial.printf("[BLECardIsOnScreen] %s is onScreen!\n", _BLEDevCache[_BLEDevCacheIndex].address);
           onScreen = true;
-          break;
+          return true;
         }
         delay(1);
       }
@@ -603,18 +607,16 @@ class UIUtils {
     void printBLECard( BlueToothDevice *_BLEDevCache, uint16_t _BLEDevCacheIndex ) {
       // don't render if already on screen
       if( BLECardIsOnScreen( _BLEDevCache, _BLEDevCacheIndex ) ) {
-        Serial.println("[printBLECard] Already on screen");
+        Serial.printf("[printBLECard] Skipping rendering %s (already on screen)\n", _BLEDevCache[_BLEDevCacheIndex].address);
         return;
-      } else {
-        Serial.printf("[printBLECard] #%d needs rendering\n", _BLEDevCacheIndex);
       }
 
       if ( isEmpty( _BLEDevCache[_BLEDevCacheIndex].address ) ) {
-        Serial.println("[printBLECard] Cowardly refusing to render with an empty address");
+        Serial.printf("[printBLECard] Cowardly refusing to render %d with an empty address\n", _BLEDevCacheIndex);
         return;        
-      } else {
-        Serial.printf("[printBLECard] Will render %s\n", _BLEDevCache[_BLEDevCacheIndex].address);
       }
+
+      Serial.printf("[printBLECard] Will render %s\n", _BLEDevCache[_BLEDevCacheIndex].address);
 
       esp_task_wdt_reset();
       takeMuxSemaphore();
