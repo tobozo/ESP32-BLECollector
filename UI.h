@@ -329,7 +329,6 @@ class UIUtils {
       if (xoffsetpercent == 0) return;
       byte linew = (xoffsetpercent * w) / 10;
       tft.drawFastHLine(x, y + boxh, linew, barcolor);
-
     }
 
 
@@ -349,6 +348,7 @@ class UIUtils {
           color = WROVER_RED;
           break;
       }
+      delay(1);
       takeMuxSemaphore();
       tft.fillCircle(ICON_DB_X, ICON_DB_Y, ICON_R, color);
       giveMuxSemaphore();
@@ -356,9 +356,7 @@ class UIUtils {
 
 
     static void timeStateIcon() {
-
       tft.drawJpg( clock_jpeg, clock_jpeg_len, ICON_RTC_X-ICON_R, ICON_RTC_Y-ICON_R+1, 8,  8);
-      
       //tft.fillCircle(ICON_RTC_X, ICON_RTC_Y, ICON_R, WROVER_GREENYELLOW);
       if (RTC_is_running) {
         //tft.drawCircle(ICON_RTC_X, ICON_RTC_Y, ICON_R, WROVER_DARKGREEN);
@@ -373,7 +371,6 @@ class UIUtils {
 
 
     static void bleStateIcon(uint16_t color, bool fill = true) {
-
       takeMuxSemaphore();
       blestateicon = color;
       if (fill) {
@@ -382,26 +379,17 @@ class UIUtils {
         tft.fillCircle(ICON_BLE_X, ICON_BLE_Y, ICON_R - 1, color);
       }
       giveMuxSemaphore();
-
     }
 
 
     static void blinkIcon() {
-      /*
-      unsigned long blinkfreq = 30;
-      if( lastblink + blinkfreq < millis() ) {
-        return;
-      }
-      */
       if (!blinkit || blinknow >= blinkthen) {
         blinkit = false;
         if(blestateicon!=WROVER_DARKGREY) {
-
           takeMuxSemaphore();
           tft.fillRect(0, PROGRESSBAR_Y, Out.width, 2, WROVER_DARKGREY);
-          // clear blue pin
           giveMuxSemaphore();
-
+          // clear blue pin
           bleStateIcon(WROVER_DARKGREY);
         }
         return;
@@ -417,14 +405,13 @@ class UIUtils {
         }
         lastblink = blinknow;
       }
+
       if (lastprogress + 1000 < blinknow) {
         unsigned long remaining = blinkthen - blinknow;
         int percent = 100 - ( ( remaining * 100 ) / scanTime );
-
         takeMuxSemaphore();
         tft.fillRect(0, PROGRESSBAR_Y, (Out.width * percent) / 100, 2, BLUETOOTH_COLOR);
         giveMuxSemaphore();
-
         lastprogress = blinknow;
       }
     }
@@ -435,7 +422,7 @@ class UIUtils {
         mux = xSemaphoreCreateMutex();
         //xTaskCreate(heapGraph, "HeapGraph", 2048, NULL, 0, NULL);
       #endif
-      xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 2048, NULL, 1, NULL, 0); /* last = Task Core */
+      xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 2048, NULL, 2, NULL, 0); /* last = Task Core */
       xTaskCreatePinnedToCore(clockSync, "clockSync", 2048, NULL, 1, NULL, 1); // RTC wants to run on core 1 or it fails
       vTaskDelete(NULL);
     }
@@ -446,15 +433,14 @@ class UIUtils {
       while(1) {
         if(lastClockTick + 1000 > millis()) {
           blinkIcon();
-          vTaskDelay( 1 );
+          vTaskDelay( 100 );
           continue;
         }
-
         //takeMuxSemaphore();
         updateTimeString();
         //giveMuxSemaphore();
-     
         lastClockTick = millis();
+        vTaskDelay( 100 );
         //Serial.printf("[%s]\n", hhmmssString);
       }
     }
@@ -482,7 +468,7 @@ class UIUtils {
           lastfreeheap = freeheap;
         } else {
           //blinkIcon();
-          vTaskDelay( 100 );
+          vTaskDelay( 30 );
           //esp_task_wdt_reset();
           continue;
         }
@@ -521,7 +507,7 @@ class UIUtils {
           toleranceline = map(toleranceheap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
         }
 
-        takeMuxSemaphore();
+        
 
         // draw graph
         for (i = 0; i < GRAPH_LINE_WIDTH; i++) {
@@ -548,19 +534,18 @@ class UIUtils {
             }
           }
           // fill background
+          takeMuxSemaphore();
           tft.drawFastVLine( GRAPH_X + i, GRAPH_Y, GRAPH_LINE_HEIGHT, GRAPH_BG_COLOR );
           if ( heapval > 0 ) {
             uint32_t lineheight = map(heapval, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
             tft.drawFastVLine( GRAPH_X + i, GRAPH_Y + GRAPH_LINE_HEIGHT-lineheight, lineheight, GRAPH_COLOR );
           }
-          delay(1);
+          giveMuxSemaphore();
         }
 
-        //uint32_t toleranceline = map(min_free_heap + heap_tolerance, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
-        //uint32_t minline = map(min_free_heap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
+        takeMuxSemaphore();
         tft.drawFastHLine( GRAPH_X, GRAPH_Y + GRAPH_LINE_HEIGHT - toleranceline, GRAPH_LINE_WIDTH, WROVER_LIGHTGREY );
         tft.drawFastHLine( GRAPH_X, GRAPH_Y + GRAPH_LINE_HEIGHT - minline, GRAPH_LINE_WIDTH, WROVER_RED );
-
         giveMuxSemaphore();
         vTaskDelay(30);
       }

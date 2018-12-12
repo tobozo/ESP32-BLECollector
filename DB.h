@@ -331,6 +331,7 @@ class DBUtils {
         return rc;
       } else {
         //Serial.println("Opened database successfully");
+        delay(1);
         if(readonly) {
           UI.dbStateIcon(1); // R/O
         } else {
@@ -349,6 +350,7 @@ class DBUtils {
         case BLE_VENDOR_NAMES_DB: sqlite3_close(BLEVendorsDB); break;
         default: /* duh ! */ Serial.println("Can't open null DB");
       }
+      delay(1);
       cacheState();
       UI.cacheStats(BLEDevCacheUsed, VendorCacheUsed, OuiCacheUsed);
     }
