@@ -55,6 +55,11 @@ static int AnonymousCacheHit = 0; // cache relative
 static int scan_rounds = 0; // how many scans
 static uint16_t scan_cursor = 0; // what scan index is being processed
 
+static uint16_t BLEDevCacheUsed = 0; // for statistics
+static uint16_t VendorCacheUsed = 0; // for statistics
+static uint16_t OuiCacheUsed = 0; // for statistics
+
+
 // TODO: store this in psram
 struct BlueToothDevice {
   bool in_db          = false;

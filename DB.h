@@ -148,9 +148,7 @@ OUICacheStruct OuiCache[OUICACHE_SIZE];
 uint16_t OuiCacheIndex = 0; // index in the circular buffer
 static int OuiCacheHit = 0;
 
-static uint16_t BLEDevCacheUsed = 0; // for statistics
-static uint16_t VendorCacheUsed = 0; // for statistics
-static uint16_t OuiCacheUsed = 0; // for statistics
+
 
 class DBUtils {
   public:
@@ -215,27 +213,21 @@ class DBUtils {
     void cacheWarmup() {
       bool hasPsram = psramInit();
       if( hasPsram ) {
-        Serial.println("PSRAM OK");
+        Serial.println("[PSRAM] OK");
       } else {
-        Serial.println("PSRAM FAIL");
+        Serial.println("[PSRAM] NOT DETECTED");
       }
-     
       for(uint16_t i=0; i<BLEDEVCACHE_SIZE; i++) {
         BLEDevHelper.init( BLEDevCache[i], hasPsram );
-        //BLEDevCache[i].init( hasPsram );
         BLEDevHelper.init( BLEDevTmpCache[i], hasPsram );
-        Serial.printf("PSRam Free heap after init #%2d: %d\n", i, freepsheap);
-        //BLEDevTmpCache[i].init( hasPsram );
+        //Serial.printf("PSRam Free heap after init #%2d: %d\n", i, freepsheap);
         delay(1);
       }
       for(uint16_t i=0; i<VENDORCACHE_SIZE; i++) {
         VendorCache[i].init( hasPsram );
-        //memset( VendorCache[i].vendor, 0, MAX_FIELD_LEN+1 );
       }
       for(uint16_t i=0; i<OUICACHE_SIZE; i++) {
         OuiCache[i].init( hasPsram );
-        //memset( OuiCache[i].mac,        0, MAC_LEN+1 );
-        //memset( OuiCache[i].assignment, 0, MAX_FIELD_LEN+1 );
       }
     }
 
@@ -321,21 +313,21 @@ class DBUtils {
         case BLE_VENDOR_NAMES_DB: // https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers
           rc = sqlite3_open("/sdcard/ble-oui.db", &BLEVendorsDB); 
         break;
-        default: Serial.println("Can't open null DB"); UI.dbStateIcon(-1); return rc;
+        default: Serial.println("Can't open null DB"); UI.setDBStateIcon(-1); return rc;
       }
       if (rc) {
         Serial.print("Can't open database "); Serial.println(dbName);
         // SD Card removed ? File corruption ? OOM ?
         // isOOM = true;
-        UI.dbStateIcon(-1); // OOM or I/O error
+        UI.setDBStateIcon(-1); // OOM or I/O error
         return rc;
       } else {
         //Serial.println("Opened database successfully");
         delay(1);
         if(readonly) {
-          UI.dbStateIcon(1); // R/O
+          UI.setDBStateIcon(1); // R/O
         } else {
-          UI.dbStateIcon(2); // R+W
+          UI.setDBStateIcon(2); // R+W
         }
       }
       return rc;
@@ -343,7 +335,7 @@ class DBUtils {
 
 
     void close(DBName dbName) {
-      UI.dbStateIcon(0);
+      UI.setDBStateIcon(0);
       switch(dbName) {
         case BLE_COLLECTOR_DB:    sqlite3_close(BLECollectorDB); break;
         case MAC_OUI_NAMES_DB:    sqlite3_close(OUIVendorsDB); break;
@@ -352,7 +344,7 @@ class DBUtils {
       }
       delay(1);
       cacheState();
-      UI.cacheStats(BLEDevCacheUsed, VendorCacheUsed, OuiCacheUsed);
+      //UI.cacheStats(BLEDevCacheUsed, VendorCacheUsed, OuiCacheUsed);
     }
     
     

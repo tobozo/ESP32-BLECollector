@@ -160,8 +160,8 @@ Preferences preferences;
 #define freeheap heap_caps_get_free_size(MALLOC_CAP_INTERNAL)
 #define freepsheap ESP.getFreePsram()
 #define resetReason (int)rtc_get_reset_reason(0)
-#define takeMuxSemaphore() if( mux ) { xSemaphoreTake(mux, portMAX_DELAY); /*Serial.println("[" + String(__func__)+ "] Took semaphore");*/ }
-#define giveMuxSemaphore() if( mux ) { xSemaphoreGive(mux); /*Serial.println("[" + String(__func__)+ "] Gave semaphore");*/ }
+#define takeMuxSemaphore() if( mux ) { xSemaphoreTake(mux, portMAX_DELAY); Serial.println("[" + String(__func__)+ "] Took semaphore"); }
+#define giveMuxSemaphore() if( mux ) { xSemaphoreGive(mux); Serial.println("[" + String(__func__)+ "] Gave semaphore"); }
 
 // statistical values
 static int devicesCount = 0; // devices count per scan

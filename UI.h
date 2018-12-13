@@ -56,6 +56,9 @@ static uint16_t heapindex = 0; // index in the circular buffer
 static bool blinkit = false; // task blinker state
 static bool blinktoggler = true;
 static uint16_t blestateicon;
+static uint16_t lastblestateicon;
+static uint16_t dbIconColor;
+static uint16_t lastdbIconColor;
 static unsigned long blinknow = millis(); // task blinker start time
 static unsigned long scanTime = SCAN_DURATION * 1000; // task blinker duration
 static unsigned long blinkthen = blinknow + scanTime; // task blinker end time
@@ -163,7 +166,8 @@ class UIUtils {
       footerStats();
 
       #if RTC_PROFILE!=NTP_MENU
-        xTaskCreate(taskHeapGraph, "taskHeapGraph", 1024, NULL, 0, NULL);
+        //xTaskCreate(taskHeapGraph, "taskHeapGraph", 1024, NULL, 0, NULL);
+        xTaskCreatePinnedToCore(taskHeapGraph, "taskHeapGraph", 2048, NULL, 2, NULL, 1);
       #endif
 
       if ( clearScreen ) {
@@ -299,7 +303,7 @@ class UIUtils {
     }
 
 
-    void cacheStats(uint16_t BLEDevCacheUsed, uint16_t VendorCacheUsed, uint16_t OuiCacheUsed) {
+    void cacheStats( /*uint16_t BLEDevCacheUsed, uint16_t VendorCacheUsed, uint16_t OuiCacheUsed */) {
       takeMuxSemaphore();
       percentBox(164, 284, 10, 10, BLEDevCacheUsed, WROVER_CYAN, WROVER_BLACK);
       percentBox(164, 296, 10, 10, VendorCacheUsed, WROVER_ORANGE, WROVER_BLACK);
@@ -332,7 +336,17 @@ class UIUtils {
     }
 
 
-    static void dbStateIcon(int state) {
+    static void dbStateIcon() {
+      if( lastdbIconColor != dbIconColor ) {
+        takeMuxSemaphore();
+        tft.fillCircle(ICON_DB_X, ICON_DB_Y, ICON_R, dbIconColor);
+        giveMuxSemaphore();
+        lastdbIconColor = dbIconColor;
+      }
+    }
+
+
+    static void setDBStateIcon(int state) {
       uint16_t color = WROVER_DARKGREY;
       switch (state) {
         case 2:/*DB OPEN FOR WRITING*/
@@ -348,10 +362,13 @@ class UIUtils {
           color = WROVER_RED;
           break;
       }
+      dbIconColor = state;
+      /*
       delay(1);
       takeMuxSemaphore();
       tft.fillCircle(ICON_DB_X, ICON_DB_Y, ICON_R, color);
       giveMuxSemaphore();
+      */
     }
 
 
@@ -369,16 +386,22 @@ class UIUtils {
       }
     }
 
-
-    static void bleStateIcon(uint16_t color, bool fill = true) {
-      takeMuxSemaphore();
+    static void setBLEStateIcon(uint16_t color) {
       blestateicon = color;
-      if (fill) {
-        tft.fillCircle(ICON_BLE_X, ICON_BLE_Y, ICON_R, color);
-      } else {
-        tft.fillCircle(ICON_BLE_X, ICON_BLE_Y, ICON_R - 1, color);
+    }
+
+
+    static void bleStateIcon(bool fill = true) {
+      if( lastblestateicon != blestateicon ) {
+        takeMuxSemaphore();
+        lastblestateicon = blestateicon;
+        if (fill) {
+          tft.fillCircle(ICON_BLE_X, ICON_BLE_Y, ICON_R, blestateicon);
+        } else {
+          tft.fillCircle(ICON_BLE_X, ICON_BLE_Y, ICON_R - 1, blestateicon);
+        }
+        giveMuxSemaphore();
       }
-      giveMuxSemaphore();
     }
 
 
@@ -390,7 +413,7 @@ class UIUtils {
           tft.fillRect(0, PROGRESSBAR_Y, Out.width, 2, WROVER_DARKGREY);
           giveMuxSemaphore();
           // clear blue pin
-          bleStateIcon(WROVER_DARKGREY);
+          setBLEStateIcon(WROVER_DARKGREY);
         }
         return;
       }
@@ -399,9 +422,9 @@ class UIUtils {
       if (lastblink + random(222, 666) < blinknow) {
         blinktoggler = !blinktoggler;
         if (blinktoggler) {
-          bleStateIcon(BLUETOOTH_COLOR);
+          setBLEStateIcon(BLUETOOTH_COLOR);
         } else {
-          bleStateIcon(HEADER_BGCOLOR, false);
+          setBLEStateIcon(HEADER_BGCOLOR);
         }
         lastblink = blinknow;
       }
@@ -422,8 +445,8 @@ class UIUtils {
         mux = xSemaphoreCreateMutex();
         //xTaskCreate(heapGraph, "HeapGraph", 2048, NULL, 0, NULL);
       #endif
-      xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 2048, NULL, 2, NULL, 0); /* last = Task Core */
-      xTaskCreatePinnedToCore(clockSync, "clockSync", 2048, NULL, 1, NULL, 1); // RTC wants to run on core 1 or it fails
+      xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 4096, NULL, 4, NULL, 0); /* last = Task Core */
+      xTaskCreatePinnedToCore(clockSync, "clockSync", 2048, NULL, 4, NULL, 1); // RTC wants to run on core 1 or it fails
       vTaskDelete(NULL);
     }
 
@@ -432,7 +455,6 @@ class UIUtils {
       unsigned long lastClockTick = millis();
       while(1) {
         if(lastClockTick + 1000 > millis()) {
-          blinkIcon();
           vTaskDelay( 100 );
           continue;
         }
@@ -444,7 +466,7 @@ class UIUtils {
         //Serial.printf("[%s]\n", hhmmssString);
       }
     }
-   
+
 
     static void heapGraph(void * parameter) {
       uint32_t lastfreeheap;
@@ -457,10 +479,14 @@ class UIUtils {
       while (1) {
 
         if (isScrolling) {
-          vTaskDelay( 30 );
+          vTaskDelay( 10 );
           //esp_task_wdt_reset();
           continue;
         }
+
+        dbStateIcon();
+        bleStateIcon();
+        blinkIcon();
 
         if (lastfreeheap != freeheap) {
           heapmap[heapindex++] = freeheap;
@@ -468,11 +494,11 @@ class UIUtils {
           lastfreeheap = freeheap;
         } else {
           //blinkIcon();
-          vTaskDelay( 30 );
+          vTaskDelay( 10 );
           //esp_task_wdt_reset();
           continue;
         }
-
+        takeMuxSemaphore();
         uint16_t GRAPH_COLOR = WROVER_WHITE;
         uint32_t graphMin = min_free_heap;
         uint32_t graphMax = graphMin;
@@ -507,8 +533,6 @@ class UIUtils {
           toleranceline = map(toleranceheap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
         }
 
-        
-
         // draw graph
         for (i = 0; i < GRAPH_LINE_WIDTH; i++) {
           int thisindex = int(heapindex - GRAPH_LINE_WIDTH + i + HEAPMAP_BUFFLEN) % HEAPMAP_BUFFLEN;
@@ -534,20 +558,20 @@ class UIUtils {
             }
           }
           // fill background
-          takeMuxSemaphore();
+          //takeMuxSemaphore();
           tft.drawFastVLine( GRAPH_X + i, GRAPH_Y, GRAPH_LINE_HEIGHT, GRAPH_BG_COLOR );
           if ( heapval > 0 ) {
             uint32_t lineheight = map(heapval, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
             tft.drawFastVLine( GRAPH_X + i, GRAPH_Y + GRAPH_LINE_HEIGHT-lineheight, lineheight, GRAPH_COLOR );
           }
-          giveMuxSemaphore();
+          //giveMuxSemaphore();
         }
 
-        takeMuxSemaphore();
+        //takeMuxSemaphore();
         tft.drawFastHLine( GRAPH_X, GRAPH_Y + GRAPH_LINE_HEIGHT - toleranceline, GRAPH_LINE_WIDTH, WROVER_LIGHTGREY );
         tft.drawFastHLine( GRAPH_X, GRAPH_Y + GRAPH_LINE_HEIGHT - minline, GRAPH_LINE_WIDTH, WROVER_RED );
         giveMuxSemaphore();
-        vTaskDelay(30);
+        vTaskDelay( 100 );
       }
     }
 
@@ -578,13 +602,13 @@ class UIUtils {
       //Serial.printf("[BLECardIsOnScreen] Checking if %s is onScreen\n", _BLEDevCache[_BLEDevCacheIndex].address);
       for (uint16_t j = 0; j < BLECARD_MAC_CACHE_SIZE; j++) {
         if ( strcmp(_BLEDevCache[_BLEDevCacheIndex].address, lastPrintedMac[j]) == 0) {
-          Serial.printf("[BLECardIsOnScreen] %s is onScreen!\n", _BLEDevCache[_BLEDevCacheIndex].address);
+          Serial.printf("  [BLECardIsOnScreen] %s is onScreen\n", _BLEDevCache[_BLEDevCacheIndex].address);
           onScreen = true;
           return true;
         }
         delay(1);
       }
-      Serial.printf("[BLECardIsOnScreen] %s is NOT onScreen!\n", _BLEDevCache[_BLEDevCacheIndex].address);
+      Serial.printf("  [BLECardIsOnScreen] %s is NOT onScreen\n", _BLEDevCache[_BLEDevCacheIndex].address);
       return onScreen;
     }
 
@@ -592,18 +616,18 @@ class UIUtils {
     void printBLECard( BlueToothDevice *_BLEDevCache, uint16_t _BLEDevCacheIndex ) {
       // don't render if already on screen
       if( BLECardIsOnScreen( _BLEDevCache, _BLEDevCacheIndex ) ) {
-        Serial.printf("[printBLECard] Skipping rendering %s (already on screen)\n", _BLEDevCache[_BLEDevCacheIndex].address);
+        Serial.printf("  [printBLECard] Skipping rendering %s (already on screen)\n", _BLEDevCache[_BLEDevCacheIndex].address);
         return;
       }
 
       if ( isEmpty( _BLEDevCache[_BLEDevCacheIndex].address ) ) {
-        Serial.printf("[printBLECard] Cowardly refusing to render %d with an empty address\n", _BLEDevCacheIndex);
+        Serial.printf("  [printBLECard] Cowardly refusing to render %d with an empty address\n", _BLEDevCacheIndex);
         return;        
       }
 
-      Serial.printf("[printBLECard] Will render %s\n", _BLEDevCache[_BLEDevCacheIndex].address);
+      Serial.printf("  [printBLECard] Will render %s\n", _BLEDevCache[_BLEDevCacheIndex].address);
 
-      esp_task_wdt_reset();
+      //esp_task_wdt_reset();
       takeMuxSemaphore();
       //Serial.printf("[printBLECard] #%d took semaphore\n", _BLEDevCacheIndex);
 

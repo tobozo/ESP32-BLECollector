@@ -87,10 +87,11 @@ class FoundDeviceCallback: public BLEAdvertisedDeviceCallbacks {
     }
     foundDeviceToggler = !foundDeviceToggler;
     if(foundDeviceToggler) {
-      UI.bleStateIcon(WROVER_GREEN);
+      UI.setBLEStateIcon(WROVER_GREEN);
     } else {
-      UI.bleStateIcon(WROVER_DARKGREEN);
+      UI.setBLEStateIcon(WROVER_DARKGREEN);
     }
+    vTaskDelay(100);
   }
 };
 
@@ -126,7 +127,7 @@ class BLEScanUtils {
         xTaskCreatePinnedToCore(scanTask, "scanTask", 10000, NULL, 0, NULL, 1); /* last = Task Core */
       #elif SCAN_MODE==SCAN_TASK
         //xTaskCreate(scanTask, "scanTask", 8000, NULL, 1, NULL);
-        xTaskCreatePinnedToCore(scanTask, "scanTask", 12000, NULL, 2, NULL, 0); /* last = Task Core */
+        xTaskCreatePinnedToCore(scanTask, "scanTask", 16000, NULL, 5, NULL, 1); /* last = Task Core */
       #elif SCAN_MODE==SCAN_LOOP
         BLEDevice::init("");
         pBLEScan = BLEDevice::getScan(); //create new scan
@@ -351,6 +352,7 @@ class BLEScanUtils {
           sprintf( headerStr, headerTpl, BLEDevCacheIndex, i);
           UI.headerStats( headerStr );
           UI.printBLECard( BLEDevCache, BLEDevCacheIndex );
+          UI.cacheStats( /*BLEDevCacheUsed, VendorCacheUsed, OuiCacheUsed */);
           UI.footerStats();          
         }
       }
@@ -522,7 +524,7 @@ class BLEScanUtils {
       }
       if( scan_cursor >= devicesCount) {
         onScanPopulated = true;
-        scan_cursor = 0;
+        //scan_cursor = 0;
         Serial.printf("[%s] %s\n", __func__, "done all");
         return false;
       }
@@ -555,7 +557,7 @@ class BLEScanUtils {
       if( scan_cursor >= devicesCount) {
         Serial.printf("[%s] %s\n", __func__, "done all");
         onScanPostPopulated = true;
-        scan_cursor = 0;
+        //scan_cursor = 0;
         return false;
       }
       if( BLEDevTmpCache[scan_cursor].hits > 0 ) {
@@ -602,16 +604,21 @@ class BLEScanUtils {
       if( scan_cursor >= devicesCount) {
         Serial.printf("[%s] %s\n", __func__, "done all");
         onScanRendered = true;
-        scan_cursor = 0;
+        //scan_cursor = 0;
         return false;
       }
       UI.BLECardTheme.setTheme( IN_CACHE_ANON );
       //delay(10);
       //esp_task_wdt_reset();
       UI.printBLECard( BLEDevTmpCache, _scan_cursor ); // render
+      delay(1);
       sprintf( processMessage, processTemplateLong, "Rendered ", _scan_cursor+1, " / ", devicesCount );
       UI.headerStats( processMessage );
+      delay(1);
+      UI.cacheStats( /*BLEDevCacheUsed, VendorCacheUsed, OuiCacheUsed */);
+      delay(1);
       UI.footerStats();
+      delay(1);
       //scan_cursor++;
       return true;
     }
@@ -793,9 +800,17 @@ class BLEScanUtils {
         pBLEScan->setWindow(0x30); // 0x30
         while( 1 ) {
           // flattened logic tree saves memory
-          if( onScanPopulate( scan_cursor ) )  { scan_cursor++; continue; } // OUI / vendorname / isanonymous
-          if( onScanIfExists( scan_cursor ) )  { scan_cursor++; continue; } // exists + hits
-          if( onScanRender( scan_cursor ) )    { scan_cursor++; continue; } // ui work
+          //vTaskDelay(10);
+          //esp_task_wdt_reset();
+          if( onScanPopulate( scan_cursor ) )  { /*scan_cursor++; continue;*/ } // OUI / vendorname / isanonymous
+          //vTaskDelay(10);
+          //esp_task_wdt_reset();
+          if( onScanIfExists( scan_cursor ) )  { /*scan_cursor++; continue;*/ } // exists + hits
+          //vTaskDelay(10);
+          //esp_task_wdt_reset();
+          if( onScanRender( scan_cursor ) )    { /*scan_cursor++; continue;*/ } // ui work
+          //vTaskDelay(10);
+          //esp_task_wdt_reset();
           if( onScanPropagate( scan_cursor ) ) { scan_cursor++; continue; } // copy to DB / cache
 
           Serial.print("BeforeScan::");dumpStats();
