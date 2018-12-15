@@ -28,7 +28,7 @@
   -----------------------------------------------------------------------------
 
   Hardware requirements:
-    - [mandatory] ESP32 (with or without PSRam)
+    - [mandatory] ESP32 (PSRam optional but recommended)
     - [mandatory] SD Card breakout (or bundled in Wrover-Kit, M5Stack, LoLinD32 Pro)
     - [mandatory] Micro SD (FAT32 formatted, max 32GB)
     - [mandatory] 'mac-oui-light.db' and 'ble-oui.db' files copied on the Micro SD Card root
@@ -39,21 +39,16 @@
     - Partition Scheme : Minimal SPIFFS (Large APPS with OTA)
 
   Optional I2C RTC Module requirements:
-    - Set "#define RTC_PROFILE NTP_MENU" in settings.h
-    - Set your WIFI_SSID and WIFI_PASSWD in settings.h
-    - Export compiled binary as "NTPMenu.bin" && copy the file on the SD Card
-    - Set "#define RTC_PROFILE CHRONOMANIAC" in settings.h
-    - Export compiled binary as "BLEMenu.bin" && copy the file on the SD Card
     - Insert the SD Card
-    - Flash the ESP
+    - Set "#define RTC_PROFILE NTP_MENU" in Settings.h
+    - Set your WIFI_SSID and WIFI_PASSWD in Settings.h
+    - Flash the sketch, wait for time synch and SD Card replication (will save itself as "NTPMenu.bin")
+    - Set "#define RTC_PROFILE CHRONOMANIAC" in settings.h
+    - Flash the sketch, wait for SD Card replication (will save itself as "BLEMenu.bin")
 
 */
 
 #include "Settings.h"
-
-#ifndef CONFIG_SPIRAM_SUPPORT
-  #error "NO SPIRAM DEFINED"
-#endif
 
 
 void setup() {
@@ -65,11 +60,5 @@ void setup() {
 
 
 void loop() {
-   #if SCAN_MODE==SCAN_TASK_0 || SCAN_MODE==SCAN_TASK_1 || SCAN_MODE==SCAN_TASK
-     vTaskSuspend(NULL);
-   #else
-     #if RTC_PROFILE!=NTP_MENU
-       BLECollector.scanLoop();
-     #endif
-   #endif
+  vTaskSuspend(NULL);
 }

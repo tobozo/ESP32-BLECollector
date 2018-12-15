@@ -49,15 +49,7 @@ class ScrollableOutput {
     uint16_t w_tmp, h_tmp;
     int scrollPosY = -1;
     int scrollPosX = -1;
-    /*
-    int printf(char* fmt ...) { // printf for the poor :-)
-      char buf[1024]; // resulting string limited to 1024 chars
-      va_list args;
-      va_start (args, fmt );
-      vsnprintf(buf, 1024, fmt, args);
-      va_end (args);
-      return print(buf);
-    }*/
+
     int println() {
       return println(" ");
     }
@@ -66,25 +58,14 @@ class ScrollableOutput {
       sprintf(output, "%s\n", str);
       return print(output);
     }
-    /*
-    int println(String str = " ") { 
-      // force a space to increment scroll on the display
-      return print(str + "\n");
-    }*/
+
     int print(const char* str) {
       if(strcmp(str, " \n")!=0) {
         Serial.print( str );
       }
       return scroll(str);
     }
-    /*
-    int print(String str) {
-      if(str!=" \n") {
-        // avoid unnecessary scrolling in the serial console
-        Serial.print( str );
-      }
-      return scroll(str);
-    }*/
+
     void setupScrollArea(uint16_t TFA, uint16_t BFA, bool clear = false) {
       tft.setCursor(0, TFA);
       tft.setupScrollArea(TFA, BFA); // driver needs patching for that, see https://github.com/espressif/WROVER_KIT_LCD/pull/3/files
@@ -99,10 +80,7 @@ class ScrollableOutput {
       }
     }
   private:
-    /*
-    int scroll(String str) {
-      return scroll( str.c_str() );
-    }*/
+
     int scroll(const char* str) {
       isScrolling = true;
       if (scrollPosY == -1) {
@@ -126,7 +104,7 @@ class ScrollableOutput {
       isScrolling = false;
       return h_tmp;
     }
-    /* change this function if your TFT does not handle hardware scrolling */
+    // change this function if your TFT does not handle hardware scrolling
     int scroll_slow(int lines, int wait) {
       int yTemp = yStart;
       scrollPosY = -1;

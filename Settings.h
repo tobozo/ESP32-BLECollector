@@ -51,12 +51,14 @@
 byte SCAN_DURATION = 60; // seconds 
 #define MIN_SCAN_DURATION 10 // seconds min
 #define MAX_SCAN_DURATION 120 // seconds max
-#define MAX_DEVICES_PER_SCAN 32 // will adjust scan duration accordingly
-#define BLEDEVCACHE_SIZE 64 // use some heap to cache BLECards. Without psram, min = 5, max = 64, higher value = smaller uptime
-#define VENDORCACHE_SIZE 255 // use some heap to cache vendor query responses, min = 5, max = 256
-#define OUICACHE_SIZE 512 // use some heap to cache mac query responses, min = 16, max = 4096
+#define MAX_DEVICES_PER_SCAN 5 // will adjust scan duration accordingly
+#define BLEDEVCACHE_PSRAM_SIZE 1024 // use PSram to cache BLECards
+#define BLEDEVCACHE_HEAP_SIZE 32 // use some heap to cache BLECards. min = 5, max = 64, higher value = smaller uptime
+#define VENDORCACHE_SIZE 16 // use some heap to cache vendor query responses, min = 5, max = 256
+#define OUICACHE_SIZE 8 // use some heap to cache mac query responses, min = 16, max = 4096
 #define MAX_FIELD_LEN 32 // max chars returned by field
 #define MAC_LEN 17 // chars used by a mac address
+#define SHORT_MAC_LEN 7 // chars used by the oui part of a mac address
 #define USE_NVS // comment this out if you have NVS problems (or just do an erase_flash)
 
 #define NTP_MENU_NAME "NTPMenu"
@@ -64,14 +66,6 @@ byte SCAN_DURATION = 60; // seconds
 #define RTC_SDA 26 // pin number
 #define RTC_SCL 27 // pin number
 
-// scan modes
-#define SCAN_TASK_0 0 // scan as a task on core 0
-#define SCAN_TASK_1 1 // scan as a task on core 1
-#define SCAN_TASK   2
-#define SCAN_LOOP   3 // scan from loop()
-#define SCAN_MODE SCAN_TASK
-//#define SCAN_MODE SCAN_TASK_0
-//#define SCAN_MODE SCAN_TASK_1
 
 // don't edit anything below this
 #if RTC_PROFILE==HOBO // no NTP for Hobo mode
@@ -84,7 +78,6 @@ byte SCAN_DURATION = 60; // seconds
   // building 'NTPMenu.bin'
   #define BUILD_NTPMENU_BIN
   #define BUILD_TYPE NTP_MENU_NAME
-  #define SCAN_MODE SCAN_LOOP
   //#define WIFI_SSID "my-router-ssid"
   //#define WIFI_PASSWD "my-router-passwd"
 #else
@@ -133,16 +126,20 @@ WROVER_KIT_LCD tft;
 
 #include <Preferences.h>
 Preferences preferences;
+/*
 #define MAX_ITEMS_IN_PREFS BLEDEVCACHE_SIZE // hopefully this will not overflow the 100k of NVRAM so don't assign a too high value or it will fail
 #if MAX_ITEMS_IN_PREFS > BLEDEVCACHE_SIZE
   #error "MAX_ITEMS_IN_PREFS must be inferior or equal to BLEDEVCACHE_SIZE in Settings.h"
 #endif
-
+*/
 
 /*
  * Data sources:
- * - HEAP Cache : used as often as possible
- * - NVS Cache : used to freeze unsaved data, when heap is too low or DB oom occurs and reboot is required
+ * - HEAP Cache : used if no SPIRAM detected for BLEDEV, OUI and Vendors
+ * - SPIRAM BLEDEV Cache L1 : all scanned BLE Devices are copied there for further analysis
+ * - SPIRAM BLEDEV Cache L2 : all returning BLE Devices are copied there for hits counting
+ * - SPIRAM OUI Lookup : OUI/Mac Database is copied there
+ * - SPIRAM Vendor Lookup : Manufacturer names/id Database is copied there
  * - SQLite3 DB OUI : readonly, mainly a getter for vendor names by mac address 
  * - SQLite3 DB Vendor : readonly, mainly a getter for vendor names by manufacturer data
  * - SQLite3 DB blemacs : read/write, getter and setter for non anonymous BLE Advertised Devices

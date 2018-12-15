@@ -30,6 +30,8 @@
 */
 
 // icon positions for RTC/DB/BLE
+#define ICON_APP_X 124
+#define ICON_APP_Y 0
 #define ICON_RTC_X 92
 #define ICON_RTC_Y 7
 #define ICON_BLE_X 104
@@ -55,12 +57,28 @@ static uint32_t heapmap[HEAPMAP_BUFFLEN] = {0}; // stores the history of heapmap
 static uint16_t heapindex = 0; // index in the circular buffer
 static bool blinkit = false; // task blinker state
 static bool blinktoggler = true;
+static bool appIconVisible = false;
 static uint16_t blestateicon;
+static uint16_t lastblestateicon;
+static uint16_t dbIconColor;
+static uint16_t lastdbIconColor;
 static unsigned long blinknow = millis(); // task blinker start time
 static unsigned long scanTime = SCAN_DURATION * 1000; // task blinker duration
 static unsigned long blinkthen = blinknow + scanTime; // task blinker end time
 static unsigned long lastblink = millis(); // task blinker last blink
 static unsigned long lastprogress = millis(); // task blinker progress
+
+const char* sessDevicesCountTpl = " Seen: %4d ";
+const char* devicesCountTpl = " Last: %4d ";
+const char* newDevicesCountTpl = " Scans:%4d ";
+const char* heapTpl = " Heap: %6d";
+const char* entriesTpl = " Entries:%4d";
+const char *addressTpl = "  %s";
+const char* dbmTpl = "%d dBm    ";
+const char* ouiTpl = "      %s";
+const char* appearanceTpl = "  Appearance: %d";
+const char* manufTpl = "      %s";
+const char* nameTpl = "      %s";
 
 //#define SPACETABS "      "
 #define SPACE " "
@@ -152,7 +170,6 @@ class UIUtils {
       alignTextAt( "BLE Collector", 6, 4, WROVER_YELLOW, HEADER_BGCOLOR, ALIGN_FREE );
       if (resetReason == 12) { // SW Reset
         headerStats("Heap heap heap...");
-        delay(1000);
       } else {
         headerStats("Init UI");
       }
@@ -163,7 +180,7 @@ class UIUtils {
       footerStats();
 
       #if RTC_PROFILE!=NTP_MENU
-        xTaskCreate(taskHeapGraph, "taskHeapGraph", 1024, NULL, 0, NULL);
+        xTaskCreatePinnedToCore(taskHeapGraph, "taskHeapGraph", 2048, NULL, 2, NULL, 1);
       #endif
 
       if ( clearScreen ) {
@@ -175,12 +192,11 @@ class UIUtils {
     void update() {
       if ( freeheap + heap_tolerance < min_free_heap ) {
         headerStats("Out of heap..!");
-        Serial.print("Heap too low:"); Serial.println(freeheap);
+        Serial.printf("[FATAL] Heap too low: %d\n", freeheap);
         delay(1000);
         ESP.restart();
       }
-      //updateTimeString();
-      headerStats("");
+      headerStats();
       footerStats();
     }
 
@@ -204,45 +220,22 @@ class UIUtils {
     }
 
 
-    void alignTextAt(const char* text, uint16_t x, uint16_t y, int16_t color = WROVER_YELLOW, int16_t bgcolor = WROVER_BLACK, byte textAlign = ALIGN_FREE) {
-      tft.setTextColor(color, bgcolor);
-      tft.getTextBounds(text, x, y, &Out.x1_tmp, &Out.y1_tmp, &Out.w_tmp, &Out.h_tmp);
-      switch (textAlign) {
-        case ALIGN_FREE:
-          tft.setCursor(x, y);
-          break;
-        case ALIGN_LEFT:
-          tft.setCursor(0, y);
-          break;
-        case ALIGN_RIGHT:
-          tft.setCursor(Out.width - Out.w_tmp, y);
-          break;
-        case ALIGN_CENTER:
-          tft.setCursor(Out.width / 2 - Out.w_tmp / 2, y);
-          break;
-      }
-      tft.print(text);
-    }
-
-
-    void headerStats(const char *status) {
+    void headerStats(const char *status = "") {
       if (isScrolling) return;
       takeMuxSemaphore();
       int16_t posX = tft.getCursorX();
       int16_t posY = tft.getCursorY();
-      const char* heapTpl = " Heap: %6d";
+      int16_t statuspos = 0;
+
       char heapStr[16] = {'\0'};
       sprintf(heapStr, heapTpl, freeheap);
-      const char* entriesTpl = " Entries:%4d";
+
       char entriesStr[14] = {'\0'};
       sprintf(entriesStr, entriesTpl, entries);
-      
-      //String s_heap = " Heap: " + String(freeheap) + " ";
-      //String s_entries = " Entries: " + String(entries) + " ";
       alignTextAt( heapStr, 128, 4, WROVER_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
-      if ( !isEmpty( status ) /* && status[0] != '\0'*/) {
-        tft.fillRect(0, 18, Out.width, 8, HEADER_BGCOLOR); // clear whole message status area
+      if ( !isEmpty( status ) ) {
         byte alignoffset = 5;
+        tft.fillRect(0, 18, ICON_APP_X, 8, HEADER_BGCOLOR); // clear whole message status area
         if (strstr(status, "Inserted")) {
           tft.drawJpg(disk_jpeg, disk_jpeg_len, alignoffset, 18, 8, 8); // disk icon
           alignoffset +=10;
@@ -256,11 +249,16 @@ class UIUtils {
           
         }
         alignTextAt( status, alignoffset, 18, WROVER_YELLOW, HEADER_BGCOLOR, ALIGN_FREE );
+        statuspos = Out.x1_tmp + Out.w_tmp;
       }
       alignTextAt( entriesStr, 128, 18, WROVER_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
       tft.drawJpg(ram_jpeg, ram_jpeg_len, 156, 4, 8, 8); // heap icon
       tft.drawJpg(earth_jpeg, earth_jpeg_len, 156, 18, 8, 8); // entries icon
-      tft.drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, 124, 0, 28,  28); // app icon
+
+      if( !appIconVisible || statuspos > ICON_APP_X ) { // only draw if text has overlapped
+        tft.drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, ICON_APP_X, ICON_APP_Y, 28,  28); // app icon
+        appIconVisible = true;
+      }
       tft.setCursor(posX, posY);
       giveMuxSemaphore();
     }
@@ -276,20 +274,14 @@ class UIUtils {
       alignTextAt( UpTimeString, 95, 298, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
       alignTextAt("(c+) tobozo", 77, 308, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
 
-      const char* sessDevicesCountTpl = " Total:%4d ";// + String(sessDevicesCount) + " ";
-      const char* devicesCountTpl = " Last: %4d ";// + String(devicesCount) + " ";
-      const char* newDevicesCountTpl = " Scans:%4d ";// + String(newDevicesCount) + " ";
-      char sessDevicesCountStr[16] = {'\0'};// = " Total: " + String(sessDevicesCount) + " ";
-      char devicesCountStr[16] = {'\0'};// = " Last:  " + String(devicesCount) + " ";
-      char newDevicesCountStr[16] = {'\0'};// = " New:   " + String(newDevicesCount) + " ";
+      char sessDevicesCountStr[16] = {'\0'};
+      char devicesCountStr[16] = {'\0'};
+      char newDevicesCountStr[16] = {'\0'};
 
       sprintf( sessDevicesCountStr, sessDevicesCountTpl, sessDevicesCount );
       sprintf( devicesCountStr, devicesCountTpl, devicesCount );
       sprintf( newDevicesCountStr, newDevicesCountTpl, scan_rounds/*newDevicesCount*/ );
 
-      //String sessDevicesCountStr = " Total: " + String(sessDevicesCount) + " ";
-      //String devicesCountStr = " Last:  " + String(devicesCount) + " ";
-      //String newDevicesCountStr = " New:   " + String(newDevicesCount) + " ";
       alignTextAt( devicesCountStr, 0, 288, WROVER_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
       alignTextAt( sessDevicesCountStr, 0, 298, WROVER_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
       alignTextAt( newDevicesCountStr, 0, 308, WROVER_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
@@ -299,7 +291,7 @@ class UIUtils {
     }
 
 
-    void cacheStats(uint16_t BLEDevCacheUsed, uint16_t VendorCacheUsed, uint16_t OuiCacheUsed) {
+    void cacheStats() {
       takeMuxSemaphore();
       percentBox(164, 284, 10, 10, BLEDevCacheUsed, WROVER_CYAN, WROVER_BLACK);
       percentBox(164, 296, 10, 10, VendorCacheUsed, WROVER_ORANGE, WROVER_BLACK);
@@ -332,29 +324,6 @@ class UIUtils {
     }
 
 
-    static void dbStateIcon(int state) {
-      uint16_t color = WROVER_DARKGREY;
-      switch (state) {
-        case 2:/*DB OPEN FOR WRITING*/
-          color = WROVER_ORANGE;
-          break;
-        case 1/*DB_OPEN FOR READING*/:
-          color = WROVER_YELLOW;
-          break;
-        case 0/*DB CLOSED*/:
-          color = WROVER_DARKGREEN;
-          break;
-        case -1/*DB BROKEN*/:
-          color = WROVER_RED;
-          break;
-      }
-      delay(1);
-      takeMuxSemaphore();
-      tft.fillCircle(ICON_DB_X, ICON_DB_Y, ICON_R, color);
-      giveMuxSemaphore();
-    }
-
-
     static void timeStateIcon() {
       tft.drawJpg( clock_jpeg, clock_jpeg_len, ICON_RTC_X-ICON_R, ICON_RTC_Y-ICON_R+1, 8,  8);
       //tft.fillCircle(ICON_RTC_X, ICON_RTC_Y, ICON_R, WROVER_GREENYELLOW);
@@ -370,27 +339,83 @@ class UIUtils {
     }
 
 
-    static void bleStateIcon(uint16_t color, bool fill = true) {
-      takeMuxSemaphore();
-      blestateicon = color;
-      if (fill) {
-        tft.fillCircle(ICON_BLE_X, ICON_BLE_Y, ICON_R, color);
-      } else {
-        tft.fillCircle(ICON_BLE_X, ICON_BLE_Y, ICON_R - 1, color);
-      }
-      giveMuxSemaphore();
+    static void startBlink() { // runs one and detaches
+      tft.drawJpg( zzz_jpeg, zzz_jpeg_len, 5, 18, 8,  8 );
+      blinkit = true;
+      blinknow = millis();
+      scanTime = SCAN_DURATION * 1000;
+      blinkthen = blinknow + scanTime;
+      lastblink = millis();
+      lastprogress = millis();
     }
 
 
-    static void blinkIcon() {
+    static void stopBlink() {
+      // clear progress bar
+      blinkit = false;
+      delay(150); // give some time to the task to end
+    }
+
+    // sqlite state (read/write/inert) icon
+    static void DBStateIconSetColor(int state) {
+      switch (state) {
+        case 2:/*DB OPEN FOR WRITING*/ dbIconColor = WROVER_ORANGE;    break;
+        case 1:/*DB_OPEN FOR READING*/ dbIconColor = WROVER_YELLOW;    break;
+        case 0:/*DB CLOSED*/           dbIconColor = WROVER_DARKGREEN; break;
+        case -1:/*DB BROKEN*/          dbIconColor = WROVER_RED;       break;
+        default:/*DB INACTIVE*/        dbIconColor = WROVER_DARKGREY;  break;
+      }
+    }
+
+
+    static void BLEStateIconSetColor(uint16_t color) {
+      blestateicon = color;
+    }
+
+    static void PrintProgressBar(uint16_t width) {
+      if( width == Out.width ) {
+        tft.fillRect(0, PROGRESSBAR_Y, width, 2, WROVER_DARKGREY);
+      } else {
+        tft.fillRect(0, PROGRESSBAR_Y, width, 2, BLUETOOTH_COLOR);
+      }
+    }
+
+
+    static void PrintDBStateIcon() {
+      if( lastdbIconColor != dbIconColor ) {
+        //Serial.printf("[%s] blinked at %d\n", __func__, dbIconColor);
+        takeMuxSemaphore();
+        tft.fillCircle(ICON_DB_X, ICON_DB_Y, ICON_R, dbIconColor);
+        giveMuxSemaphore();
+        lastdbIconColor = dbIconColor;
+      }
+    }
+
+
+    static void PrintBLEStateIcon(bool fill = true) {
+      if( lastblestateicon != blestateicon ) {
+        takeMuxSemaphore();
+        lastblestateicon = blestateicon;
+        if (fill) {
+          tft.fillCircle(ICON_BLE_X, ICON_BLE_Y, ICON_R, blestateicon);
+        } else {
+          tft.fillCircle(ICON_BLE_X, ICON_BLE_Y, ICON_R - 1, blestateicon);
+        }
+        giveMuxSemaphore();
+      }
+    }
+
+
+    static void PrintBleScanWidgets() {
       if (!blinkit || blinknow >= blinkthen) {
         blinkit = false;
         if(blestateicon!=WROVER_DARKGREY) {
           takeMuxSemaphore();
-          tft.fillRect(0, PROGRESSBAR_Y, Out.width, 2, WROVER_DARKGREY);
+          //tft.fillRect(0, PROGRESSBAR_Y, Out.width, 2, WROVER_DARKGREY);
+          PrintProgressBar( Out.width );
           giveMuxSemaphore();
           // clear blue pin
-          bleStateIcon(WROVER_DARKGREY);
+          BLEStateIconSetColor(WROVER_DARKGREY);
         }
         return;
       }
@@ -399,9 +424,9 @@ class UIUtils {
       if (lastblink + random(222, 666) < blinknow) {
         blinktoggler = !blinktoggler;
         if (blinktoggler) {
-          bleStateIcon(BLUETOOTH_COLOR);
+          BLEStateIconSetColor(BLUETOOTH_COLOR);
         } else {
-          bleStateIcon(HEADER_BGCOLOR, false);
+          BLEStateIconSetColor(HEADER_BGCOLOR);
         }
         lastblink = blinknow;
       }
@@ -410,20 +435,18 @@ class UIUtils {
         unsigned long remaining = blinkthen - blinknow;
         int percent = 100 - ( ( remaining * 100 ) / scanTime );
         takeMuxSemaphore();
-        tft.fillRect(0, PROGRESSBAR_Y, (Out.width * percent) / 100, 2, BLUETOOTH_COLOR);
+        PrintProgressBar( (Out.width * percent) / 100 );
+        //tft.fillRect(0, PROGRESSBAR_Y, (Out.width * percent) / 100, 2, BLUETOOTH_COLOR);
         giveMuxSemaphore();
         lastprogress = blinknow;
       }
     }
 
-    /* spawn subtasks and leave */
+    // spawn subtasks and leave
     static void taskHeapGraph( void * pvParameters ) { // always running
-      #if SCAN_MODE==SCAN_TASK_0 || SCAN_MODE==SCAN_TASK_1 || SCAN_MODE==SCAN_TASK
-        mux = xSemaphoreCreateMutex();
-        //xTaskCreate(heapGraph, "HeapGraph", 2048, NULL, 0, NULL);
-      #endif
-      xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 2048, NULL, 2, NULL, 0); /* last = Task Core */
-      xTaskCreatePinnedToCore(clockSync, "clockSync", 2048, NULL, 1, NULL, 1); // RTC wants to run on core 1 or it fails
+      mux = xSemaphoreCreateMutex();
+      xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 4096, NULL, 4, NULL, 0); /* last = Task Core */
+      xTaskCreatePinnedToCore(clockSync, "clockSync", 2048, NULL, 4, NULL, 1); // RTC wants to run on core 1 or it fails
       vTaskDelete(NULL);
     }
 
@@ -432,7 +455,6 @@ class UIUtils {
       unsigned long lastClockTick = millis();
       while(1) {
         if(lastClockTick + 1000 > millis()) {
-          blinkIcon();
           vTaskDelay( 100 );
           continue;
         }
@@ -441,10 +463,9 @@ class UIUtils {
         //giveMuxSemaphore();
         lastClockTick = millis();
         vTaskDelay( 100 );
-        //Serial.printf("[%s]\n", hhmmssString);
       }
     }
-   
+
 
     static void heapGraph(void * parameter) {
       uint32_t lastfreeheap;
@@ -457,22 +478,24 @@ class UIUtils {
       while (1) {
 
         if (isScrolling) {
-          vTaskDelay( 30 );
-          //esp_task_wdt_reset();
+          vTaskDelay( 10 );
           continue;
         }
-
+        // do the blinky stuff
+        PrintDBStateIcon();
+        PrintBLEStateIcon();
+        PrintBleScanWidgets();
+        // see if heatmap needs updating
         if (lastfreeheap != freeheap) {
           heapmap[heapindex++] = freeheap;
           heapindex = heapindex % HEAPMAP_BUFFLEN;
           lastfreeheap = freeheap;
         } else {
-          //blinkIcon();
-          vTaskDelay( 30 );
-          //esp_task_wdt_reset();
+          vTaskDelay( 10 );
           continue;
         }
-
+        // render heatmap
+        takeMuxSemaphore();
         uint16_t GRAPH_COLOR = WROVER_WHITE;
         uint32_t graphMin = min_free_heap;
         uint32_t graphMax = graphMin;
@@ -490,13 +513,14 @@ class UIUtils {
             graphMax = heapval;
           }
         }
-        /* min anx max lines */
+
         if (graphMin == graphMax) {
-          //esp_task_wdt_reset();
+          // data isn't relevant enough to render
+          giveMuxSemaphore();
+          vTaskDelay( 100 );
           continue; 
         }
-        
-        toleranceline;// = map(toleranceheap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
+        // bounds, min and max lines
         minline = map(min_free_heap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
         if (toleranceheap > graphMax) {
           GRAPH_BG_COLOR = WROVER_ORANGE;
@@ -506,15 +530,12 @@ class UIUtils {
         } else {
           toleranceline = map(toleranceheap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
         }
-
-        
-
         // draw graph
         for (i = 0; i < GRAPH_LINE_WIDTH; i++) {
           int thisindex = int(heapindex - GRAPH_LINE_WIDTH + i + HEAPMAP_BUFFLEN) % HEAPMAP_BUFFLEN;
           uint32_t heapval = heapmap[thisindex];
           if ( heapval > toleranceheap ) {
-            // nominal
+            // nominal, all green
             GRAPH_COLOR = WROVER_GREEN;
             GRAPH_BG_COLOR = WROVER_DARKGREY;
           } else {
@@ -534,84 +555,41 @@ class UIUtils {
             }
           }
           // fill background
-          takeMuxSemaphore();
           tft.drawFastVLine( GRAPH_X + i, GRAPH_Y, GRAPH_LINE_HEIGHT, GRAPH_BG_COLOR );
           if ( heapval > 0 ) {
             uint32_t lineheight = map(heapval, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
             tft.drawFastVLine( GRAPH_X + i, GRAPH_Y + GRAPH_LINE_HEIGHT-lineheight, lineheight, GRAPH_COLOR );
           }
-          giveMuxSemaphore();
         }
-
-        takeMuxSemaphore();
         tft.drawFastHLine( GRAPH_X, GRAPH_Y + GRAPH_LINE_HEIGHT - toleranceline, GRAPH_LINE_WIDTH, WROVER_LIGHTGREY );
         tft.drawFastHLine( GRAPH_X, GRAPH_Y + GRAPH_LINE_HEIGHT - minline, GRAPH_LINE_WIDTH, WROVER_RED );
         giveMuxSemaphore();
-        vTaskDelay(30);
+        vTaskDelay( 100 );
       }
     }
 
 
-    static void startBlink() { // runs one and detaches
-      tft.drawJpg( zzz_jpeg, zzz_jpeg_len, 5, 18, 8,  8 );
-      blinkit = true;
-      blinknow = millis();
-      scanTime = SCAN_DURATION * 1000;
-      blinkthen = blinknow + scanTime;
-      lastblink = millis();
-      lastprogress = millis();
-    }
-
-    static void stopBlink() {
-      // clear progress bar
-      blinkit = false;
-      delay(150); // give some time to the task to end
-    }
-
-
-    static bool BLECardIsOnScreen( BlueToothDevice *_BLEDevCache, uint16_t _BLEDevCacheIndex ) {
-      bool onScreen = false;
-      if( isEmpty( _BLEDevCache[_BLEDevCacheIndex].address ) ) {
-        Serial.print("[BLECardIsOnScreen] Empty address !!");
-        return false;
-      }
-      //Serial.printf("[BLECardIsOnScreen] Checking if %s is onScreen\n", _BLEDevCache[_BLEDevCacheIndex].address);
-      for (uint16_t j = 0; j < BLECARD_MAC_CACHE_SIZE; j++) {
-        if ( strcmp(_BLEDevCache[_BLEDevCacheIndex].address, lastPrintedMac[j]) == 0) {
-          Serial.printf("[BLECardIsOnScreen] %s is onScreen!\n", _BLEDevCache[_BLEDevCacheIndex].address);
-          onScreen = true;
-          return true;
-        }
-        delay(1);
-      }
-      Serial.printf("[BLECardIsOnScreen] %s is NOT onScreen!\n", _BLEDevCache[_BLEDevCacheIndex].address);
-      return onScreen;
-    }
-
-
-    void printBLECard( BlueToothDevice *_BLEDevCache, uint16_t _BLEDevCacheIndex ) {
+    void printBLECard( BlueToothDevice *_BLEDevTmp ) {
       // don't render if already on screen
-      if( BLECardIsOnScreen( _BLEDevCache, _BLEDevCacheIndex ) ) {
-        Serial.printf("[printBLECard] Skipping rendering %s (already on screen)\n", _BLEDevCache[_BLEDevCacheIndex].address);
+      if( BLECardIsOnScreen( _BLEDevTmp->address ) ) {
+        Serial.printf("  [printBLECard] Skipping rendering %s (already on screen)\n", _BLEDevTmp->address);
         return;
       }
 
-      if ( isEmpty( _BLEDevCache[_BLEDevCacheIndex].address ) ) {
-        Serial.printf("[printBLECard] Cowardly refusing to render %d with an empty address\n", _BLEDevCacheIndex);
+      if ( isEmpty( _BLEDevTmp->address ) ) {
+        Serial.printf("  [printBLECard] Cowardly refusing to render %d with an empty address\n", 0);
         return;        
       }
 
-      Serial.printf("[printBLECard] Will render %s\n", _BLEDevCache[_BLEDevCacheIndex].address);
+      Serial.printf("  [printBLECard] Will render %s\n", _BLEDevTmp->address);
 
-      esp_task_wdt_reset();
       takeMuxSemaphore();
-      //Serial.printf("[printBLECard] #%d took semaphore\n", _BLEDevCacheIndex);
 
       uint16_t randomcolor = tft.color565( random(128, 255), random(128, 255), random(128, 255) );
       uint16_t pos = 0;
       uint16_t hop;
 
-      if( _BLEDevCache[_BLEDevCacheIndex].is_anonymous ) {
+      if( _BLEDevTmp->is_anonymous ) {
         BLECardTheme.setTheme( IN_CACHE_ANON );
       } else {
         BLECardTheme.setTheme( IN_CACHE_NOT_ANON );
@@ -622,28 +600,28 @@ class UIUtils {
       hop = Out.println( SPACE );
       pos += hop;
 
-      memcpy( lastPrintedMac[lastPrintedMacIndex++ % BLECARD_MAC_CACHE_SIZE], _BLEDevCache[_BLEDevCacheIndex].address, MAC_LEN+1 );
-      const char *addressTpl = "  %s";
+      memcpy( lastPrintedMac[lastPrintedMacIndex++ % BLECARD_MAC_CACHE_SIZE], _BLEDevTmp->address, MAC_LEN+1 );
+
       char addressStr[24] = {'\0'};
-      sprintf( addressStr, addressTpl, _BLEDevCache[_BLEDevCacheIndex].address );
+      sprintf( addressStr, addressTpl, _BLEDevTmp->address );
       hop = Out.println( addressStr );
       pos += hop;
       char dbmStr[16];
-      const char* dbmTpl = "%d dBm    ";
-      sprintf( dbmStr, dbmTpl, _BLEDevCache[_BLEDevCacheIndex].rssi );
+
+      sprintf( dbmStr, dbmTpl, _BLEDevTmp->rssi );
       alignTextAt( dbmStr, 0, Out.scrollPosY - hop, BLECardTheme.textColor, BLECardTheme.bgColor, ALIGN_RIGHT );
       tft.setCursor( 0, Out.scrollPosY );
-      drawRSSI( Out.width - 18, Out.scrollPosY - hop - 1, _BLEDevCache[_BLEDevCacheIndex].rssi, BLECardTheme.textColor );
-      if ( _BLEDevCache[_BLEDevCacheIndex].in_db ) { // 'already seen this' icon
+      drawRSSI( Out.width - 18, Out.scrollPosY - hop - 1, _BLEDevTmp->rssi, BLECardTheme.textColor );
+      if ( _BLEDevTmp->in_db ) { // 'already seen this' icon
         tft.drawJpg( update_jpeg, update_jpeg_len, 138, Out.scrollPosY - hop, 8,  8);
       } else { // 'just inserted this' icon
         tft.drawJpg( insert_jpeg, insert_jpeg_len, 138, Out.scrollPosY - hop, 8,  8);
       }
-      if ( !isEmpty( _BLEDevCache[_BLEDevCacheIndex].uuid ) ) { // 'has service UUID' Icon
+      if ( !isEmpty( _BLEDevTmp->uuid ) ) { // 'has service UUID' Icon
         tft.drawJpg( service_jpeg, service_jpeg_len, 128, Out.scrollPosY - hop, 8,  8);
       }
 
-      switch( _BLEDevCache[_BLEDevCacheIndex].hits ) {
+      switch( _BLEDevTmp->hits ) {
         case 0:
           tft.drawJpg( ghost_jpeg, ghost_jpeg_len, 118, Out.scrollPosY - hop, 8,  8);
         break;
@@ -655,62 +633,102 @@ class UIUtils {
         break;
       }
 
-      if ( !isEmpty( _BLEDevCache[_BLEDevCacheIndex].ouiname ) ) {
+      if ( !isEmpty( _BLEDevTmp->ouiname ) ) {
         pos += Out.println( SPACE );
-        const char* ouiTpl = "      %s";
         char ouiStr[38] = {'\0'};
-        sprintf( ouiStr, ouiTpl, _BLEDevCache[_BLEDevCacheIndex].ouiname );
+        sprintf( ouiStr, ouiTpl, _BLEDevTmp->ouiname );
         hop = Out.println( ouiStr );
         pos += hop;
         tft.drawJpg( nic16_jpeg, nic16_jpeg_len, 10, Out.scrollPosY - hop, 13, 8 );
       }
-      if ( _BLEDevCache[_BLEDevCacheIndex].appearance != 0 ) {
+      if ( _BLEDevTmp->appearance != 0 ) {
         pos += Out.println(SPACE);
-        const char* appearanceTpl = "  Appearance: %d";
         char appearanceStr[48];
-        sprintf( appearanceStr, appearanceTpl, _BLEDevCache[_BLEDevCacheIndex].appearance );
+        sprintf( appearanceStr, appearanceTpl, _BLEDevTmp->appearance );
         hop = Out.println( appearanceStr );
         pos += hop;
       }
-      if ( !isEmpty( _BLEDevCache[_BLEDevCacheIndex].name ) ) {
-        const char* nameTpl = "      %s";
-        char nameStr[38] = {'\0'};
-        sprintf(nameStr, nameTpl, _BLEDevCache[_BLEDevCacheIndex].name);
+      if ( !isEmpty( _BLEDevTmp->manufname ) ) {
         pos += Out.println(SPACE);
-        hop = Out.println( nameStr );
-        pos += hop;
-        tft.drawJpg( name_jpeg, name_jpeg_len, 12, Out.scrollPosY - hop, 7,  8);
-      }
-      if ( !isEmpty( _BLEDevCache[_BLEDevCacheIndex].manufname ) ) {
-        pos += Out.println(SPACE);
-        const char* manufTpl = "      %s";
         char manufStr[38] = {'\0'};
-        sprintf( manufStr, manufTpl, _BLEDevCache[_BLEDevCacheIndex].manufname );
+        sprintf( manufStr, manufTpl, _BLEDevTmp->manufname );
         hop = Out.println( manufStr );
         pos += hop;
-        if ( strstr( _BLEDevCache[_BLEDevCacheIndex].manufname, "Apple" ) ) {
+        if ( strstr( _BLEDevTmp->manufname, "Apple" ) ) {
           tft.drawJpg( apple16_jpeg, apple16_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
-        } else if ( strstr( _BLEDevCache[_BLEDevCacheIndex].manufname, "IBM" ) ) {
+        } else if ( strstr( _BLEDevTmp->manufname, "IBM" ) ) {
           tft.drawJpg( ibm8_jpg, ibm8_jpg_len, 10, Out.scrollPosY - hop, 20,  8);
-        } else if ( strstr (_BLEDevCache[_BLEDevCacheIndex].manufname, "Microsoft" ) ) {
+        } else if ( strstr (_BLEDevTmp->manufname, "Microsoft" ) ) {
           tft.drawJpg( crosoft_jpeg, crosoft_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
-        } else if ( strstr( _BLEDevCache[_BLEDevCacheIndex].manufname, "Bose" ) ) {
+        } else if ( strstr( _BLEDevTmp->manufname, "Bose" ) ) {
           tft.drawJpg( speaker_icon_jpg, speaker_icon_jpg_len, 12, Out.scrollPosY - hop, 6,  8 );
         } else {
           tft.drawJpg( generic_jpeg, generic_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
         }
       }
+      if ( !isEmpty( _BLEDevTmp->name ) ) {
+        char nameStr[38] = {'\0'};
+        sprintf(nameStr, nameTpl, _BLEDevTmp->name);
+        pos += Out.println(SPACE);
+        hop = Out.println( nameStr );
+        pos += hop;
+        tft.drawJpg( name_jpeg, name_jpeg_len, 12, Out.scrollPosY - hop, 7,  8);
+      }
       hop = Out.println( SPACE) ;
       pos += hop;
       drawRoundRect( pos, 4, BLECardTheme.borderColor );
       giveMuxSemaphore();
-      //Serial.printf("[printBLECard] #%d gave semaphore back\n", _BLEDevCacheIndex);
+    }
+
+
+    static bool BLECardIsOnScreen( const char* address ) {
+      //Serial.printf("[BLECardIsOnScreen] Checking if %s is onScreen\n", CacheItem[CacheItemIndex].address);
+      bool onScreen = false;
+      for (uint16_t j = 0; j < BLECARD_MAC_CACHE_SIZE; j++) {
+        if ( strcmp( address, lastPrintedMac[j] ) == 0) {
+          Serial.printf("  [BLECardIsOnScreen] %s is onScreen\n", address);
+          onScreen = true;
+          return true;
+        }
+        delay(1);
+      }
+      Serial.printf("  [BLECardIsOnScreen] %s is NOT onScreen\n", address);
+      return onScreen;      
+    }
+
+
+    static bool BLECardIsOnScreen( BlueToothDevice *CacheItem, uint16_t CacheItemIndex ) {
+      if( isEmpty( CacheItem[CacheItemIndex].address ) ) {
+        Serial.print("[BLECardIsOnScreen] Empty address !!");
+        return false;
+      }
+      return BLECardIsOnScreen( CacheItem[CacheItemIndex].address );
     }
 
 
   private:
 
-    /* draw rounded corners boxes over the scroll limit */
+    void alignTextAt(const char* text, uint16_t x, uint16_t y, int16_t color = WROVER_YELLOW, int16_t bgcolor = WROVER_BLACK, byte textAlign = ALIGN_FREE) {
+      tft.setTextColor(color, bgcolor);
+      tft.getTextBounds(text, x, y, &Out.x1_tmp, &Out.y1_tmp, &Out.w_tmp, &Out.h_tmp);
+      switch (textAlign) {
+        case ALIGN_FREE:
+          tft.setCursor(x, y);
+          break;
+        case ALIGN_LEFT:
+          tft.setCursor(0, y);
+          break;
+        case ALIGN_RIGHT:
+          tft.setCursor(Out.width - Out.w_tmp, y);
+          break;
+        case ALIGN_CENTER:
+          tft.setCursor(Out.width / 2 - Out.w_tmp / 2, y);
+          break;
+      }
+      tft.print(text);
+    }
+
+    // draw rounded corners boxes over the scroll limit
     void drawRoundRect(uint16_t pos, uint16_t radius, uint16_t color) {
       if (Out.scrollPosY - pos >= Out.scrollTopFixedArea) {
         // no scroll loop point overlap, just render the box
