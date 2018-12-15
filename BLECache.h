@@ -41,7 +41,6 @@ void unset( char* str) {
 }
 
 
-
 #define BLECARD_MAC_CACHE_SIZE 5
 //#define BLECARD_MAC_CACHE_SIZE 5 // "virtual" BLE Card circular cache size, keeps mac addresses to avoid duplicate rendering
 static char lastPrintedMac[BLECARD_MAC_CACHE_SIZE][MAC_LEN+1]; // BLECard circular screen cache
@@ -76,190 +75,107 @@ struct BlueToothDevice {
   //String spower = "";
   //time_t created_at;
   //time_t updated_at;
-  /*
-  void init( bool hasPsram=false ) {
-    in_db      = false;
-    is_anonymous = true;
-    hits       = 0;
-    appearance = 0;
-    rssi       = 0;
-    manufid    = -1;
-    if( hasPsram ) {    
-      name      = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
-      address   = (char*)ps_calloc(MAC_LEN+1, sizeof(char));
-      ouiname   = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
-      manufname = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
-      uuid      = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
-    } else {
-      name      = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
-      address   = (char*)calloc(MAC_LEN+1, sizeof(char));
-      ouiname   = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
-      manufname = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
-      uuid      = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
-    }
-  }
-  void reset() {
-    in_db      = false;
-    is_anonymous = true;
-    hits       = 0;
-    appearance = 0;
-    rssi       = 0;
-    manufid    = -1;
-    memset( name,      0, MAX_FIELD_LEN+1 );
-    memset( address,   0, MAC_LEN+1 );
-    memset( ouiname,   0, MAX_FIELD_LEN+1 );
-    memset( manufname, 0, MAX_FIELD_LEN+1 );
-    memset( uuid,      0, MAX_FIELD_LEN+1 );
-  }
-  void set(const char* prop, bool val) {
-    if(strcmp(prop, "in_db")==0) { in_db = val;}
-  }
-  void set(const char* prop, const int val) {
-    if(!prop) return;
-    if     (strcmp(prop, "appearance")==0) { appearance = val;}
-    else if(strcmp(prop, "rssi")==0)       { rssi = val;} // coming from thaw()
-    else if(strcmp(prop, "manufid")==0)    { manufid = val;}
-  }
-  void set(const char* prop, const char* val) {
-    if(!prop) return;
-    if     (strcmp(prop, "name")==0)       { copy( name, val, MAX_FIELD_LEN ); }
-    else if(strcmp(prop, "address")==0)    { copy( address, val, MAC_LEN ); }
-    else if(strcmp(prop, "ouiname")==0)    { copy( ouiname, val, MAX_FIELD_LEN ); }
-    else if(strcmp(prop, "manufname")==0)  { copy( manufname, val, MAX_FIELD_LEN ); }
-    else if(strcmp(prop, "uuid")==0)       { copy( uuid, val, MAX_FIELD_LEN ); }
-    else if(strcmp(prop, "rssi")==0)       { rssi = atoi(val);} // coming from BLE
-  }
-  void copy(char* dest, const char* source, byte maxlen) {
-    byte sourcelen = strlen(source);
-    if( sourcelen < maxlen ) {
-      maxlen = sourcelen;
-    }
-    memcpy( dest, source, maxlen );
-    dest[maxlen] = '\0'; // null terminate
-  }
-  void store( BLEAdvertisedDevice advertisedDevice ) {
-    reset();// avoid mixing new and old data
-    set("address", advertisedDevice.getAddress().toString().c_str());
-    set("rssi", advertisedDevice.getRSSI());
-    set("ouiname", "[unpopulated]");
-    if ( advertisedDevice.haveName() ) {
-      set("name", advertisedDevice.getName().c_str());
-    } else {
-      set("name", '\0');
-    }
-    if ( advertisedDevice.haveAppearance() ) {
-      set("appearance", advertisedDevice.getAppearance());
-    } else {
-      set("appearance", 0);
-    }
-    if ( advertisedDevice.haveManufacturerData() ) {
-      uint8_t* mdp = (uint8_t*)advertisedDevice.getManufacturerData().data();
-      //std::string md = advertisedDevice.getManufacturerData();
-      //char *pHex = BLEUtils::buildHexData(nullptr, mdp, md.length());
-      uint8_t vlsb = mdp[0];
-      uint8_t vmsb = mdp[1];
-      uint16_t vint = vmsb * 256 + vlsb;
-      set("manufname", "[unpopulated]");
-      set("manufid", vint);
-    } else {
-      set("manufname", '\0');
-      set("manufid", -1);
-    }
-    if ( advertisedDevice.haveServiceUUID() ) {
-      set("uuid", advertisedDevice.getServiceUUID().toString().c_str());
-    } else {
-      set("uuid", '\0');
-    }
-  }*/
 };
 
-#ifndef BLEDEVCACHE_SIZE // override this from Settings.h
-#define BLEDEVCACHE_SIZE 10
-#endif
-static BlueToothDevice BLEDevCache[BLEDEVCACHE_SIZE]; // will store database results here 
-static BlueToothDevice BLEDevTmpCache[BLEDEVCACHE_SIZE]; // will store temporary database results here 
+
 static uint16_t BLEDevCacheIndex = 0; // index in the circular buffer
 static uint16_t BLEDevTmpCacheIndex = 0; // index in the circular buffer
+
+BlueToothDevice** BLEDevCache = NULL; // store returning devices here
+BlueToothDevice** BLEDevTmpCache = NULL; // store scanned devices before analysis
+BlueToothDevice*  BLEDevTmp = NULL; // temporary placeholder used to render BLE Card, explicitly outside SPIram
+
+static int BLEDEVCACHE_SIZE; // will be set after PSRam detection
+
+static void copy(char* dest, const char* source, byte maxlen) {
+  byte sourcelen = strlen(source);
+  if( sourcelen < maxlen ) {
+    maxlen = sourcelen;
+  }
+  memcpy( dest, source, maxlen );
+  if( maxlen > 0 && dest[maxlen-1]!='\0' ) {
+    dest[maxlen] = '\0'; // append null terminate
+  }
+}
 
 
 class BlueToothDeviceHelper {
   public:
-    static void init( BlueToothDevice &_BLEDevCache, bool hasPsram=false ) {
-      _BLEDevCache.in_db      = false;
-      _BLEDevCache.is_anonymous = true;
-      _BLEDevCache.hits       = 0;
-      _BLEDevCache.appearance = 0;
-      _BLEDevCache.rssi       = 0;
-      _BLEDevCache.manufid    = -1;
+
+    static void init( BlueToothDevice *CacheItem, bool hasPsram=true ) {
+      CacheItem->in_db      = false;
+      CacheItem->is_anonymous = true;
+      CacheItem->hits       = 0;
+      CacheItem->appearance = 0;
+      CacheItem->rssi       = 0;
+      CacheItem->manufid    = -1;
       if( hasPsram ) {    
-        _BLEDevCache.name      = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
-        _BLEDevCache.address   = (char*)ps_calloc(MAC_LEN+1, sizeof(char));
-        _BLEDevCache.ouiname   = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
-        _BLEDevCache.manufname = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
-        _BLEDevCache.uuid      = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
+        CacheItem->name      = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
+        CacheItem->address   = (char*)ps_calloc(MAC_LEN+1, sizeof(char));
+        CacheItem->ouiname   = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
+        CacheItem->manufname = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
+        CacheItem->uuid      = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
       } else {
-        _BLEDevCache.name      = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
-        _BLEDevCache.address   = (char*)calloc(MAC_LEN+1, sizeof(char));
-        _BLEDevCache.ouiname   = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
-        _BLEDevCache.manufname = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
-        _BLEDevCache.uuid      = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
+        CacheItem->name      = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
+        CacheItem->address   = (char*)calloc(MAC_LEN+1, sizeof(char));
+        CacheItem->ouiname   = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
+        CacheItem->manufname = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
+        CacheItem->uuid      = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
       }
     }
-    static void reset( BlueToothDevice &_BLEDevCache ) {
-      _BLEDevCache.in_db      = false;
-      _BLEDevCache.is_anonymous = true;
-      _BLEDevCache.hits       = 0;
-      _BLEDevCache.appearance = 0;
-      _BLEDevCache.rssi       = 0;
-      _BLEDevCache.manufid    = -1;
-      memset( _BLEDevCache.name,      0, MAX_FIELD_LEN+1 );
-      memset( _BLEDevCache.address,   0, MAC_LEN+1 );
-      memset( _BLEDevCache.ouiname,   0, MAX_FIELD_LEN+1 );
-      memset( _BLEDevCache.manufname, 0, MAX_FIELD_LEN+1 );
-      memset( _BLEDevCache.uuid,      0, MAX_FIELD_LEN+1 );
+
+    static void reset( BlueToothDevice *CacheItem ) {
+      CacheItem->in_db      = false;
+      CacheItem->is_anonymous = true;
+      CacheItem->hits       = 0;
+      CacheItem->appearance = 0;
+      CacheItem->rssi       = 0;
+      CacheItem->manufid    = -1;
+      memset( CacheItem->name,      0, MAX_FIELD_LEN+1 );
+      memset( CacheItem->address,   0, MAC_LEN+1 );
+      memset( CacheItem->ouiname,   0, MAX_FIELD_LEN+1 );
+      memset( CacheItem->manufname, 0, MAX_FIELD_LEN+1 );
+      memset( CacheItem->uuid,      0, MAX_FIELD_LEN+1 );
     }
-    static void set(BlueToothDevice &_BLEDevCache, const char* prop, bool val) {
-      if(strcmp(prop, "in_db")==0) { _BLEDevCache.in_db = val;}
+
+    static void set(BlueToothDevice *CacheItem, const char* prop, bool val) {
+      if(strcmp(prop, "in_db")==0) { CacheItem->in_db = val;}
     }
-    static void set(BlueToothDevice &_BLEDevCache, const char* prop, const int val) {
+
+    static void set(BlueToothDevice *CacheItem, const char* prop, const int val) {
       if(!prop) return;
-      if     (strcmp(prop, "appearance")==0) { _BLEDevCache.appearance = val;}
-      else if(strcmp(prop, "rssi")==0)       { _BLEDevCache.rssi = val;} // coming from thaw()
-      else if(strcmp(prop, "manufid")==0)    { _BLEDevCache.manufid = val;}
+      if     (strcmp(prop, "appearance")==0) { CacheItem->appearance = val;}
+      else if(strcmp(prop, "rssi")==0)       { CacheItem->rssi = val;} // coming from thaw()
+      else if(strcmp(prop, "manufid")==0)    { CacheItem->manufid = val;}
     }
-    static void set(BlueToothDevice &_BLEDevCache, const char* prop, const char* val) {
+
+    static void set(BlueToothDevice *CacheItem, const char* prop, const char* val) {
       if(!prop) return;
-      if     (strcmp(prop, "name")==0)       { copy( _BLEDevCache.name, val, MAX_FIELD_LEN ); }
-      else if(strcmp(prop, "address")==0)    { copy( _BLEDevCache.address, val, MAC_LEN ); }
-      else if(strcmp(prop, "ouiname")==0)    { copy( _BLEDevCache.ouiname, val, MAX_FIELD_LEN ); }
-      else if(strcmp(prop, "manufname")==0)  { copy( _BLEDevCache.manufname, val, MAX_FIELD_LEN ); }
-      else if(strcmp(prop, "uuid")==0)       { copy( _BLEDevCache.uuid, val, MAX_FIELD_LEN ); }
-      else if(strcmp(prop, "rssi")==0)       { _BLEDevCache.rssi = atoi(val);} // coming from BLE
+      if     (strcmp(prop, "name")==0)       { copy( CacheItem->name, val, MAX_FIELD_LEN ); }
+      else if(strcmp(prop, "address")==0)    { copy( CacheItem->address, val, MAC_LEN ); }
+      else if(strcmp(prop, "ouiname")==0)    { copy( CacheItem->ouiname, val, MAX_FIELD_LEN ); }
+      else if(strcmp(prop, "manufname")==0)  { copy( CacheItem->manufname, val, MAX_FIELD_LEN ); }
+      else if(strcmp(prop, "uuid")==0)       { copy( CacheItem->uuid, val, MAX_FIELD_LEN ); }
+      else if(strcmp(prop, "rssi")==0)       { CacheItem->rssi = atoi(val);} // coming from BLE
     }
-    static void copy(char* dest, const char* source, byte maxlen) {
-      byte sourcelen = strlen(source);
-      if( sourcelen < maxlen ) {
-        maxlen = sourcelen;
-      }
-      memcpy( dest, source, maxlen );
-      if( maxlen > 0 && dest[maxlen-1]!='\0' ) {
-        dest[maxlen] = '\0'; // append null terminate
-      }
-    }
-    static void store( BlueToothDevice &_BLEDevCache, BLEAdvertisedDevice advertisedDevice ) {
-      reset(_BLEDevCache);// avoid mixing new and old data
-      set(_BLEDevCache, "address", advertisedDevice.getAddress().toString().c_str());
-      set(_BLEDevCache, "rssi", advertisedDevice.getRSSI());
-      set(_BLEDevCache, "ouiname", "[unpopulated]");
+
+    // stores in cache a given advertised device
+    static void store( BlueToothDevice *CacheItem, BLEAdvertisedDevice advertisedDevice ) {
+      reset(CacheItem);// avoid mixing new and old data
+      //Serial.printf("[%s] OUI Lookup for %s returned : %s\n", __func__, advertisedDevice.getAddress().toString().c_str(), ouiStrDirty.c_str() );
+      set(CacheItem, "address", advertisedDevice.getAddress().toString().c_str());
+      set(CacheItem, "rssi", advertisedDevice.getRSSI());
+      set(CacheItem, "ouiname", "[unpopulated]");
+
       if ( advertisedDevice.haveName() ) {
-        set(_BLEDevCache, "name", advertisedDevice.getName().c_str());
+        set(CacheItem, "name", advertisedDevice.getName().c_str());
       } else {
-        set(_BLEDevCache, "name", '\0');
+        set(CacheItem, "name", '\0');
       }
       if ( advertisedDevice.haveAppearance() ) {
-        set(_BLEDevCache, "appearance", advertisedDevice.getAppearance());
+        set(CacheItem, "appearance", advertisedDevice.getAppearance());
       } else {
-        set(_BLEDevCache, "appearance", 0);
+        set(CacheItem, "appearance", 0);
       }
       if ( advertisedDevice.haveManufacturerData() ) {
         uint8_t* mdp = (uint8_t*)advertisedDevice.getManufacturerData().data();
@@ -268,44 +184,59 @@ class BlueToothDeviceHelper {
         uint8_t vlsb = mdp[0];
         uint8_t vmsb = mdp[1];
         uint16_t vint = vmsb * 256 + vlsb;
-        set(_BLEDevCache, "manufname", "[unpopulated]");
-        set(_BLEDevCache, "manufid", vint);
+        set(CacheItem, "manufname", "[unpopulated]");
+        set(CacheItem, "manufid", vint);
       } else {
-        set(_BLEDevCache, "manufname", '\0');
-        set(_BLEDevCache, "manufid", -1);
+        set(CacheItem, "manufname", '\0');
+        set(CacheItem, "manufid", -1);
       }
       if ( advertisedDevice.haveServiceUUID() ) {
-        set(_BLEDevCache, "uuid", advertisedDevice.getServiceUUID().toString().c_str());
+        set(CacheItem, "uuid", advertisedDevice.getServiceUUID().toString().c_str());
       } else {
-        set(_BLEDevCache, "uuid", '\0');
+        set(CacheItem, "uuid", '\0');
       }
     }
+
+    // determines whether a device is worth saving or not
+    static bool isAnonymous( BlueToothDevice *CacheItem ) {
+      if( CacheItem->uuid && strlen( CacheItem->uuid ) >= 0 ) return false; // uuid's are interesting, let's collect
+      if( CacheItem->name && strlen( CacheItem->name ) > 0 ) return false; // has name, let's collect
+      if( CacheItem->appearance !=0 ) return false; // has icon, let's collect
+      if( strcmp( CacheItem->ouiname, "[unpopulated]" ) == 0 ) return false; // don't know yet, let's keep
+      if( strcmp( CacheItem->manufname, "[unpopulated]" ) == 0 ) return false; // don't know yet, let's keep
+      if( strcmp( CacheItem->ouiname, "[private]" ) == 0 || isEmpty( CacheItem->ouiname ) ) return true; // don't care
+      if( strcmp( CacheItem->manufname, "[unknown]" ) == 0 || isEmpty( CacheItem->manufname ) ) return true; // don't care
+      if( !isEmpty( CacheItem->manufname ) && !isEmpty( CacheItem->ouiname ) ) return false; // anonymous but qualified device, let's collect
+      return true;
+    }
+
+    static uint16_t getNextCacheIndex(BlueToothDevice **CacheItem, uint16_t CacheItemIndex) {
+      uint16_t minCacheValue = 65535;
+      uint16_t maxCacheValue = 0;
+      uint16_t defaultIndex = CacheItemIndex;
+      defaultIndex++;
+      defaultIndex = defaultIndex%BLEDEVCACHE_SIZE;
+      uint16_t outIndex = defaultIndex;
+      // find first index with least hits
+      for(int i=defaultIndex;i<defaultIndex+BLEDEVCACHE_SIZE;i++) {
+        uint16_t tempIndex = i%BLEDEVCACHE_SIZE;
+        if( isEmpty( CacheItem[tempIndex]->address ) ) {
+          return tempIndex;
+        }
+        if( CacheItem[tempIndex]->hits > maxCacheValue ) {
+          maxCacheValue = CacheItem[tempIndex]->hits;
+        }
+        if( CacheItem[tempIndex]->hits < minCacheValue ) {
+          minCacheValue = CacheItem[tempIndex]->hits;
+          outIndex = tempIndex;
+        }
+        delay(1);
+      }
+      return outIndex;
+    }
+
+
 };
 
 
 BlueToothDeviceHelper BLEDevHelper;
-
-static uint16_t getNextBLEDevCacheIndex(BlueToothDevice *_BLEDevCache, uint16_t _BLEDevCacheIndex) {
-  uint16_t minCacheValue = 65535;
-  uint16_t maxCacheValue = 0;
-  uint16_t defaultIndex = _BLEDevCacheIndex;
-  defaultIndex++;
-  defaultIndex = defaultIndex%BLEDEVCACHE_SIZE;
-  uint16_t outIndex = defaultIndex;
-  // find first index with least hits
-  for(int i=defaultIndex;i<defaultIndex+BLEDEVCACHE_SIZE;i++) {
-    uint16_t tempIndex = i%BLEDEVCACHE_SIZE;
-    if( isEmpty( _BLEDevCache[tempIndex].address ) ) {
-      return tempIndex;
-    }
-    if( _BLEDevCache[tempIndex].hits > maxCacheValue ) {
-      maxCacheValue = _BLEDevCache[tempIndex].hits;
-    }
-    if( _BLEDevCache[tempIndex].hits < minCacheValue ) {
-      minCacheValue = _BLEDevCache[tempIndex].hits;
-      outIndex = tempIndex;
-    }
-    delay(1);
-  }
-  return outIndex;
-}
