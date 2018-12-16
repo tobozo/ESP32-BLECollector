@@ -43,7 +43,7 @@
 #define NTP_MENU 4 // use this to produce the NTPMenu.bin, only if you have a RTC module !!
 
 // edit this value to fit your mode
-#define RTC_PROFILE ROGUE
+#define RTC_PROFILE CHRONOMANIAC
 //#define RTC_PROFILE NTP_MENU // to build the NTPMenu.bin (will perform the NTP Sync)
 //#define RTC_PROFILE CHRONOMANIAC // to build the BLEMenu.bin with RTC support and NTP Sync
 //#define RTC_PROFILE ROGUE // to build the BLEMenu.bin with RTC support, but *without* NTP sync

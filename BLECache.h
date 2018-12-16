@@ -99,6 +99,8 @@ static void copy(char* dest, const char* source, byte maxlen) {
 }
 
 
+#if RTC_PROFILE != NTP_MENU
+
 class BlueToothDeviceHelper {
   public:
 
@@ -240,3 +242,5 @@ class BlueToothDeviceHelper {
 
 
 BlueToothDeviceHelper BLEDevHelper;
+
+#endif 

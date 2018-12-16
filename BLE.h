@@ -106,7 +106,12 @@ class FoundDeviceCallback: public BLEAdvertisedDeviceCallbacks {
   }
 };
 
+static bool scanTaskRunning = false;
+static bool scanTaskStopped = true;
 
+static char* serialBuffer = NULL;
+static char* tempBuffer = NULL;
+#define SERIAL_BUFFER_SIZE 32
 
 class BLEScanUtils {
 
@@ -117,11 +122,91 @@ class BLEScanUtils {
       SDSetup(); // health check before mounting DB
       DB.init(); // mount DB
       WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
-      xTaskCreatePinnedToCore(scanTask, "scanTask", 10000, NULL, 5, NULL, 1); /* last = Task Core */
+      startScanTask();
+      startSerialTask();
+    }
+
+    static void startScanTask() {
+      xTaskCreatePinnedToCore(scanTask, "scanTask", 10000, NULL, 5, NULL, 1); /* last = Task Core */      
+    }
+    static void stopScanTask() {
+      scanTaskRunning = false;
+      BLEDevice::getScan()->stop();
+    }
+
+    static void startSerialTask() {
+      serialBuffer = (char*)calloc( SERIAL_BUFFER_SIZE, sizeof(char) );
+      tempBuffer   = (char*)calloc( SERIAL_BUFFER_SIZE, sizeof(char) );
+      xTaskCreatePinnedToCore(serialTask, "serialTask", 2048, NULL, 0, NULL, 0); /* last = Task Core */      
+    }
+
+
+    static void serialTask( void * parameter ) {
+      static byte idx = 0;
+      char eol = '\n';
+      char c;
+      Serial.printf("[%s] Listening to Serial...\n", __func__ );
+      while( 1 ) {
+        while (Serial.available() > 0) {
+          c = Serial.read();
+          if (c != eol) {
+            serialBuffer[idx] = c;
+            idx++;
+            if (idx >= SERIAL_BUFFER_SIZE) {
+              idx = SERIAL_BUFFER_SIZE - 1;
+            }
+          } else {
+            serialBuffer[idx] = '\0'; // null terminate
+            memcpy(tempBuffer, serialBuffer, idx+1);
+            if( !serialParseBuffer() ) {
+              Serial.printf("[%s] Serial data received and ignored: %s / %s\n", __func__, serialBuffer, tempBuffer );
+            }
+            idx = 0;            
+          }
+          delay(1);
+        }
+        delay(1);
+      }
+    }
+
+    static bool serialParseBuffer() {
+      if(strstr(tempBuffer, "stopScan")) {
+        if( scanTaskRunning ) {
+          Serial.printf("[%s] Stopping scan\n", __func__ );
+          stopScanTask();
+          while(!scanTaskStopped) {
+            Serial.printf("[%s] Waiting for scan to stop...\n", __func__);
+            vTaskDelay(1000);
+          }
+          Serial.printf("[%s] Scan stopped...\n", __func__);
+          return true;
+        }
+      } else if(strstr(tempBuffer, "startScan")) {
+        if( !scanTaskRunning ) {
+          Serial.printf("[%s] Starting scan\n", __func__ );
+          startScanTask();
+          while(scanTaskStopped) {
+            Serial.printf("[%s] Waiting for scan to start...\n", __func__);
+            vTaskDelay(1000);
+          }
+          Serial.printf("[%s] Scan started...\n", __func__);
+          return true;
+        }
+      #if RTC_PROFILE == CHRONOMANIAC  // chronomaniac mode
+      } else if(strstr(tempBuffer, "update")) {
+        resetTimeActivity( SOURCE_COMPILER ); // will eventually result in loading NTPMenu.bin
+        ESP.restart();
+      #endif
+      } else if(strstr(tempBuffer, "restart")) {
+        ESP.restart();
+      }
+      return false;
     }
 
 
     static void scanTask( void * parameter ) {
+      scanTaskRunning = true;
+      scanTaskStopped = false;
       BLEDevice::init("");
       pBLEScan = BLEDevice::getScan(); //create new scan
       auto pDeviceCallback = new FoundDeviceCallback(); // collect/store BLE data
@@ -130,7 +215,7 @@ class BLEScanUtils {
       pBLEScan->setInterval(0x50); // 0x50
       pBLEScan->setWindow(0x30); // 0x30
       byte onAfterScanStep = 0;
-      while( 1 ) {
+      while( scanTaskRunning ) {
         if( onAfterScanSteps( onAfterScanStep, scan_cursor ) ) continue;
         Serial.print("BeforeScan::");dumpStats();
         onBeforeScan();
@@ -141,6 +226,7 @@ class BLEScanUtils {
         Serial.print("AfterScan:::");dumpStats();
         scan_rounds++;
       }
+      scanTaskStopped = true;
       vTaskDelete( NULL );
     }
 

@@ -41,15 +41,6 @@ static char LastSyncTimeString[32] = "YYYY-MM-DD HH:MM:SS";
   //static DateTime nowDateTime;
   static DateTime lastSyncDateTime;
 
-  void logTimeActivity(byte source) {
-    preferences.begin("BLEClock", false);
-    preferences.clear();
-    DateTime epoch = RTC.now();
-    preferences.putUInt("epoch", epoch.unixtime());
-    preferences.putUChar("source", source);
-    preferences.end();
-  }
-
   enum OTAPartitionNames {
     NO_PARTITION = -1,
     CURRENT_PARTITION = 0,
@@ -62,6 +53,23 @@ static char LastSyncTimeString[32] = "YYYY-MM-DD HH:MM:SS";
     SOURCE_RTC = 2,
     SOURCE_NTP = 3
   };
+
+  void logTimeActivity(TimeUpdateSources source) {
+    preferences.begin("BLEClock", false);
+    preferences.clear();
+    DateTime epoch = RTC.now();
+    preferences.putUInt("epoch", epoch.unixtime());
+    preferences.putUChar("source", source);
+    preferences.end();
+  }
+
+  void resetTimeActivity(TimeUpdateSources source) {
+    preferences.begin("BLEClock", false);
+    preferences.clear();
+    preferences.putUInt("epoch", 0);
+    preferences.putUChar("source", source);
+    preferences.end();
+  }
 
   struct TimeActivity {
     DateTime epoch;
@@ -158,7 +166,7 @@ static void updateTimeString(bool checkNTP=false) {
     #if RTC_PROFILE == CHRONOMANIAC  // chronomaniac mode
       if (checkNTP && RTC.isrunning()) {
         int64_t deltaInSeconds = nowDateTime.unixtime() - lastSyncDateTime.unixtime();
-        Serial.printf("Comparing %d with %d\n", nowDateTime.unixtime(), lastSyncDateTime.unixtime());
+        Serial.printf("[%s] now(%d) - last(%d) = %d seconds\n", __func__, nowDateTime.unixtime(), lastSyncDateTime.unixtime(), deltaInSeconds);
         if ( deltaInSeconds > 86400/*300*/) {
           Serial.printf("[CHRONOMANIAC] Last Time Sync: %s (%d seconds ago). Time isn't fresh anymore, should reload NTP menu !!\n", LastSyncTimeString, deltaInSeconds);
           rollBackOrUpdateFromFS( SD_MMC, NTP_MENU_FILENAME );
@@ -280,18 +288,109 @@ bool SDSetup() {
   */
   #include <WiFi.h>
   #include <HTTPClient.h>
+  #include "certificates.h"
   
   const char* NTP_SERVER = "europe.pool.ntp.org";
   const char* TZ_INFO = "CET-1CEST,M3.3.0,M10.5.0/3"; // build your TZ String here e.g. https://phpsecu.re/tz/get.php?timezone=Europe/Paris
   struct tm timeinfo;
   bool WiFiConnected = false;
   bool NTPTimeSet = false;
+  HTTPClient http;
+  SDUpdater sdUpdater;
   
   #ifdef MYSSID // see Settings.h
     #define WiFi_Begin() WiFi.begin(WIFI_SSID, WIFI_PASSWD);
   #else
     #define WiFi_Begin() WiFi.begin();
   #endif
+
+
+ 
+  // used to retrieve DB files from the webs :]
+  void wget(String bin_url, String appName, const char* &ca ) {
+    Serial.printf("[%s] Will check %s and save to SD as %s if filesizes differ\n", __func__, bin_url.c_str(), appName.c_str());
+    http.begin(bin_url, ca);
+    int httpCode = http.GET();
+    if(httpCode <= 0) {
+      Serial.println("[HTTP] GET... failed");
+      http.end();
+      return;
+    }
+    if(httpCode != HTTP_CODE_OK) {
+      Serial.printf("[%s][HTTP] GET... failed, error: %s\n", __func__, http.errorToString(httpCode).c_str() ); 
+      http.end();
+      return;
+    }
+    int len = http.getSize();
+    if(len<=0) {
+      Serial.printf("[%s] Failed to read %s content is empty, aborting\n", __func__, bin_url.c_str() );
+      http.end();
+      return;
+    }
+    int httpSize = len;
+    uint8_t buff[512] = { 0 };
+    WiFiClient * stream = http.getStreamPtr();
+    File myFile = SD_MMC.open(appName, FILE_WRITE);
+    if(!myFile) {
+      Serial.printf("[%s] Failed to open %s for writing, aborting\n", __func__, appName.c_str() );
+      http.end();
+      myFile.close();
+      return;
+    }
+    while(http.connected() && (len > 0 || len == -1)) {
+      sdUpdater.SDMenuProgress((httpSize-len)/10, httpSize/10);
+      // get available data size
+      size_t size = stream->available();
+      if(size) {
+        // read up to 128 byte
+        int c = stream->readBytes(buff, ((size > sizeof(buff)) ? sizeof(buff) : size));
+        // write it to SD
+        myFile.write(buff, c);
+        //Serial.write(buff, c);
+        if(len-c >= 0) {
+          len -= c;
+        }
+      }
+      delay(1);
+    }
+    myFile.close();
+    Serial.println("Copy done...");
+    http.end();
+  }
+
+  // HEAD request to check for remote file size
+  size_t getRemoteFileSize( String bin_url, const char * &ca) {
+    http.begin(bin_url, ca);
+    int httpCode = http.sendRequest("HEAD");
+    if(httpCode <= 0) {
+      Serial.printf("[%s][HTTP] HEAD... failed\n", __func__);
+      http.end();
+      return 0;
+    }
+    size_t len = http.getSize();
+    http.end();
+    return len;
+  }
+
+  // check for remote file size and retrieve if sizes differ
+  void sudoMakeMeASandwich(String fileURL, String fileName, bool force = false) {
+    size_t sdFileSize = 0;
+    size_t remoteFileSize = 0;
+    File fileBin = SD_MMC.open(fileName);
+    if (fileBin) {
+      sdFileSize = fileBin.size();
+      Serial.printf("[%s][SD] %s : %d bytes\n", __func__, fileName.c_str(), sdFileSize);
+      fileBin.close();
+    } else {
+      Serial.printf("[%s][SD] %s not found, will proceed to initial download\n", __func__, fileName);
+    }
+    remoteFileSize = getRemoteFileSize( fileURL, raw_github_ca );
+    Serial.printf("[%s] Remote file size is : %d\n", __func__, remoteFileSize);
+    if( remoteFileSize == 0 ) return; // shit happens
+    if( remoteFileSize != sdFileSize || force ) {
+      wget( fileURL, fileName, raw_github_ca );
+    }
+  }
 
 
   bool WiFiConnect() {
@@ -347,9 +446,14 @@ bool SDSetup() {
         if( RTC.isrunning() ) {
           Out.println("[RTC] Adjusted from NTP \\o/");
           logTimeActivity(SOURCE_NTP);
+          http.setReuse(true);
+          sudoMakeMeASandwich("https://raw.githubusercontent.com/tobozo/ESP32-BLECollector/master/SD/mac-oui-light.db", "/mac-oui-light.db");
+          delay( 500 );
+          sudoMakeMeASandwich("https://raw.githubusercontent.com/tobozo/ESP32-BLECollector/master/SD/ble-oui.db", "/ble-oui.db");
         } else {
           Out.println("[NTP] OK but RTC died :-(");
         }
+
       } else {
         Out.println("[NTP] Unreachable. Time not set");
         ESP.restart();
