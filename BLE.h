@@ -127,11 +127,25 @@ class BLEScanUtils {
     }
 
     static void startScanTask() {
-      xTaskCreatePinnedToCore(scanTask, "scanTask", 10000, NULL, 5, NULL, 1); /* last = Task Core */      
+      xTaskCreatePinnedToCore(scanTask, "scanTask", 10000, NULL, 5, NULL, 1); /* last = Task Core */
+      while(scanTaskStopped) {
+        Serial.printf("[%s] Waiting for scan to start...\n", __func__);
+        vTaskDelay(1000);
+      }
+      Serial.printf("[%s] Scan started...\n", __func__);
     }
     static void stopScanTask() {
       scanTaskRunning = false;
       BLEDevice::getScan()->stop();
+      while(!scanTaskStopped) {
+        Serial.printf("[%s] Waiting for scan to stop...\n", __func__);
+        vTaskDelay(1000);
+      }
+      Serial.printf("[%s] Scan stopped...\n", __func__);
+    }
+
+    static void startDumpTask() {
+      xTaskCreatePinnedToCore(dumpTask, "dumpTask", 10000, NULL, 5, NULL, 1); /* last = Task Core */
     }
 
     static void startSerialTask() {
@@ -170,26 +184,16 @@ class BLEScanUtils {
     }
 
     static bool serialParseBuffer() {
-      if(strstr(tempBuffer, "stopScan")) {
+      if(strstr(tempBuffer, "stop")) {
         if( scanTaskRunning ) {
           Serial.printf("[%s] Stopping scan\n", __func__ );
           stopScanTask();
-          while(!scanTaskStopped) {
-            Serial.printf("[%s] Waiting for scan to stop...\n", __func__);
-            vTaskDelay(1000);
-          }
-          Serial.printf("[%s] Scan stopped...\n", __func__);
           return true;
         }
-      } else if(strstr(tempBuffer, "startScan")) {
+      } else if(strstr(tempBuffer, "start")) {
         if( !scanTaskRunning ) {
           Serial.printf("[%s] Starting scan\n", __func__ );
           startScanTask();
-          while(scanTaskStopped) {
-            Serial.printf("[%s] Waiting for scan to start...\n", __func__);
-            vTaskDelay(1000);
-          }
-          Serial.printf("[%s] Scan started...\n", __func__);
           return true;
         }
       #if RTC_PROFILE == CHRONOMANIAC  // chronomaniac mode
@@ -199,10 +203,31 @@ class BLEScanUtils {
       #endif
       } else if(strstr(tempBuffer, "restart")) {
         ESP.restart();
+      } else if(strstr(tempBuffer, "dump")) {
+        Serial.printf("[%s] Stopping scan\n", __func__ );
+        startDumpTask();
+        return true;
       }
       return false;
     }
 
+
+    static void dumpTask( void * parameter ) {
+      bool dumpTaskRunning = true;
+      stopScanTask();
+      while( dumpTaskRunning ) {
+        for( int16_t i=0; i< BLEDEVCACHE_SIZE; i++ ) {
+          if( !isEmpty( BLEDevCache[i]->address ) ) {
+            UI.BLECardTheme.setTheme( IN_CACHE_ANON );
+            BLEDevTmp = BLEDevCache[i];
+            UI.printBLECard( BLEDevTmp ); // render                      
+          }
+        }
+        dumpTaskRunning = false;
+      }
+      startScanTask();
+      vTaskDelete( NULL );
+    }
 
     static void scanTask( void * parameter ) {
       scanTaskRunning = true;
