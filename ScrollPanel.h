@@ -29,9 +29,9 @@
 
 */
 
-
+#define SPACE " "
 static bool isScrolling = false;
-static uint16_t BGCOLOR;
+static uint16_t BGCOLOR = tft.color565(0x22, 0x22, 0x44);
 volatile xSemaphoreHandle displayWrite = NULL; // this is needed to prevent rendering collisions 
                                      // between scrollpanel and heap graph
 static xSemaphoreHandle mux = NULL;
@@ -76,7 +76,15 @@ class ScrollableOutput {
       yArea = height - scrollTopFixedArea - scrollBottomFixedArea;
       //Serial.printf("*** NEW Scroll Setup: Top=%d Bottom=%d YArea=%d\n", TFA, BFA, yArea);
       if (clear) {
-        tft.fillRect(0, TFA, width, yArea, WROVER_BLACK);
+        tft.fillRect(0, TFA, width, yArea, BLE_BLACK);
+      }
+    }
+
+    void scrollNextPage() {
+      tft.getTextBounds("O", scrollPosX, scrollPosY, &x1_tmp, &y1_tmp, &w_tmp, &h_tmp);
+      int linesInPage = (yArea-(scrollPosY-scrollTopFixedArea)) / h_tmp;
+      for(int i=0; i<linesInPage; i++) {
+        println();
       }
     }
   private:

@@ -58,6 +58,11 @@ static uint16_t BLEDevCacheUsed = 0; // for statistics
 static uint16_t VendorCacheUsed = 0; // for statistics
 static uint16_t OuiCacheUsed = 0; // for statistics
 
+#if RTC_PROFILE > HOBO // all profiles manage time except HOBO
+  //static DateTime nowDateTime;
+  static DateTime lastSyncDateTime;
+  static DateTime nowDateTime;
+#endif
 
 // TODO: store this in psram
 struct BlueToothDevice {
@@ -67,6 +72,10 @@ struct BlueToothDevice {
   uint16_t appearance = 0; // BLE Icon
   int rssi            = 0; // RSSI
   int manufid         = -1;// manufacturer data (or ID)
+  #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
+    DateTime created_at = 0;
+    DateTime updated_at = 0;
+  #endif
   char* name      = NULL;// device name
   char* address   = NULL;// device mac address
   char* ouiname   = NULL;// oui vendor name (from mac address, see oui.h)
@@ -111,6 +120,10 @@ class BlueToothDeviceHelper {
       CacheItem->appearance = 0;
       CacheItem->rssi       = 0;
       CacheItem->manufid    = -1;
+      #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
+        CacheItem->created_at = 0;
+        CacheItem->updated_at = 0;
+      #endif
       if( hasPsram ) {    
         CacheItem->name      = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
         CacheItem->address   = (char*)ps_calloc(MAC_LEN+1, sizeof(char));
@@ -133,6 +146,10 @@ class BlueToothDeviceHelper {
       CacheItem->appearance = 0;
       CacheItem->rssi       = 0;
       CacheItem->manufid    = -1;
+      #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
+      CacheItem->created_at = 0;
+      CacheItem->updated_at = 0;
+      #endif
       memset( CacheItem->name,      0, MAX_FIELD_LEN+1 );
       memset( CacheItem->address,   0, MAC_LEN+1 );
       memset( CacheItem->ouiname,   0, MAX_FIELD_LEN+1 );
@@ -159,6 +176,10 @@ class BlueToothDeviceHelper {
       else if(strcmp(prop, "manufname")==0)  { copy( CacheItem->manufname, val, MAX_FIELD_LEN ); }
       else if(strcmp(prop, "uuid")==0)       { copy( CacheItem->uuid, val, MAX_FIELD_LEN ); }
       else if(strcmp(prop, "rssi")==0)       { CacheItem->rssi = atoi(val);} // coming from BLE
+      #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
+      else if(strcmp(prop, "created_at")==0) { CacheItem->created_at = DateTime( atoi(val) );}
+      else if(strcmp(prop, "updated_at")==0) { CacheItem->created_at = DateTime( atoi(val) );}
+      #endif
     }
 
     // stores in cache a given advertised device
@@ -168,6 +189,13 @@ class BlueToothDeviceHelper {
       set(CacheItem, "address", advertisedDevice.getAddress().toString().c_str());
       set(CacheItem, "rssi", advertisedDevice.getRSSI());
       set(CacheItem, "ouiname", "[unpopulated]");
+      
+      #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
+      CacheItem->created_at = (DateTime) nowDateTime;
+      //CacheItem->created_at = (DateTime) nowDateTime;
+      //Serial.printf("[%s] Stored created_at DateTime %d\n", __func__, (unsigned long)nowDateTime.unixtime());
+      //Serial.printf(YYYYMMDD_HHMMSS_Tpl, nowDateTime.
+      #endif
 
       if ( advertisedDevice.haveName() ) {
         set(CacheItem, "name", advertisedDevice.getName().c_str());

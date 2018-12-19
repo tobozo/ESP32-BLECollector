@@ -66,7 +66,7 @@ uint32_t sizeofneedle = strlen(needle);
 uint32_t sizeoftrail = strlen(welcomeMessage) - sizeofneedle;
 
 /* checks buffer for signature, returns true if found */
-static bool parseBuffer(char* &signature) {
+static bool parseBuffer(char* signature) {
   for(uint32_t i=0;i<(SPI_FLASH_SEC_STEP8-sizeofneedle);i++) {
     uint32_t j;
     for(j=0;j<sizeofneedle;j++) {
@@ -124,19 +124,22 @@ static char* getBinarySignature(fs::FS &fs, String fileName ) {
 }
 
 
+const char* outTpl = " [%s] %s";
+char outStr[32] = {'\0'};
+
 static bool doUpdateToFS(fs::FS &fs, String fileName, const esp_partition_t* currentpartition) {
   uint8_t headerbuf[4];
   
   if(!currentpartition) {
-    Out.println("Bad partition");
+    Out.println(" [ERROR] Bad partition");
     return false;
   }
   if(!ESP.flashRead(currentpartition->address, (uint32_t*)headerbuf, 4)) {
-    Out.println("Partition is not bootable");
+    Out.println(" [ERROR] Partition is not bootable");
     return false;
   }
   if(headerbuf[0] != 0xE9/*ESP_IMAGE_HEADER_MAGIC*/) {
-    Out.println("Partition has no magic header");
+    Out.println(" [ERROR] Partition has no magic header");
     return false;
   }
 
@@ -145,20 +148,27 @@ static bool doUpdateToFS(fs::FS &fs, String fileName, const esp_partition_t* cur
   if(strcmp(partitionSignature, binarySignature)==0) {
     return false;
   } else {
-    Out.println("Partition signatures differ"); Out.println(partitionSignature); Out.println(binarySignature);
+
+    Out.println(" [INFO] Partition signatures differ"); 
+    //Out.println("          ----------------------------"); 
+    sprintf( outStr, outTpl, "FL", partitionSignature);
+    Out.println( outStr ); 
+    sprintf( outStr, outTpl, "SD", binarySignature);
+    Out.println( outStr ); 
+    //Out.println("          ----------------------------"); 
   }
 
   if(fs.remove(fileName)){
-    Out.println(String("Outdated "+fileName+" deleted").c_str());
+    Out.println(String(" [INFO] Outdated "+fileName+" deleted").c_str());
   }
 
   File updateBin = fs.open(fileName, FILE_WRITE);
   if(!updateBin) {
-    Out.println(String("Can't write to " + String(fileName) + " :-(").c_str());
+    Out.println(String(" [ERROR] Can't write to " + String(fileName) + " :-(").c_str());
     updateBin.close();
     return false;
   }
-  Out.println(String("Writing "+ String(fileName) +" ...").c_str());
+  Out.println(String(" [INFO] Writing "+ String(fileName) +" ...").c_str());
   uint32_t bytescounter = 0;
   for (uint32_t base_addr = currentpartition->address; base_addr < currentpartition->address + currentpartition->size; base_addr += SPI_FLASH_SEC_STEP8) {
     memset(g8_rbuf, 0, SPI_FLASH_SEC_STEP8);
@@ -171,7 +181,7 @@ static bool doUpdateToFS(fs::FS &fs, String fileName, const esp_partition_t* cur
       Serial.print(".");
     }
   }
-  Out.println("Done");
+  Out.println(" [INFO] Done");
   updateBin.close();
   return true;
 }
@@ -225,10 +235,10 @@ static bool rollBackOrUpdateFromFS(fs::FS &fs, String fileName = MENU_BIN ) {
 
 void SDUpdater::displayUpdateUI(String label) {
   tft.setCursor(0, 300);
-  tft.setTextColor(WROVER_WHITE);
-  tft.fillRect(0, 300, SDU_PROGRESS_W+2, 20, WROVER_BLACK);
+  tft.setTextColor(BLE_WHITE);
+  tft.fillRect(0, 300, SDU_PROGRESS_W+2, 20, BLE_BLACK);
   tft.printf(label.c_str());
-  tft.drawRect(SDU_PROGRESS_X, SDU_PROGRESS_Y, SDU_PROGRESS_W+2, SDU_PROGRESS_H, WROVER_WHITE);
+  tft.drawRect(SDU_PROGRESS_X, SDU_PROGRESS_Y, SDU_PROGRESS_W+2, SDU_PROGRESS_H, BLE_WHITE);
 }
 
 
@@ -240,12 +250,12 @@ void SDUpdater::SDMenuProgress(int state, int size) {
   uint16_t x = tft.getCursorX();
   uint16_t y = tft.getCursorY();
   uint16_t wpercent = (SDU_PROGRESS_W * percent) / 100;
-  tft.setTextColor(WROVER_WHITE, WROVER_BLACK);
+  tft.setTextColor(BLE_WHITE, BLE_BLACK);
   if (percent > 0 && wpercent <= SDU_PROGRESS_W) {
-    tft.fillRect(SDU_PROGRESS_X+1, SDU_PROGRESS_Y+1, wpercent, SDU_PROGRESS_H-2, WROVER_GREEN);
-    tft.fillRect(SDU_PROGRESS_X+1+wpercent, SDU_PROGRESS_Y+1, SDU_PROGRESS_W-wpercent, SDU_PROGRESS_H-2, WROVER_BLACK);
+    tft.fillRect(SDU_PROGRESS_X+1, SDU_PROGRESS_Y+1, wpercent, SDU_PROGRESS_H-2, BLE_GREEN);
+    tft.fillRect(SDU_PROGRESS_X+1+wpercent, SDU_PROGRESS_Y+1, SDU_PROGRESS_W-wpercent, SDU_PROGRESS_H-2, BLE_BLACK);
   } else {
-    tft.fillRect(SDU_PROGRESS_X+1, SDU_PROGRESS_Y+1, SDU_PROGRESS_W, SDU_PROGRESS_H-2, WROVER_BLACK);
+    tft.fillRect(SDU_PROGRESS_X+1, SDU_PROGRESS_Y+1, SDU_PROGRESS_W, SDU_PROGRESS_H-2, BLE_BLACK);
   }
   tft.setCursor(SDU_PERCENT_X, SDU_PERCENT_Y);
   tft.print(" " + String(percent) + "% ");
@@ -266,18 +276,18 @@ bool SDUpdater::performUpdate(Stream &updateSource, size_t updateSize, String fi
       if (Update.end()) {
          Serial.println("OTA done!");
          if (Update.isFinished()) {
-            Out.println(); Out.println("Update successfully completed"); Out.println("Rebooting."); Out.println();
+            Out.println(); Out.println(" [INFO] Update successful"); Out.println(" [INFO] Rebooting."); Out.println();
             return true;
          } else {
-            Out.println(); Out.println("Update not finished!"); Out.println("Something went wrong!"); Out.println();
+            Out.println(); Out.println(" [ERROR] Update failed!"); Out.println(" [ERROR] Something went wrong!"); Out.println();
             return false;
          }
       } else {
-         Out.println(); Out.println(String("Error Occurred. Error #: " + String(Update.getError())).c_str()); Out.println();
+         Out.println(); Out.println(String(" [ERROR] " + String(Update.getError())).c_str()); Out.println();
          return false;
       }
    } else {
-      Out.println(); Out.println("Not enough space to begin OTA"); Out.println();
+      Out.println(); Out.println(" [ERROR] Not enough space to begin OTA"); Out.println();
       return false;
    }
 }
@@ -288,20 +298,20 @@ bool SDUpdater::updateFromFS(fs::FS &fs, String fileName) {
   bool ret = false;
   if (updateBin) {
     if(updateBin.isDirectory()){
-      Out.println(); Out.println(String("Error, "+ fileName +" is a directory").c_str()); Out.println();
+      Out.println(); Out.println(String(" [ERROR] "+ fileName +" is a directory").c_str()); Out.println();
       updateBin.close();
       return ret;
     }
     size_t updateSize = updateBin.size();
     if (updateSize > 0) {
-      Out.println(); Out.println(String("Updating from "+ fileName).c_str()); Out.println();
+      Out.println(); Out.println(String(" [INFO] Updating from "+ fileName).c_str()); Out.println();
       ret = performUpdate(updateBin, updateSize, fileName);
     } else {
-      Out.println(); Out.println(String("Error, file "+ fileName +" is empty!").c_str()); Out.println();
+      Out.println(); Out.println(String(" [ERROR]  file "+ fileName +" is empty!").c_str()); Out.println();
     }
     updateBin.close();
   } else {
-    Out.println(); Out.println(String("Could not load "+ fileName).c_str()); Out.println();
+    Out.println(); Out.println(String(" [ERROR] Could not load "+ fileName).c_str()); Out.println();
   }
   return ret;
 }
