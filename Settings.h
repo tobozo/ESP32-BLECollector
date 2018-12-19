@@ -48,10 +48,10 @@
 //#define RTC_PROFILE CHRONOMANIAC // to build the BLEMenu.bin with RTC support and NTP Sync
 //#define RTC_PROFILE ROGUE // to build the BLEMenu.bin with RTC support, but *without* NTP sync
 //#define RTC_PROFILE HOBO // to build the NTPMenu.bin *without* RTC/NTP support
-byte SCAN_DURATION = 60; // seconds 
+byte SCAN_DURATION = 20; // seconds 
 #define MIN_SCAN_DURATION 10 // seconds min
 #define MAX_SCAN_DURATION 120 // seconds max
-#define MAX_DEVICES_PER_SCAN 5 // will adjust scan duration accordingly
+#define MAX_DEVICES_PER_SCAN 4 // also max displayed devices on the screen, affects initial scan duration
 #define BLEDEVCACHE_PSRAM_SIZE 1024 // use PSram to cache BLECards
 #define BLEDEVCACHE_HEAP_SIZE 32 // use some heap to cache BLECards. min = 5, max = 64, higher value = smaller uptime
 #define VENDORCACHE_SIZE 16 // use some heap to cache vendor query responses, min = 5, max = 256
@@ -95,17 +95,17 @@ const char* needle = BUILD_NEEDLE;
 const char* welcomeMessage = WELCOME_MESSAGE;
 const char* buildSignature = BUILD_SIGNATURE;
 
-#include <Adafruit_GFX.h>    // Core graphics library
-#include "WROVER_KIT_LCD.h" // Latest version must have the VScroll def patch: https://github.com/espressif/WROVER_KIT_LCD/pull/3/files
-WROVER_KIT_LCD tft;
+#include "Display.h"
+
 
 #if RTC_PROFILE > HOBO
   // RTC Module: On Wrover Kit you can use the following pins (from the camera connector)
   // SCL = GPIO27 (SIO_C / SCCB Clock 4)
   // SDA = GPIO26 (SIO_D / SCCB Data)
   #include <RTClib.h>
-  #include <Wire.h>
+  //#include <Wire.h>
   static RTC_DS1307 RTC; // or your own RTC module
+  
 #endif
 
 #ifndef BUILD_NTPMENU_BIN 
@@ -147,8 +147,8 @@ Preferences preferences;
  */
 
 
-#include <FS.h>
-#include <SD_MMC.h>
+
+
 // used to get the resetReason
 #include <rom/rtc.h>
 

@@ -81,7 +81,7 @@ const char* manufTpl = "      %s";
 const char* nameTpl = "      %s";
 
 //#define SPACETABS "      "
-#define SPACE " "
+
 
 enum TextDirections {
   ALIGN_FREE   = 0,
@@ -90,19 +90,6 @@ enum TextDirections {
   ALIGN_CENTER = 3,
 };
 
-// top and bottom non-scrolly zones
-#define HEADER_BGCOLOR tft.color565(0x22, 0x22, 0x22)
-#define FOOTER_BGCOLOR tft.color565(0x22, 0x22, 0x22)
-// BLECard info styling
-#define IN_CACHE_COLOR tft.color565(0x37, 0x6b, 0x37)
-#define NOT_IN_CACHE_COLOR tft.color565(0xa4, 0xa0, 0x5f)
-#define ANONYMOUS_COLOR tft.color565(0x88, 0x88, 0x88)
-#define NOT_ANONYMOUS_COLOR tft.color565(0xee, 0xee, 0xee)
-// one carefully chosen blue
-#define BLUETOOTH_COLOR tft.color565(0x14, 0x54, 0xf0)
-#define WROVER_DARKORANGE tft.color565(0x80, 0x40, 0x00)
-// middle scrolly zone
-#define BLECARD_BGCOLOR tft.color565(0x22, 0x22, 0x44)
 
 enum BLECardThemes {
   IN_CACHE_ANON = 0,
@@ -118,8 +105,8 @@ class UIUtils {
   public:
 
     struct BLECardStyle {
-      uint16_t textColor = WROVER_WHITE;
-      uint16_t borderColor = WROVER_WHITE;
+      uint16_t textColor = BLE_WHITE;
+      uint16_t borderColor = BLE_WHITE;
       uint16_t bgColor = BLECARD_BGCOLOR;
       void setTheme( byte themeID ) {
         bgColor = BLECARD_BGCOLOR;
@@ -147,33 +134,37 @@ class UIUtils {
     BLECardStyle BLECardTheme;
 
     void init() {
-      
+
       bool clearScreen = true;
       if (resetReason == 12) { // SW Reset
         clearScreen = false;
       }
+      //GO.begin();
       tft.begin();
       tft.setRotation( 0 ); // required to get smooth scrolling
-      tft.setTextColor(WROVER_YELLOW);
+      tft.setTextColor(BLE_YELLOW);
+
       if (clearScreen) {
-        tft.fillScreen(WROVER_BLACK);
+        tft.fillScreen(BLE_BLACK);
         tft.fillRect(0, HEADER_HEIGHT, Out.width, SCROLL_HEIGHT, BLECARD_BGCOLOR);
         // clear heap map
         for (uint16_t i = 0; i < HEAPMAP_BUFFLEN; i++) heapmap[i] = 0;
       }
+
       tft.fillRect(0, 0, Out.width, HEADER_HEIGHT, HEADER_BGCOLOR);
       tft.fillRect(0, Out.height - FOOTER_HEIGHT, Out.width, FOOTER_HEIGHT, FOOTER_BGCOLOR);
-      tft.fillRect(0, PROGRESSBAR_Y, Out.width, 2, WROVER_GREENYELLOW);
+      tft.fillRect(0, PROGRESSBAR_Y, Out.width, 2, BLE_GREENYELLOW);
 
       AmigaBall.init();
 
-      alignTextAt( "BLE Collector", 6, 4, WROVER_YELLOW, HEADER_BGCOLOR, ALIGN_FREE );
+      alignTextAt( "BLE Collector", 6, 4, BLE_YELLOW, HEADER_BGCOLOR, ALIGN_FREE );
       if (resetReason == 12) { // SW Reset
         headerStats("Heap heap heap...");
       } else {
         headerStats("Init UI");
       }
       Out.setupScrollArea(HEADER_HEIGHT, FOOTER_HEIGHT);
+      tft.setTextColor( BLE_WHITE, BLECARD_BGCOLOR );
       timeSetup();
       updateTimeString( true );
       timeStateIcon();
@@ -203,7 +194,7 @@ class UIUtils {
 
     void playIntro() {
       uint16_t pos = 0;
-      tft.setTextColor(WROVER_GREENYELLOW, BGCOLOR);
+      tft.setTextColor(BLE_GREENYELLOW, BGCOLOR);
       for (int i = 0; i < 5; i++) {
         pos += Out.println();
       }
@@ -214,7 +205,7 @@ class UIUtils {
       pos += Out.println("         \\---------------------/");
       tft.drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, 106, Out.scrollPosY - pos + 8, 28,  28);
       for (int i = 0; i < 5; i++) {
-        Out.println();
+        Out.println(SPACE);
       }
       AmigaBall.animate( 5000 );
     }
@@ -232,7 +223,7 @@ class UIUtils {
 
       char entriesStr[14] = {'\0'};
       sprintf(entriesStr, entriesTpl, entries);
-      alignTextAt( heapStr, 128, 4, WROVER_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
+      alignTextAt( heapStr, 128, 4, BLE_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
       if ( !isEmpty( status ) ) {
         byte alignoffset = 5;
         tft.fillRect(0, 18, ICON_APP_X, 8, HEADER_BGCOLOR); // clear whole message status area
@@ -248,10 +239,10 @@ class UIUtils {
         } else {
           
         }
-        alignTextAt( status, alignoffset, 18, WROVER_YELLOW, HEADER_BGCOLOR, ALIGN_FREE );
+        alignTextAt( status, alignoffset, 18, BLE_YELLOW, HEADER_BGCOLOR, ALIGN_FREE );
         statuspos = Out.x1_tmp + Out.w_tmp;
       }
-      alignTextAt( entriesStr, 128, 18, WROVER_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
+      alignTextAt( entriesStr, 128, 18, BLE_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
       tft.drawJpg(ram_jpeg, ram_jpeg_len, 156, 4, 8, 8); // heap icon
       tft.drawJpg(earth_jpeg, earth_jpeg_len, 156, 18, 8, 8); // entries icon
 
@@ -270,9 +261,9 @@ class UIUtils {
       int16_t posX = tft.getCursorX();
       int16_t posY = tft.getCursorY();
 
-      alignTextAt( hhmmString,   95, 288, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
-      alignTextAt( UpTimeString, 95, 298, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
-      alignTextAt("(c+) tobozo", 77, 308, WROVER_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+      alignTextAt( hhmmString,   95, 288, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+      alignTextAt( UpTimeString, 95, 298, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+      alignTextAt("(c+) tobozo", 77, 308, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
 
       char sessDevicesCountStr[16] = {'\0'};
       char devicesCountStr[16] = {'\0'};
@@ -282,9 +273,9 @@ class UIUtils {
       sprintf( devicesCountStr, devicesCountTpl, devicesCount );
       sprintf( newDevicesCountStr, newDevicesCountTpl, scan_rounds/*newDevicesCount*/ );
 
-      alignTextAt( devicesCountStr, 0, 288, WROVER_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
-      alignTextAt( sessDevicesCountStr, 0, 298, WROVER_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
-      alignTextAt( newDevicesCountStr, 0, 308, WROVER_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
+      alignTextAt( devicesCountStr, 0, 288, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
+      alignTextAt( sessDevicesCountStr, 0, 298, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
+      alignTextAt( newDevicesCountStr, 0, 308, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
 
       tft.setCursor(posX, posY);
       giveMuxSemaphore();
@@ -293,14 +284,14 @@ class UIUtils {
 
     void cacheStats() {
       takeMuxSemaphore();
-      percentBox(164, 284, 10, 10, BLEDevCacheUsed, WROVER_CYAN, WROVER_BLACK);
-      percentBox(164, 296, 10, 10, VendorCacheUsed, WROVER_ORANGE, WROVER_BLACK);
-      percentBox(164, 308, 10, 10, OuiCacheUsed, WROVER_GREENYELLOW, WROVER_BLACK);
+      percentBox(164, 284, 10, 10, BLEDevCacheUsed, BLE_CYAN, BLE_BLACK);
+      percentBox(164, 296, 10, 10, VendorCacheUsed, BLE_ORANGE, BLE_BLACK);
+      percentBox(164, 308, 10, 10, OuiCacheUsed, BLE_GREENYELLOW, BLE_BLACK);
       giveMuxSemaphore();
     }
 
 
-    void percentBox(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t percent, uint16_t barcolor, uint16_t bgcolor, uint16_t bordercolor = WROVER_DARKGREY) {
+    void percentBox(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t percent, uint16_t barcolor, uint16_t bgcolor, uint16_t bordercolor = BLE_DARKGREY) {
       if (percent == 0) {
         tft.drawRect(x - 1, y - 1, w + 2, h + 2, bordercolor);
         tft.fillRect(x, y, w, h, bgcolor);
@@ -326,15 +317,15 @@ class UIUtils {
 
     static void timeStateIcon() {
       tft.drawJpg( clock_jpeg, clock_jpeg_len, ICON_RTC_X-ICON_R, ICON_RTC_Y-ICON_R+1, 8,  8);
-      //tft.fillCircle(ICON_RTC_X, ICON_RTC_Y, ICON_R, WROVER_GREENYELLOW);
+      //tft.fillCircle(ICON_RTC_X, ICON_RTC_Y, ICON_R, BLE_GREENYELLOW);
       if (RTC_is_running) {
-        //tft.drawCircle(ICON_RTC_X, ICON_RTC_Y, ICON_R, WROVER_DARKGREEN);
-        //tft.drawFastHLine(ICON_RTC_X, ICON_RTC_Y, ICON_R, WROVER_DARKGREY);
-        //tft.drawFastVLine(ICON_RTC_X, ICON_RTC_Y, ICON_R - 2, WROVER_DARKGREY);
+        //tft.drawCircle(ICON_RTC_X, ICON_RTC_Y, ICON_R, BLE_DARKGREEN);
+        //tft.drawFastHLine(ICON_RTC_X, ICON_RTC_Y, ICON_R, BLE_DARKGREY);
+        //tft.drawFastVLine(ICON_RTC_X, ICON_RTC_Y, ICON_R - 2, BLE_DARKGREY);
       } else {
-        tft.drawCircle(ICON_RTC_X, ICON_RTC_Y, ICON_R, WROVER_RED);
-        //tft.drawFastHLine(ICON_RTC_X, ICON_RTC_Y, ICON_R, WROVER_RED);
-        //tft.drawFastVLine(ICON_RTC_X, ICON_RTC_Y, ICON_R - 2, WROVER_RED);
+        tft.drawCircle(ICON_RTC_X, ICON_RTC_Y, ICON_R, BLE_RED);
+        //tft.drawFastHLine(ICON_RTC_X, ICON_RTC_Y, ICON_R, BLE_RED);
+        //tft.drawFastVLine(ICON_RTC_X, ICON_RTC_Y, ICON_R - 2, BLE_RED);
       }
     }
 
@@ -359,11 +350,11 @@ class UIUtils {
     // sqlite state (read/write/inert) icon
     static void DBStateIconSetColor(int state) {
       switch (state) {
-        case 2:/*DB OPEN FOR WRITING*/ dbIconColor = WROVER_ORANGE;    break;
-        case 1:/*DB_OPEN FOR READING*/ dbIconColor = WROVER_YELLOW;    break;
-        case 0:/*DB CLOSED*/           dbIconColor = WROVER_DARKGREEN; break;
-        case -1:/*DB BROKEN*/          dbIconColor = WROVER_RED;       break;
-        default:/*DB INACTIVE*/        dbIconColor = WROVER_DARKGREY;  break;
+        case 2:/*DB OPEN FOR WRITING*/ dbIconColor = BLE_ORANGE;    break;
+        case 1:/*DB_OPEN FOR READING*/ dbIconColor = BLE_YELLOW;    break;
+        case 0:/*DB CLOSED*/           dbIconColor = BLE_DARKGREEN; break;
+        case -1:/*DB BROKEN*/          dbIconColor = BLE_RED;       break;
+        default:/*DB INACTIVE*/        dbIconColor = BLE_DARKGREY;  break;
       }
     }
 
@@ -374,7 +365,7 @@ class UIUtils {
 
     static void PrintProgressBar(uint16_t width) {
       if( width == Out.width ) {
-        tft.fillRect(0, PROGRESSBAR_Y, width, 2, WROVER_DARKGREY);
+        tft.fillRect(0, PROGRESSBAR_Y, width, 2, BLE_DARKGREY);
       } else {
         tft.fillRect(0, PROGRESSBAR_Y, width, 2, BLUETOOTH_COLOR);
       }
@@ -409,13 +400,13 @@ class UIUtils {
     static void PrintBleScanWidgets() {
       if (!blinkit || blinknow >= blinkthen) {
         blinkit = false;
-        if(blestateicon!=WROVER_DARKGREY) {
+        if(blestateicon!=BLE_DARKGREY) {
           takeMuxSemaphore();
-          //tft.fillRect(0, PROGRESSBAR_Y, Out.width, 2, WROVER_DARKGREY);
+          //tft.fillRect(0, PROGRESSBAR_Y, Out.width, 2, BLE_DARKGREY);
           PrintProgressBar( Out.width );
           giveMuxSemaphore();
           // clear blue pin
-          BLEStateIconSetColor(WROVER_DARKGREY);
+          BLEStateIconSetColor(BLE_DARKGREY);
         }
         return;
       }
@@ -496,12 +487,12 @@ class UIUtils {
         }
         // render heatmap
         takeMuxSemaphore();
-        uint16_t GRAPH_COLOR = WROVER_WHITE;
+        uint16_t GRAPH_COLOR = BLE_WHITE;
         uint32_t graphMin = min_free_heap;
         uint32_t graphMax = graphMin;
         uint32_t toleranceline = GRAPH_LINE_HEIGHT;
         uint32_t minline = 0;
-        uint16_t GRAPH_BG_COLOR = WROVER_BLACK;
+        uint16_t GRAPH_BG_COLOR = BLE_BLACK;
         // dynamic scaling
         for (i = 0; i < GRAPH_LINE_WIDTH; i++) {
           int thisindex = int(heapindex - GRAPH_LINE_WIDTH + i + HEAPMAP_BUFFLEN) % HEAPMAP_BUFFLEN;
@@ -523,7 +514,7 @@ class UIUtils {
         // bounds, min and max lines
         minline = map(min_free_heap, graphMin, graphMax, 0, GRAPH_LINE_HEIGHT);
         if (toleranceheap > graphMax) {
-          GRAPH_BG_COLOR = WROVER_ORANGE;
+          GRAPH_BG_COLOR = BLE_ORANGE;
           toleranceline = GRAPH_LINE_HEIGHT;
         } else if ( toleranceheap < graphMin ) {
           toleranceline = 0;
@@ -536,21 +527,21 @@ class UIUtils {
           uint32_t heapval = heapmap[thisindex];
           if ( heapval > toleranceheap ) {
             // nominal, all green
-            GRAPH_COLOR = WROVER_GREEN;
-            GRAPH_BG_COLOR = WROVER_DARKGREY;
+            GRAPH_COLOR = BLE_GREEN;
+            GRAPH_BG_COLOR = BLE_DARKGREY;
           } else {
             if ( heapval > min_free_heap ) {
               // in tolerance zone
-              GRAPH_COLOR = WROVER_YELLOW;
-              GRAPH_BG_COLOR = WROVER_DARKGREEN;
+              GRAPH_COLOR = BLE_YELLOW;
+              GRAPH_BG_COLOR = BLE_DARKGREEN;
             } else {
               // under tolerance zone
               if (heapval > 0) {
-                GRAPH_COLOR = WROVER_RED;
-                GRAPH_BG_COLOR = WROVER_ORANGE;
+                GRAPH_COLOR = BLE_RED;
+                GRAPH_BG_COLOR = BLE_ORANGE;
               } else {
                 // no record
-                GRAPH_BG_COLOR = WROVER_BLACK;
+                GRAPH_BG_COLOR = BLE_BLACK;
               }
             }
           }
@@ -561,8 +552,8 @@ class UIUtils {
             tft.drawFastVLine( GRAPH_X + i, GRAPH_Y + GRAPH_LINE_HEIGHT-lineheight, lineheight, GRAPH_COLOR );
           }
         }
-        tft.drawFastHLine( GRAPH_X, GRAPH_Y + GRAPH_LINE_HEIGHT - toleranceline, GRAPH_LINE_WIDTH, WROVER_LIGHTGREY );
-        tft.drawFastHLine( GRAPH_X, GRAPH_Y + GRAPH_LINE_HEIGHT - minline, GRAPH_LINE_WIDTH, WROVER_RED );
+        tft.drawFastHLine( GRAPH_X, GRAPH_Y + GRAPH_LINE_HEIGHT - toleranceline, GRAPH_LINE_WIDTH, BLE_LIGHTGREY );
+        tft.drawFastHLine( GRAPH_X, GRAPH_Y + GRAPH_LINE_HEIGHT - minline, GRAPH_LINE_WIDTH, BLE_RED );
         giveMuxSemaphore();
         vTaskDelay( 100 );
       }
@@ -572,7 +563,7 @@ class UIUtils {
     void printBLECard( BlueToothDevice *_BLEDevTmp ) {
       // don't render if already on screen
       if( BLECardIsOnScreen( _BLEDevTmp->address ) ) {
-        Serial.printf("  [printBLECard] Skipping rendering %s (already on screen)\n", _BLEDevTmp->address);
+        Serial.printf("  [printBLECard] %s is already on screen, skipping rendering\n", _BLEDevTmp->address);
         return;
       }
 
@@ -581,7 +572,7 @@ class UIUtils {
         return;        
       }
 
-      Serial.printf("  [printBLECard] Will render %s\n", _BLEDevTmp->address);
+      Serial.printf("  [printBLECard] %s will be rendered\n", _BLEDevTmp->address);
 
       takeMuxSemaphore();
 
@@ -633,6 +624,50 @@ class UIUtils {
         break;
       }
 
+      #if RTC_PROFILE > HOBO 
+      if ( _BLEDevTmp->hits > 1 ) {
+        pos += Out.println(SPACE);
+
+        char timeStampStr[48];
+        const char* timeStampTpl = "      %s: %04d/%02d/%02d %02d:%02d:%02d %s%s%s";
+        sprintf(timeStampStr, timeStampTpl, 
+          "C",
+          _BLEDevTmp->created_at.year(),
+          _BLEDevTmp->created_at.month(),
+          _BLEDevTmp->created_at.day(),
+          _BLEDevTmp->created_at.hour(),
+          _BLEDevTmp->created_at.minute(),
+          _BLEDevTmp->created_at.second(),
+          "(",
+          String(_BLEDevTmp->hits).c_str(),
+          " hits)"
+        );
+        hop = Out.println( timeStampStr );
+        pos += hop;
+
+        tft.drawJpg( clock_jpeg, clock_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
+
+/*
+        pos += Out.println(SPACE);
+        sprintf(timeStampStr, timeStampTpl, 
+          "U",
+          _BLEDevTmp->updated_at.year(),
+          _BLEDevTmp->updated_at.month(),
+          _BLEDevTmp->updated_at.day(),
+          _BLEDevTmp->updated_at.hour(),
+          _BLEDevTmp->updated_at.minute(),
+          _BLEDevTmp->updated_at.second(),
+          "", "", ""
+        );
+        hop = Out.println( timeStampStr );
+        pos += hop;
+
+        tft.drawJpg( clock_jpeg, clock_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
+ */       
+        
+      }
+      #endif
+
       if ( !isEmpty( _BLEDevTmp->ouiname ) ) {
         pos += Out.println( SPACE );
         char ouiStr[38] = {'\0'};
@@ -641,6 +676,7 @@ class UIUtils {
         pos += hop;
         tft.drawJpg( nic16_jpeg, nic16_jpeg_len, 10, Out.scrollPosY - hop, 13, 8 );
       }
+      
       if ( _BLEDevTmp->appearance != 0 ) {
         pos += Out.println(SPACE);
         char appearanceStr[48];
@@ -686,13 +722,13 @@ class UIUtils {
       bool onScreen = false;
       for (uint16_t j = 0; j < BLECARD_MAC_CACHE_SIZE; j++) {
         if ( strcmp( address, lastPrintedMac[j] ) == 0) {
-          Serial.printf("  [BLECardIsOnScreen] %s is onScreen\n", address);
+          //Serial.printf("  [BLECardIsOnScreen] %s is onScreen\n", address);
           onScreen = true;
           return true;
         }
         delay(1);
       }
-      Serial.printf("  [BLECardIsOnScreen] %s is NOT onScreen\n", address);
+      //Serial.printf("  [BLECardIsOnScreen] %s is NOT onScreen\n", address);
       return onScreen;      
     }
 
@@ -708,7 +744,7 @@ class UIUtils {
 
   private:
 
-    void alignTextAt(const char* text, uint16_t x, uint16_t y, int16_t color = WROVER_YELLOW, int16_t bgcolor = WROVER_BLACK, byte textAlign = ALIGN_FREE) {
+    void alignTextAt(const char* text, uint16_t x, uint16_t y, int16_t color = BLE_YELLOW, int16_t bgcolor = BLE_BLACK, byte textAlign = ALIGN_FREE) {
       tft.setTextColor(color, bgcolor);
       tft.getTextBounds(text, x, y, &Out.x1_tmp, &Out.y1_tmp, &Out.w_tmp, &Out.h_tmp);
       switch (textAlign) {
@@ -767,38 +803,38 @@ class UIUtils {
       if (rssi >= -30) {
         // -30 dBm and more Amazing    - Max achievable signal strength. The client can only be a few feet
         // from the AP to achieve this. Not typical or desirable in the real world.  N/A
-        barColors[0] = WROVER_GREEN;
-        barColors[1] = WROVER_GREEN;
-        barColors[2] = WROVER_GREEN;
-        barColors[3] = WROVER_GREEN;
+        barColors[0] = BLE_GREEN;
+        barColors[1] = BLE_GREEN;
+        barColors[2] = BLE_GREEN;
+        barColors[3] = BLE_GREEN;
       } else if (rssi >= -67) {
         // between -67 dBm and 31 dBm  - Very Good   Minimum signal strength for applications that require
         // very reliable, timely delivery of data packets.   VoIP/VoWiFi, streaming video
-        barColors[0] = WROVER_GREEN;
-        barColors[1] = WROVER_GREEN;
-        barColors[2] = WROVER_GREEN;
+        barColors[0] = BLE_GREEN;
+        barColors[1] = BLE_GREEN;
+        barColors[2] = BLE_GREEN;
         barColors[3] = bgcolor;
       } else if (rssi >= -70) {
         // between -70 dBm and -68 dBm - Okay  Minimum signal strength for reliable packet delivery.   Email, web
-        barColors[0] = WROVER_YELLOW;
-        barColors[1] = WROVER_YELLOW;
-        barColors[2] = WROVER_YELLOW;
+        barColors[0] = BLE_YELLOW;
+        barColors[1] = BLE_YELLOW;
+        barColors[2] = BLE_YELLOW;
         barColors[3] = bgcolor;
       } else if (rssi >= -80) {
         // between -80 dBm and -71 dBm - Not Good  Minimum signal strength for basic connectivity. Packet delivery may be unreliable.  N/A
-        barColors[0] = WROVER_YELLOW;
-        barColors[1] = WROVER_YELLOW;
+        barColors[0] = BLE_YELLOW;
+        barColors[1] = BLE_YELLOW;
         barColors[2] = bgcolor;
         barColors[3] = bgcolor;
       } else if (rssi >= -90) {
         // between -90 dBm and -81 dBm - Unusable  Approaching or drowning in the noise floor. Any functionality is highly unlikely.
-        barColors[0] = WROVER_RED;
+        barColors[0] = BLE_RED;
         barColors[1] = bgcolor;
         barColors[2] = bgcolor;
         barColors[3] = bgcolor;
       }  else {
         // dude, this sucks
-        barColors[0] = WROVER_RED; // want: WROVER_RAINBOW
+        barColors[0] = BLE_RED; // want: BLE_RAINBOW
         barColors[1] = bgcolor;
         barColors[2] = bgcolor;
         barColors[3] = bgcolor;

@@ -55,36 +55,79 @@ static char colValue[32] = {'\0'}; // search result
 #define manufnameQuery   "SELECT DISTINCT SUBSTR(manufname,0,32) FROM blemacs where TRIM(manufname)!=''"
 #define ouinameQuery "SELECT DISTINCT SUBSTR(ouiname,0,32) FROM blemacs where TRIM(ouiname)!=''"
 // used by getEntries()
-#define BLEMAC_CREATE_FIELDNAMES " \
-  appearance INTEGER, \
-  name, \
-  address, \
-  ouiname, \
-  rssi INTEGER, \
-  manufid INTEGER, \
-  manufname, \
-  uuid \
-"
-#define BLEMAC_INSERT_FIELDNAMES " \
-  appearance, \
-  name, \
-  address, \
-  ouiname, \
-  rssi, \
-  manufid, \
-  manufname, \
-  uuid \
-"
-#define BLEMAC_SELECT_FIELDNAMES " \
-  appearance, \
-  name, \
-  address, \
-  ouiname, \
-  rssi, \
-  manufid, \
-  manufname, \
-  uuid \
-"
+#if RTC_PROFILE > HOBO // all profiles manage time except HOBO
+
+  #define BLEMAC_CREATE_FIELDNAMES " \
+    appearance INTEGER, \
+    name, \
+    address, \
+    ouiname, \
+    rssi INTEGER, \
+    manufid INTEGER, \
+    manufname, \
+    uuid, \
+    created_at DATETIME, \
+    updated_at DATETIME \
+  "
+  #define BLEMAC_INSERT_FIELDNAMES " \
+    appearance, \
+    name, \
+    address, \
+    ouiname, \
+    rssi, \
+    manufid, \
+    manufname, \
+    uuid, \
+    created_at, \
+    updated_at \
+  "
+  #define BLEMAC_SELECT_FIELDNAMES " \
+    appearance, \
+    name, \
+    address, \
+    ouiname, \
+    rssi, \
+    manufid, \
+    manufname, \
+    uuid, \
+    strftime('%s', created_at) as created_at, \
+    strftime('%s', updated_at) as updated_at \
+  "
+  #define insertQueryTemplate "INSERT INTO blemacs(" BLEMAC_INSERT_FIELDNAMES ") VALUES(%d,\"%s\",\"%s\",\"%s\",%d,%d,\"%s\",\"%s\",'%s.000000','%s.000000')"
+#else
+
+  #define BLEMAC_CREATE_FIELDNAMES " \
+    appearance INTEGER, \
+    name, \
+    address, \
+    ouiname, \
+    rssi INTEGER, \
+    manufid INTEGER, \
+    manufname, \
+    uuid \
+  "
+  #define BLEMAC_INSERT_FIELDNAMES " \
+    appearance, \
+    name, \
+    address, \
+    ouiname, \
+    rssi, \
+    manufid, \
+    manufname, \
+    uuid \
+  "
+  #define BLEMAC_SELECT_FIELDNAMES " \
+    appearance, \
+    name, \
+    address, \
+    ouiname, \
+    rssi, \
+    manufid, \
+    manufname, \
+    uuid \
+  "
+  #define insertQueryTemplate "INSERT INTO blemacs(" BLEMAC_INSERT_FIELDNAMES ") VALUES(%d,\"%s\",\"%s\",\"%s\",%d,%d,\"%s\",\"%s\")"
+#endif
 #define allEntriesQuery "SELECT " BLEMAC_SELECT_FIELDNAMES " FROM blemacs;"
 #define countEntriesQuery "SELECT count(*) FROM blemacs;"
 // used by resetDB()
@@ -99,10 +142,9 @@ static char colValue[32] = {'\0'}; // search result
 // used by testOUI()
 #define testOUIQuery "SELECT * FROM 'oui-light' limit 10"
 // used by insertBTDevice()
-#define insertQueryTemplate "INSERT INTO blemacs(" BLEMAC_INSERT_FIELDNAMES ") VALUES(%d,\"%s\",\"%s\",\"%s\",%d,%d,\"%s\",\"%s\")"
-static char insertQuery[256]; // stack overflow ? pray that 256 is enough :D
+static char insertQuery[512]; // stack overflow ? pray that 256 is enough :D
 #define searchDeviceTemplate "SELECT " BLEMAC_SELECT_FIELDNAMES " FROM blemacs WHERE address='%s'"
-static char searchDeviceQuery[132];
+static char searchDeviceQuery[160];
 #define vendorRequestTpl "SELECT vendor FROM 'ble-oui' WHERE id='%d'"
 #define OUIRequestTpl "SELECT * FROM 'oui-light' WHERE Assignment=UPPER('%s');"
 
@@ -200,11 +242,12 @@ struct OUIPsramCacheStruct {
 #define OUIDBSize 25523 // how many entries in the OUI lookup DB
 OUIPsramCacheStruct** OuiPsramCache = NULL;
 
-
 class DBUtils {
   public:
 
     char currentBLEAddress[MAC_LEN+1] = "00:00:00:00:00:00"; // used to proxy BLE search term to DB query
+   
+    char* BLEMacsDbSQLitePath = NULL;//"/sdcard/blemacs.db";
 
     sqlite3 *BLECollectorDB; // read/write
     sqlite3 *BLEVendorsDB; // readonly
@@ -237,29 +280,48 @@ class DBUtils {
         UI.headerStats(" ");
         delay(300);
       }
+      BLEMacsDbSQLitePath = (char*)malloc(32);
+      setBLEDBPath();
+      
       hasPsram = psramInit();
       sqlite3_initialize();
       initial_free_heap = freeheap;
+
+      createDB(); // only if no exists
+      entries = getEntries();
+      cacheWarmup();
+
       if ( resetReason == 12)  { // =  SW_CPU_RESET
         // CPU was reset by software, don't perform tests (faster load)
-        cacheWarmup();
       } else {
         Out.println();
         Out.println("Cold boot detected");
         Out.println();
         Out.println("Testing Database...");
         Out.println();
-        resetDB(); // use this when db is corrupt (shit happens) or filled by ESP32-BLE-BeaconSpam
-        pruneDB(); // remove unnecessary/redundant entries
+        //pruneDB(); // remove unnecessary/redundant entries
         // initial boot, perform some tests
         testOUI(); // test oui database
         testVendorNames(); // test vendornames database
         //showDataSamples(); // print some of the collected values (WARN: memory hungry)
         // note: BLE.init() will restart on cold boot
       }
-      entries = getEntries();
+
     }
 
+    void setBLEDBPath() {
+      #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
+        DateTime epoch = RTC.now();
+        sprintf(BLEMacsDbSQLitePath, "/sdcard/ble-%04d-%02d-%02d.db",
+          epoch.year(),
+          epoch.month(),
+          epoch.day()
+        );
+        Serial.printf(" [%s] Assigning db path : %s\n", __func__, BLEMacsDbSQLitePath);
+      #else
+        BLEMacsDbSQLitePath = "/sdcard/blemacs.db";
+      #endif
+    }
 
     void cacheWarmup() {
 
@@ -365,7 +427,7 @@ class DBUtils {
       if( isCorrupt ) {
         Serial.println("[I/O ERROR] this DB file is too big");
         Serial.printf("During this session (%d), %d out of %d devices were added to the DB\n", UpTimeString, newDevicesCount-AnonymousCacheHit, sessDevicesCount);
-        moveDB();
+        resetDB();
         delay(1000);
         ESP.restart();
       }
@@ -405,7 +467,7 @@ class DBUtils {
      int rc;
       switch(dbName) {
         case BLE_COLLECTOR_DB: // will be created upon first boot
-          rc = sqlite3_open("/sdcard/blemacs.db", &BLECollectorDB); 
+          rc = sqlite3_open(/*"/sdcard/blemacs.db"*/BLEMacsDbSQLitePath, &BLECollectorDB); 
         break;
         case MAC_OUI_NAMES_DB: // https://code.wireshark.org/review/gitweb?p=wireshark.git;a=blob_plain;f=manuf
           rc = sqlite3_open("/sdcard/mac-oui-light.db", &OUIVendorsDB); 
@@ -465,7 +527,13 @@ class DBUtils {
         return -1;
       }
       open(BLE_COLLECTOR_DB);
-      sprintf(searchDeviceQuery, searchDeviceTemplate, address);
+      #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
+        //Serial.printf("[%s] will run on template %s\n", __func__, searchDeviceTemplate );
+        sprintf(searchDeviceQuery, searchDeviceTemplate, "%s", "%s", address);
+      #else
+        //Serial.printf("[%s] will run on template %s\n", __func__, searchDeviceTemplate );
+        sprintf(searchDeviceQuery, searchDeviceTemplate, address);
+      #endif
       //Serial.print( address ); Serial.print( " => " ); Serial.println(searchDeviceQuery);
       int rc = sqlite3_exec(BLECollectorDB, searchDeviceQuery, BLEDevDBCallback, (void*)dataBLE, &zErrMsg);
       if (rc != SQLITE_OK) {
@@ -483,7 +551,9 @@ class DBUtils {
     void loadVendorsToPSRam() {
       results = 0;
       open(BLE_VENDOR_NAMES_DB);
-      UI.headerStats("Moving Vendors to PSRam");
+      Out.println("Cloning Vendors DB to PSRam...");
+      Out.println();
+      UI.headerStats("Cloning...");
       int rc = sqlite3_exec(BLEVendorsDB, "SELECT id, SUBSTR(vendor, 0, 32) as vendor FROM 'ble-oui' where vendor!=''", VendorDBCallback, (void*)dataVendor, &zErrMsg);
       UI.PrintProgressBar( Out.width );
       if (rc != SQLITE_OK) {
@@ -503,7 +573,9 @@ class DBUtils {
     void loadOUIToPSRam() {
       results = 0;
       open(MAC_OUI_NAMES_DB);
-      UI.headerStats("Moving OUI to PSRam");
+      Out.println("Cloning Manufacturers DB to PSRam...");
+      Out.println();
+      UI.headerStats("Cloning...");
       int rc = sqlite3_exec(OUIVendorsDB, "SELECT LOWER(assignment) as mac, SUBSTR(`Organization Name`, 0, 32) as ouiname FROM 'oui-light'", OUIDBCallback, (void*)dataOUI, &zErrMsg);
       UI.PrintProgressBar( Out.width );
       if (rc != SQLITE_OK) {
@@ -515,7 +587,7 @@ class DBUtils {
       close(MAC_OUI_NAMES_DB);
       for(byte i=0;i<8;i++) {
         uint32_t rnd = random(0, OUIDBSize);
-        Serial.printf("[%s] Testing random mac #%d: %s / %s\n", __func__, rnd, OuiPsramCache[rnd]->mac, OuiPsramCache[rnd]->assignment );
+        Serial.printf("[%s] Testing random mac #%06X: %s / %s\n", __func__, rnd, OuiPsramCache[rnd]->mac, OuiPsramCache[rnd]->assignment );
       }
     }
 
@@ -525,11 +597,13 @@ class DBUtils {
       if (strcmp(zErrMsg, "database disk image is malformed")==0) {
         resetDB();
       } else if (strcmp(zErrMsg, "no such table: blemacs")==0) {
-        resetDB();        
+        resetDB();
       } else if (strcmp(zErrMsg, "out of memory")==0) {
         isOOM = true;
       } else if(strcmp(zErrMsg, "disk I/O error")==0) {
         isCorrupt = true; // TODO: rename the DB file and create a new DB
+      } else if(strstr("no such column", zErrMsg)) {
+        resetDB();
       } else {
         UI.headerStats(zErrMsg);
         delay(1000); 
@@ -571,17 +645,47 @@ class DBUtils {
       clean( CacheItem[_index]->ouiname );
       clean( CacheItem[_index]->manufname );
       clean( CacheItem[_index]->uuid );
+
+      #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
       
-      sprintf(insertQuery, insertQueryTemplate,
-        CacheItem[_index]->appearance,
-        CacheItem[_index]->name,
-        CacheItem[_index]->address,
-        CacheItem[_index]->ouiname,
-        CacheItem[_index]->rssi,
-        CacheItem[_index]->manufid,
-        CacheItem[_index]->manufname,
-        CacheItem[_index]->uuid
-      );
+        char created_at_str[20] = "YYYY-MM-DD HH:MM:SS";
+
+        sprintf(created_at_str, YYYYMMDD_HHMMSS_Tpl, 
+          CacheItem[_index]->created_at.year(),
+          CacheItem[_index]->created_at.month(),
+          CacheItem[_index]->created_at.day(),
+          CacheItem[_index]->created_at.hour(),
+          CacheItem[_index]->created_at.minute(),
+          CacheItem[_index]->created_at.second()
+        );
+
+        sprintf(insertQuery, insertQueryTemplate,
+          CacheItem[_index]->appearance,
+          CacheItem[_index]->name,
+          CacheItem[_index]->address,
+          CacheItem[_index]->ouiname,
+          CacheItem[_index]->rssi,
+          CacheItem[_index]->manufid,
+          CacheItem[_index]->manufname,
+          CacheItem[_index]->uuid,
+          created_at_str,
+          created_at_str
+        );
+
+      #else
+      
+        sprintf(insertQuery, insertQueryTemplate,
+          CacheItem[_index]->appearance,
+          CacheItem[_index]->name,
+          CacheItem[_index]->address,
+          CacheItem[_index]->ouiname,
+          CacheItem[_index]->rssi,
+          CacheItem[_index]->manufid,
+          CacheItem[_index]->manufname,
+          CacheItem[_index]->uuid
+        );
+
+      #endif
 
       int rc = DBExec( BLECollectorDB, insertQuery );
       if (rc != SQLITE_OK) {
@@ -617,17 +721,17 @@ class DBUtils {
 
     void showDataSamples() {
       open(BLE_COLLECTOR_DB);
-      tft.setTextColor(WROVER_YELLOW);
+      tft.setTextColor(BLE_YELLOW);
       Out.println(" Collected Named Devices:");
-      tft.setTextColor(WROVER_PINK);
+      tft.setTextColor(BLE_PINK);
       DBExec(BLECollectorDB, nameQuery , true);
-      tft.setTextColor(WROVER_YELLOW);
+      tft.setTextColor(BLE_YELLOW);
       Out.println(" Collected Devices Vendors:");
-      tft.setTextColor(WROVER_PINK);
+      tft.setTextColor(BLE_PINK);
       DBExec(BLECollectorDB, manufnameQuery, true);
-      tft.setTextColor(WROVER_YELLOW);
+      tft.setTextColor(BLE_YELLOW);
       Out.println(" Collected Devices MAC's Vendors:");
-      tft.setTextColor(WROVER_PINK);
+      tft.setTextColor(BLE_PINK);
       DBExec(BLECollectorDB, ouinameQuery, true);
       close(BLE_COLLECTOR_DB);
       Out.println();
@@ -651,37 +755,49 @@ class DBUtils {
       Out.println();
       Out.println("Re-creating database");
       Out.println();
-      SD_MMC.remove("/blemacs.db");
-      open(BLE_COLLECTOR_DB, false);
-      DBExec(BLECollectorDB, dropTableQuery);
-      DBExec(BLECollectorDB, createTableQuery);
-      close(BLE_COLLECTOR_DB);
+      //BLE_FS.remove(BLEMacsDbFSPath);
+      dropDB();
+      createDB();
       ESP.restart();
     }
 
+    void createDB() {
+      open(BLE_COLLECTOR_DB, false);
+      //Serial.printf("[%s] created %s if no exists:  : %s\n", __func__, BLEMacsDbSQLitePath, createTableQuery);
+      DBExec(BLECollectorDB, createTableQuery);
+      close(BLE_COLLECTOR_DB);
+    }
 
+    void dropDB() {
+      open(BLE_COLLECTOR_DB, false);
+      Serial.printf("[%s] dropped if exists: %s DB\n", __func__, BLEMacsDbSQLitePath);
+      DBExec(BLECollectorDB, dropTableQuery);
+      close(BLE_COLLECTOR_DB);      
+    }
+
+/*
     void moveDB() {
       // TODO: give a timestamp to the destination filename
-      if(SD_MMC.rename("/blemacs.db", "/blemacs.corrupt.db") !=0) {
+      if(BLE_FS.rename(BLEMacsDbFSPath, "/blemacs.corrupt.db") !=0) {
         Serial.println("[I/O ERROR] renaming failed, will reset");
         resetDB();
       } else {
         ESP.restart();
       }
     }
-
+*/
 
     void pruneDB() {
       unsigned int before_pruning = getEntries();
-      tft.setTextColor(WROVER_YELLOW);
+      tft.setTextColor(BLE_YELLOW);
       UI.headerStats("Pruning DB");
-      tft.setTextColor(WROVER_GREEN);
+      tft.setTextColor(BLE_GREEN);
       open(BLE_COLLECTOR_DB, false);
       //DBExec(BLECollectorDB, cleanTableQuery, true);
       DBExec(BLECollectorDB, pruneTableQuery, true);
       close(BLE_COLLECTOR_DB);
       entries = getEntries();
-      tft.setTextColor(WROVER_YELLOW);
+      tft.setTextColor(BLE_YELLOW);
       prune_trigger = 0;
       UI.headerStats("DB Pruned");
       UI.footerStats();
@@ -690,21 +806,21 @@ class DBUtils {
 
     void testVendorNames() {
       open(BLE_VENDOR_NAMES_DB);
-      tft.setTextColor(WROVER_YELLOW);
+      tft.setTextColor(BLE_YELLOW);
       Out.println();
       Out.println("Testing Vendor Names Database ...");
-      tft.setTextColor(WROVER_GREENYELLOW);
+      tft.setTextColor(BLE_GREENYELLOW);
       DBExec(BLEVendorsDB, testVendorNamesQuery, true);
       close(BLE_VENDOR_NAMES_DB);
       char *vendorname = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
       getVendor( 0x001D /*Qualcomm*/, vendorname );
       if (strcmp(vendorname, "Qualcomm")!=0) {
-        tft.setTextColor(WROVER_RED);
+        tft.setTextColor(BLE_RED);
         Out.println(vendorname);
         Out.println("Vendor Names Test failed, looping");
         while (1) yield();
       } else {
-        tft.setTextColor(WROVER_GREEN);
+        tft.setTextColor(BLE_GREEN);
         Out.println("Vendor Names Test success!");
       }
       Out.println();
@@ -713,21 +829,21 @@ class DBUtils {
 
     void testOUI() {
       open(MAC_OUI_NAMES_DB);
-      tft.setTextColor(WROVER_YELLOW);
+      tft.setTextColor(BLE_YELLOW);
       Out.println();
       Out.println("Testing MAC OUI database ...");
-      tft.setTextColor(WROVER_GREENYELLOW);
+      tft.setTextColor(BLE_GREENYELLOW);
       DBExec(OUIVendorsDB, testOUIQuery, true);
       close(MAC_OUI_NAMES_DB);
       char *ouiname = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
       getOUI( "B499BA" /*Hewlett Packard */, ouiname );
       if ( strcmp(ouiname, "Hewlett Packard")!=0 ) {
-        tft.setTextColor(WROVER_RED);
+        tft.setTextColor(BLE_RED);
         Out.println(ouiname);
         Out.println("MAC OUI Test failed, looping");
         while (1) yield();
       } else {
-        tft.setTextColor(WROVER_GREEN);
+        tft.setTextColor(BLE_GREEN);
         Out.println("MAC OUI Test success!");
       }
       Out.println();
@@ -859,7 +975,7 @@ class DBUtils {
         }
       }
       if(bytepos!=6) {
-        Serial.printf("Bad getOUI query with %d chars instead of %s vs %s\n", bytepos, mac, shortmac);
+        Serial.printf("Bad getHeapOUI query with %d chars instead of %s vs %s\n", bytepos, mac, shortmac);
       }
       int OUICacheIdIfExists = OUIHeapExists( shortmac );
       if(OUICacheIdIfExists>-1) {
@@ -912,12 +1028,12 @@ class DBUtils {
       byte bytepos =  0;
       for(byte i=0;i<9;i++) {
         if(mac[i]!=':') {
-          shortmac[bytepos] = mac[i];
+          shortmac[bytepos] = tolower(mac[i]);
           bytepos++;
         }
       }
       if(bytepos!=6) {
-        Serial.printf("Bad getOUI query with %d chars instead of %s vs %s\n", bytepos, mac, shortmac);
+        Serial.printf("Bad getPsramOUI query with %d chars instead of %s vs %s\n", bytepos, mac, shortmac);
       }
       int OUICacheIdIfExists = OUIPsramExists( shortmac );
       if(OUICacheIdIfExists>-1) {
@@ -946,6 +1062,10 @@ class DBUtils {
 
         BLEDevCache[BLEDevCacheIndex]->hits = 1;
         BLEDevCache[BLEDevCacheIndex]->in_db = true;
+        #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
+          //BLEDevCache[BLEDevCacheIndex]->created_at = nowDateTime;
+        #endif
+        
         
       } else {
         Serial.print("Device Pool Size Exceeded, ignoring: ");

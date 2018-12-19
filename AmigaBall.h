@@ -1,4 +1,36 @@
-/* ported from https://github.com/niklasekstrom/boing_ball_python/blob/master/boing_ball.py */
+/*
+
+  ESP32 Amigaball - A port of the famous Amiga Boing Ball Demo
+  ported from https://github.com/niklasekstrom/boing_ball_python/
+
+  MIT License
+
+  Copyright (c) 2018 tobozo
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+
+  -----------------------------------------------------------------------------
+
+*/
+
+
+
 
 struct AmigaBallConfig {
   float BGColor = tft.color565(0x22, 0x22, 0x44);
@@ -196,7 +228,7 @@ class AmigaRulez {
           Points p3 = points[i+1][j+1];
           Points p4 = points[i][j+1];
           */
-          uint16_t color = alter ? WROVER_RED : WROVER_WHITE;
+          uint16_t color = alter ? BLE_RED : BLE_WHITE;
           tft.fillTriangle(points[i][j].x, points[i][j].y, points[i+1][j].x, points[i+1][j].y, points[i+1][j+1].x, points[i+1][j+1].y, color);
           //tft.fillTriangle(p2.x, p2.y, p3.x, p3.y, p4.x, p4.y, color);
           tft.fillTriangle(points[i+1][j+1].x, points[i+1][j+1].y, points[i][j+1].x, points[i][j+1].y, points[i][j].x, points[i][j].y, color);
@@ -208,21 +240,21 @@ class AmigaRulez {
 
     void drawWireFrame() {
       for( int i=0; i<=AmigaBallWires; i++ ) {
-        tft.drawFastHLine(boxHstart, boxVstart + i*vSteps, boxWidth, WROVER_PURPLE);
-        tft.drawLine(boxHstart, boxVstart + i*vSteps, canvasHstart, canvasVstart + i*cVsteps, WROVER_PURPLE);
-        tft.drawLine(boxHend,   boxVstart + i*vSteps, canvasHend,   canvasVstart + i*cVsteps, WROVER_PURPLE);
-        tft.drawFastVLine(boxHstart + i*hSteps, boxVstart, boxHeight, WROVER_PURPLE);
-        tft.drawLine(boxHstart + i*hSteps, boxVstart, canvasHstart + i*cHsteps, canvasVstart, WROVER_PURPLE);
-        tft.drawLine(boxHstart + i*hSteps, boxVend, canvasHstart + i*cHsteps, canvasVend, WROVER_PURPLE);
+        tft.drawFastHLine(boxHstart, boxVstart + i*vSteps, boxWidth, BLE_PURPLE);
+        tft.drawLine(boxHstart, boxVstart + i*vSteps, canvasHstart, canvasVstart + i*cVsteps, BLE_PURPLE);
+        tft.drawLine(boxHend,   boxVstart + i*vSteps, canvasHend,   canvasVstart + i*cVsteps, BLE_PURPLE);
+        tft.drawFastVLine(boxHstart + i*hSteps, boxVstart, boxHeight, BLE_PURPLE);
+        tft.drawLine(boxHstart + i*hSteps, boxVstart, canvasHstart + i*cHsteps, canvasVstart, BLE_PURPLE);
+        tft.drawLine(boxHstart + i*hSteps, boxVend, canvasHstart + i*cHsteps, canvasVend, BLE_PURPLE);
       }
       for( int i=0; i<4; i++ ) {
         float _y = perspective[i]+vSteps/2;
         float _x =  ((AmigaBallScale/2) - (_y * ytoxratio))*2;
-        tft.drawFastHLine(_x, boxVstart - _y, canvasWidth-(_x*2), WROVER_PURPLE);
-        tft.drawFastHLine(_x, boxVend   + _y, canvasWidth-(_x*2), WROVER_PURPLE);
+        tft.drawFastHLine(_x, boxVstart - _y, canvasWidth-(_x*2), BLE_PURPLE);
+        tft.drawFastHLine(_x, boxVend   + _y, canvasWidth-(_x*2), BLE_PURPLE);
         float boxH = (boxVend   + _y) - (boxVstart - _y);
-        tft.drawFastVLine(_x,               boxVstart - _y, boxH, WROVER_PURPLE);
-        tft.drawFastVLine(canvasWidth - _x, boxVstart - _y, boxH, WROVER_PURPLE);
+        tft.drawFastVLine(_x,               boxVstart - _y, boxH, BLE_PURPLE);
+        tft.drawFastVLine(canvasWidth - _x, boxVstart - _y, boxH, BLE_PURPLE);
       }
     }
 

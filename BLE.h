@@ -88,19 +88,26 @@ class FoundDeviceCallback: public BLEAdvertisedDeviceCallbacks {
       }
       scan_cursor++;
       processedDevicesCount++;
+      if( scan_cursor == MAX_DEVICES_PER_SCAN ) {
+        onScanDone = true;
+      }
     } else {
-      advertisedDevice.getScan()->stop();
       onScanDone = true;
+    }
+
+    if( onScanDone ) {
+      advertisedDevice.getScan()->stop();
       scan_cursor = 0;
       if( SCAN_DURATION-1 >= MIN_SCAN_DURATION ) {
         SCAN_DURATION--;
       }
     }
+    
     foundDeviceToggler = !foundDeviceToggler;
     if(foundDeviceToggler) {
-      UI.BLEStateIconSetColor(WROVER_GREEN);
+      UI.BLEStateIconSetColor(BLE_GREEN);
     } else {
-      UI.BLEStateIconSetColor(WROVER_DARKGREEN);
+      UI.BLEStateIconSetColor(BLE_DARKGREEN);
     }
     vTaskDelay(100);
   }
@@ -190,6 +197,8 @@ class BLEScanUtils {
           stopScanTask();
           return true;
         }
+      } else if(strstr(tempBuffer, "restart")) {
+        ESP.restart();
       } else if(strstr(tempBuffer, "start")) {
         if( !scanTaskRunning ) {
           Serial.printf("[%s] Starting scan\n", __func__ );
@@ -201,11 +210,15 @@ class BLEScanUtils {
         resetTimeActivity( SOURCE_COMPILER ); // will eventually result in loading NTPMenu.bin
         ESP.restart();
       #endif
-      } else if(strstr(tempBuffer, "restart")) {
-        ESP.restart();
       } else if(strstr(tempBuffer, "dump")) {
         Serial.printf("[%s] Stopping scan\n", __func__ );
         startDumpTask();
+        return true;
+      } else if(strstr(tempBuffer, "resetDB")) {
+        stopScanTask();
+        BLE_FS.remove( DB.BLEMacsDbSQLitePath );
+        ESP.restart();
+        //DB.resetDB();
         return true;
       }
       return false;
@@ -330,9 +343,14 @@ class BLEScanUtils {
       if( deviceIndexIfExists > -1 ) {
         inCacheCount++;
         BLEDevCache[deviceIndexIfExists]->hits++;
+        #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
+        BLEDevCache[deviceIndexIfExists]->updated_at = nowDateTime;
+        BLEDevTmpCache[_scan_cursor]->updated_at = BLEDevCache[deviceIndexIfExists]->updated_at;
+        BLEDevTmpCache[_scan_cursor]->created_at = BLEDevCache[deviceIndexIfExists]->created_at;
+        #endif
         BLEDevTmpCache[_scan_cursor]->hits = BLEDevCache[deviceIndexIfExists]->hits;
         BLEDevTmpCache[_scan_cursor]->in_db = BLEDevCache[deviceIndexIfExists]->in_db;
-        Serial.printf( "  [%s] Device %d exists in cache, copied %d hits\n", __func__, _scan_cursor, BLEDevTmpCache[_scan_cursor]->hits );
+        Serial.printf( "  [%s] Device %d exists in cache with %d hits\n", __func__, _scan_cursor, BLEDevTmpCache[_scan_cursor]->hits );
       } else {
         if( BLEDevTmpCache[_scan_cursor]->is_anonymous ) {
           // won't land in DB but can land in cache
@@ -345,10 +363,18 @@ class BLEScanUtils {
           if(deviceIndexIfExists>-1) {
             BLEDevTmpCache[_scan_cursor]->in_db = true;
             BLEDevCache[deviceIndexIfExists]->hits++;
+            #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
+            BLEDevCache[deviceIndexIfExists]->updated_at = nowDateTime;
+            //BLEDevTmpCache[_scan_cursor]->updated_at = BLEDevCache[deviceIndexIfExists]->updated_at;
+            //BLEDevTmpCache[_scan_cursor]->created_at = BLEDevCache[deviceIndexIfExists]->created_at;
+            #endif
             BLEDevTmpCache[_scan_cursor]->hits = BLEDevCache[deviceIndexIfExists]->hits;
+            BLEDevTmpCache[_scan_cursor]->in_db = BLEDevCache[deviceIndexIfExists]->in_db;
             Serial.printf( "  [%s] Device %d is already in DB, increased hits to %d\n", __func__, _scan_cursor, BLEDevTmpCache[scan_cursor]->hits );
           } else {
             Serial.printf( "  [%s] Device %d is not in DB\n", __func__, _scan_cursor );
+            //BLEDevTmpCache[_scan_cursor]->updated_at = BLEDevCache[deviceIndexIfExists]->updated_at;
+            //BLEDevTmpCache[_scan_cursor]->created_at = BLEDevCache[deviceIndexIfExists]->created_at;
           }
         }
       }
@@ -459,7 +485,7 @@ class BLEScanUtils {
       if( isEmpty( address ) )  return -1;
       for(int i=0; i<BLEDEVCACHE_SIZE; i++) {
         if( strcmp(address, BLEDevCache[i]->address )==0  ) {
-          BLEDevCache[i]->hits++;
+          //BLEDevCache[i]->hits++;
           BLEDevCacheHit++;
           //Serial.printf("[CACHE HIT] BLEDevCache ID #%s has %d cache hits\n", address, BLEDevCache[i].hits);
           return i;

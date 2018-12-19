@@ -34,12 +34,9 @@ static char hhmmString[13] = "--:--"; // %02d:%02d
 static char hhmmssString[13] = "--:--:--"; // %02d:%02d:%02d
 static char UpTimeString[13] = "00:00"; // %02d:%02d
 static char LastSyncTimeString[32] = "YYYY-MM-DD HH:MM:SS";
-
+const char* YYYYMMDD_HHMMSS_Tpl = "%04d-%02d-%02d %02d:%02d:%02d";
 
 #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
-
-  //static DateTime nowDateTime;
-  static DateTime lastSyncDateTime;
 
   enum OTAPartitionNames {
     NO_PARTITION = -1,
@@ -103,8 +100,9 @@ static char LastSyncTimeString[32] = "YYYY-MM-DD HH:MM:SS";
       }
     } else {
       lastSyncDateTime = timeActivity.epoch;
-      DateTime nowDateTime = RTC.now();
-      int64_t deltaInSeconds = (unsigned long)nowDateTime.unixtime() - (unsigned long)lastSyncDateTime.unixtime();
+      DateTime _nowDateTime = RTC.now();
+      nowDateTime = _nowDateTime;
+      int64_t deltaInSeconds = (unsigned long)_nowDateTime.unixtime() - (unsigned long)lastSyncDateTime.unixtime();
       Serial.printf("[RTC] Last Time Sync: %s (%d seconds ago) using source #%d\n", LastSyncTimeString, deltaInSeconds, timeActivity.source);
       #if RTC_PROFILE > ROGUE // on NTP_MENU and CHRONOMANIAC SD-mirror themselves
 
@@ -117,7 +115,7 @@ static char LastSyncTimeString[32] = "YYYY-MM-DD HH:MM:SS";
     
         if(strcmp(buildSignature, currentMenuSignature)==0) {
           // Build signature matches with current partition, looks fine!
-          binarySignature = getBinarySignature( SD_MMC, MENU_FILENAME );
+          binarySignature = getBinarySignature( BLE_FS, MENU_FILENAME );
           if( strcmp(binarySignature, currentMenuSignature)==0 ) {
             // Perfect match, nothing to do \o/
             return timeActivity;
@@ -140,8 +138,9 @@ static char LastSyncTimeString[32] = "YYYY-MM-DD HH:MM:SS";
 
         //Serial.println("[Flash2SD] Binary signature " + String(binarySignature));
         Out.println();
-        Out.println("[SD!=FLASH]"); // mirror current flash partition to SD
-        updateToFS(SD_MMC, MENU_FILENAME, CURRENT_PARTITION);
+        Out.println(" [SD!=FLASH]"); // mirror current flash partition to SD
+        updateToFS(BLE_FS, MENU_FILENAME, CURRENT_PARTITION);
+        Out.scrollNextPage();
 
       #endif
 
@@ -159,17 +158,18 @@ static void updateTimeString(bool checkNTP=false) {
   unsigned long  ss = seconds_since_boot % 60;
 
   #if RTC_PROFILE > HOBO
-    DateTime nowDateTime = RTC.now();
+    DateTime _nowDateTime = RTC.now();
+    nowDateTime = _nowDateTime;
 
-    sprintf(hhmmString, "%02d:%02d", nowDateTime.hour(), nowDateTime.minute());
-    sprintf(hhmmssString, "%02d:%02d:%02d", nowDateTime.hour(), nowDateTime.minute(), nowDateTime.second());
+    sprintf(hhmmString, "%02d:%02d", _nowDateTime.hour(), _nowDateTime.minute());
+    sprintf(hhmmssString, "%02d:%02d:%02d", _nowDateTime.hour(), _nowDateTime.minute(), _nowDateTime.second());
     #if RTC_PROFILE == CHRONOMANIAC  // chronomaniac mode
       if (checkNTP && RTC.isrunning()) {
-        int64_t deltaInSeconds = nowDateTime.unixtime() - lastSyncDateTime.unixtime();
-        Serial.printf("[%s] now(%d) - last(%d) = %d seconds\n", __func__, nowDateTime.unixtime(), lastSyncDateTime.unixtime(), deltaInSeconds);
+        int64_t deltaInSeconds = _nowDateTime.unixtime() - lastSyncDateTime.unixtime();
+        Serial.printf("[%s] now(%d) - last(%d) = %d seconds\n", __func__, _nowDateTime.unixtime(), lastSyncDateTime.unixtime(), deltaInSeconds);
         if ( deltaInSeconds > 86400/*300*/) {
           Serial.printf("[CHRONOMANIAC] Last Time Sync: %s (%d seconds ago). Time isn't fresh anymore, should reload NTP menu !!\n", LastSyncTimeString, deltaInSeconds);
-          rollBackOrUpdateFromFS( SD_MMC, NTP_MENU_FILENAME );
+          rollBackOrUpdateFromFS( BLE_FS, NTP_MENU_FILENAME );
           ESP.restart();
         }
       }
@@ -192,7 +192,13 @@ bool RTCSetup() {
     // using Wire.begin() instead of RTC.begin()
     // because, as usual, Adafruit library tries to sel
     // Adafruit hardware by not letting you choose the pins
-    Wire.begin(RTC_SDA/*26*/, RTC_SCL/*27*/);
+    // or patch it yourself:
+    //
+    // bool RTC::begin(uint8_t sdaPin, uint8_t sclPin) {
+    //   Wire.begin(sdaPin, sclPin);
+    //   return true;
+    // }
+    RTC.begin(RTC_SDA/*26*/, RTC_SCL/*27*/);
     /*
     if(!RTC.begin()) { 
       Serial.println("[RTC] begin() failed");
@@ -206,7 +212,7 @@ bool RTCSetup() {
       #if RTC_PROFILE == CHRONOMANIAC // chronomaniac mode
         if (RTC.isrunning()) {
           Serial.println("[RTC] alive, will load the NTP Sync binary and adjust time");
-          rollBackOrUpdateFromFS( SD_MMC, "/NTPMenu.bin" );
+          rollBackOrUpdateFromFS( BLE_FS, "/NTPMenu.bin" );
           ESP.restart(); // TODO: adjust from a BLE characteristic or a GPS
         } else {
           Serial.println("[RTC] broken or bad wiring, adjusting from NTP is futile.");
@@ -228,7 +234,7 @@ bool SDSetup() {
   unsigned long max_wait = 500;
   byte attempts = 100;
   while ( sd_mounted == false && attempts>0) {
-    if (SD_MMC.begin() ) {
+    if (BLE_FS.begin() ) {
       sd_mounted = true;
     } else {
       Serial.println("[SD] Mount Failed");
@@ -330,7 +336,7 @@ bool SDSetup() {
     int httpSize = len;
     uint8_t buff[512] = { 0 };
     WiFiClient * stream = http.getStreamPtr();
-    File myFile = SD_MMC.open(appName, FILE_WRITE);
+    File myFile = BLE_FS.open(appName, FILE_WRITE);
     if(!myFile) {
       Serial.printf("[%s] Failed to open %s for writing, aborting\n", __func__, appName.c_str() );
       http.end();
@@ -376,7 +382,7 @@ bool SDSetup() {
   void sudoMakeMeASandwich(String fileURL, String fileName, bool force = false) {
     size_t sdFileSize = 0;
     size_t remoteFileSize = 0;
-    File fileBin = SD_MMC.open(fileName);
+    File fileBin = BLE_FS.open(fileName);
     if (fileBin) {
       sdFileSize = fileBin.size();
       Serial.printf("[%s][SD] %s : %d bytes\n", __func__, fileName.c_str(), sdFileSize);
@@ -464,7 +470,7 @@ bool SDSetup() {
       // regress to ROGUE mode
       logTimeActivity(SOURCE_NONE);
     }
-    rollBackOrUpdateFromFS( SD_MMC, BLE_MENU_FILENAME );
+    rollBackOrUpdateFromFS( BLE_FS, BLE_MENU_FILENAME );
     ESP.restart();
   }
 
