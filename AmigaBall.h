@@ -228,7 +228,7 @@ class AmigaRulez {
           Points p3 = points[i+1][j+1];
           Points p4 = points[i][j+1];
           */
-          uint16_t color = alter ? WROVER_RED : WROVER_WHITE;
+          uint16_t color = alter ? BLE_RED : BLE_WHITE;
           tft.fillTriangle(points[i][j].x, points[i][j].y, points[i+1][j].x, points[i+1][j].y, points[i+1][j+1].x, points[i+1][j+1].y, color);
           //tft.fillTriangle(p2.x, p2.y, p3.x, p3.y, p4.x, p4.y, color);
           tft.fillTriangle(points[i+1][j+1].x, points[i+1][j+1].y, points[i][j+1].x, points[i][j+1].y, points[i][j].x, points[i][j].y, color);
@@ -240,21 +240,21 @@ class AmigaRulez {
 
     void drawWireFrame() {
       for( int i=0; i<=AmigaBallWires; i++ ) {
-        tft.drawFastHLine(boxHstart, boxVstart + i*vSteps, boxWidth, WROVER_PURPLE);
-        tft.drawLine(boxHstart, boxVstart + i*vSteps, canvasHstart, canvasVstart + i*cVsteps, WROVER_PURPLE);
-        tft.drawLine(boxHend,   boxVstart + i*vSteps, canvasHend,   canvasVstart + i*cVsteps, WROVER_PURPLE);
-        tft.drawFastVLine(boxHstart + i*hSteps, boxVstart, boxHeight, WROVER_PURPLE);
-        tft.drawLine(boxHstart + i*hSteps, boxVstart, canvasHstart + i*cHsteps, canvasVstart, WROVER_PURPLE);
-        tft.drawLine(boxHstart + i*hSteps, boxVend, canvasHstart + i*cHsteps, canvasVend, WROVER_PURPLE);
+        tft.drawFastHLine(boxHstart, boxVstart + i*vSteps, boxWidth, BLE_PURPLE);
+        tft.drawLine(boxHstart, boxVstart + i*vSteps, canvasHstart, canvasVstart + i*cVsteps, BLE_PURPLE);
+        tft.drawLine(boxHend,   boxVstart + i*vSteps, canvasHend,   canvasVstart + i*cVsteps, BLE_PURPLE);
+        tft.drawFastVLine(boxHstart + i*hSteps, boxVstart, boxHeight, BLE_PURPLE);
+        tft.drawLine(boxHstart + i*hSteps, boxVstart, canvasHstart + i*cHsteps, canvasVstart, BLE_PURPLE);
+        tft.drawLine(boxHstart + i*hSteps, boxVend, canvasHstart + i*cHsteps, canvasVend, BLE_PURPLE);
       }
       for( int i=0; i<4; i++ ) {
         float _y = perspective[i]+vSteps/2;
         float _x =  ((AmigaBallScale/2) - (_y * ytoxratio))*2;
-        tft.drawFastHLine(_x, boxVstart - _y, canvasWidth-(_x*2), WROVER_PURPLE);
-        tft.drawFastHLine(_x, boxVend   + _y, canvasWidth-(_x*2), WROVER_PURPLE);
+        tft.drawFastHLine(_x, boxVstart - _y, canvasWidth-(_x*2), BLE_PURPLE);
+        tft.drawFastHLine(_x, boxVend   + _y, canvasWidth-(_x*2), BLE_PURPLE);
         float boxH = (boxVend   + _y) - (boxVstart - _y);
-        tft.drawFastVLine(_x,               boxVstart - _y, boxH, WROVER_PURPLE);
-        tft.drawFastVLine(canvasWidth - _x, boxVstart - _y, boxH, WROVER_PURPLE);
+        tft.drawFastVLine(_x,               boxVstart - _y, boxH, BLE_PURPLE);
+        tft.drawFastVLine(canvasWidth - _x, boxVstart - _y, boxH, BLE_PURPLE);
       }
     }
 
