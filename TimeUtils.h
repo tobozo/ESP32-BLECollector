@@ -30,11 +30,16 @@
 */
 
 static bool RTC_is_running = false;
-static char hhmmString[13] = "--:--"; // %02d:%02d
-static char hhmmssString[13] = "--:--:--"; // %02d:%02d:%02d
-static char UpTimeString[13] = "00:00"; // %02d:%02d
-static char LastSyncTimeString[32] = "YYYY-MM-DD HH:MM:SS";
+// some date/time formats used in this app
+const char* hhmmStringTpl = "  %02d:%02d  ";
+static char hhmmString[13] = "  --:--  ";
+const char* hhmmssStringTpl = "%02d:%02d:%02d";
+static char hhmmssString[13] = "--:--:--"; 
+const char* UpTimeStringTpl = "  %02d:%02d  ";
+static char UpTimeString[13] = "  --:--  ";
 const char* YYYYMMDD_HHMMSS_Tpl = "%04d-%02d-%02d %02d:%02d:%02d";
+static char LastSyncTimeString[32] = "YYYY-MM-DD HH:MM:SS";
+
 
 #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
 
@@ -81,7 +86,7 @@ const char* YYYYMMDD_HHMMSS_Tpl = "%04d-%02d-%02d %02d:%02d:%02d";
     timeActivity.source = preferences.getUChar("source", 0);
     preferences.end();
 
-    sprintf(LastSyncTimeString, "%04d-%02d-%02d %02d:%02d:%02d", 
+    sprintf(LastSyncTimeString, YYYYMMDD_HHMMSS_Tpl, 
       timeActivity.epoch.year(),
       timeActivity.epoch.month(),
       timeActivity.epoch.day(),
@@ -92,18 +97,18 @@ const char* YYYYMMDD_HHMMSS_Tpl = "%04d-%02d-%02d %02d:%02d:%02d";
 
     if(timeActivity.source==SOURCE_NONE) {
       if(RTC.isrunning()) {
-        Serial.println("[RTC] Forcing source to RTC and rebooting");
+        log_d("[RTC] Forcing source to RTC and rebooting");
         logTimeActivity(SOURCE_RTC);
         ESP.restart();
       } else {
-        Serial.println("[RTC] isn't running!");
+        log_d("[RTC] isn't running!");
       }
     } else {
       lastSyncDateTime = timeActivity.epoch;
       DateTime _nowDateTime = RTC.now();
       nowDateTime = _nowDateTime;
       int64_t deltaInSeconds = (unsigned long)_nowDateTime.unixtime() - (unsigned long)lastSyncDateTime.unixtime();
-      Serial.printf("[RTC] Last Time Sync: %s (%d seconds ago) using source #%d\n", LastSyncTimeString, deltaInSeconds, timeActivity.source);
+      log_d("[RTC] Last Time Sync: %s (%d seconds ago) using source #%d", LastSyncTimeString, deltaInSeconds, timeActivity.source);
       #if RTC_PROFILE > ROGUE // on NTP_MENU and CHRONOMANIAC SD-mirror themselves
 
         // mirror current binary to SD Card if needed
@@ -122,16 +127,16 @@ const char* YYYYMMDD_HHMMSS_Tpl = "%04d-%02d-%02d %02d:%02d:%02d";
           }
         } else if(strcmp(buildSignature, nextMenuSignature)==0) {
           // strange situation where current partition doesn't match the binary in memory
-          Serial.println("[WUT] Build signature matches with next partition");
-          Serial.println("[WUT] Current Build Signature is: " + String( buildSignature ));
-          Serial.println("[WUT] Current Partition Signature is: " + String( currentMenuSignature ));
-          Serial.println("[WUT] Next Partition Signature is: " + String( nextMenuSignature ));
+          log_i("[WUT] Build signature matches with next partition");
+          log_i("[WUT] Current Build Signature is: %s", buildSignature );
+          log_i("[WUT] Current Partition Signature is: %s", currentMenuSignature );
+          log_i("[WUT] Next Partition Signature is: %s", nextMenuSignature );
           return timeActivity;
         } else { // this should not happen
-          Serial.println("[WUT] Build signature matches neither current nor next partition");
-          Serial.println("[WUT] Current Build Signature is: " + String( buildSignature ));
-          Serial.println("[WUT] Current Partition Signature is: " + String( currentMenuSignature ));
-          Serial.println("[WUT] Next Partition Signature is: " + String( nextMenuSignature ));
+          log_e("[WUT] Build signature matches neither current nor next partition");
+          log_e("[WUT] Current Build Signature is: %s", buildSignature );
+          log_e("[WUT] Current Partition Signature is: %s", currentMenuSignature );
+          log_e("[WUT] Next Partition Signature is: %s", nextMenuSignature );
           delay(10000);
           return timeActivity;
         }
@@ -150,6 +155,9 @@ const char* YYYYMMDD_HHMMSS_Tpl = "%04d-%02d-%02d %02d:%02d:%02d";
 
 #endif
 
+//#include <time.h>                       // time() ctime()
+#include <sys/time.h>                   // struct timeval
+
 static void updateTimeString(bool checkNTP=false) {
   unsigned long seconds_since_boot = millis() / 1000;
   unsigned long  minutes_since_boot = seconds_since_boot / 60;
@@ -161,31 +169,62 @@ static void updateTimeString(bool checkNTP=false) {
     DateTime _nowDateTime = RTC.now();
     nowDateTime = _nowDateTime;
 
-    sprintf(hhmmString, "%02d:%02d", _nowDateTime.hour(), _nowDateTime.minute());
-    sprintf(hhmmssString, "%02d:%02d:%02d", _nowDateTime.hour(), _nowDateTime.minute(), _nowDateTime.second());
+    #define TZ              1       // (utc+) TZ in hours
+    #define DST_MN 60 // use 60mn for summer time in some countries
+    #define TZ_MN           ((TZ)*60)
+    #define TZ_SEC          ((TZ)*3600)
+    #define DST_SEC ((DST_MN)*60)
+
+    timeval timeinfo;
+    time_t now;
+    uint32_t now_ms, now_us;
+    gettimeofday(&timeinfo, nullptr);
+    now = time(nullptr);
+    const tm* tmlocal = localtime(&now);
+    DateTime _internalDateTime = DateTime(tmlocal->tm_year+1900, tmlocal->tm_mon+1, tmlocal->tm_mday, tmlocal->tm_hour, tmlocal->tm_min, tmlocal->tm_sec);
+    if( abs( _nowDateTime.unixtime() - _internalDateTime.unixtime() ) > 1 ) { // time drift exceeded 1s
+      // TODO: adjust internal RTC from external RTC
+      log_d("[Internal Time Drift] : %04d-%02d-%02d %02d:%02d:%02d vs %04d-%02d-%02d %02d:%02d:%02d", 
+        _internalDateTime.year(),
+        _internalDateTime.month(),
+        _internalDateTime.day(),
+        _internalDateTime.hour(),
+        _internalDateTime.minute(),
+        _internalDateTime.second(),
+        _nowDateTime.year(),
+        _nowDateTime.month(),
+        _nowDateTime.day(),
+        _nowDateTime.hour(),
+        _nowDateTime.minute(),
+        _nowDateTime.second()
+      );
+    }
+
+    sprintf(hhmmString, hhmmStringTpl, _nowDateTime.hour(), _nowDateTime.minute());
+    sprintf(hhmmssString, hhmmssStringTpl, _nowDateTime.hour(), _nowDateTime.minute(), _nowDateTime.second());
     #if RTC_PROFILE == CHRONOMANIAC  // chronomaniac mode
       if (checkNTP && RTC.isrunning()) {
         int64_t deltaInSeconds = _nowDateTime.unixtime() - lastSyncDateTime.unixtime();
-        Serial.printf("[%s] now(%d) - last(%d) = %d seconds\n", __func__, _nowDateTime.unixtime(), lastSyncDateTime.unixtime(), deltaInSeconds);
+        log_d("now(%d) - last(%d) = %d seconds", _nowDateTime.unixtime(), lastSyncDateTime.unixtime(), deltaInSeconds);
         if ( deltaInSeconds > 86400/*300*/) {
-          Serial.printf("[CHRONOMANIAC] Last Time Sync: %s (%d seconds ago). Time isn't fresh anymore, should reload NTP menu !!\n", LastSyncTimeString, deltaInSeconds);
+          log_w("[CHRONOMANIAC] Last Time Sync: %s (%d seconds ago). Time isn't fresh anymore, should reload NTP menu !!", LastSyncTimeString, deltaInSeconds);
           rollBackOrUpdateFromFS( BLE_FS, NTP_MENU_FILENAME );
           ESP.restart();
         }
       }
     #endif
   #else
-    sprintf(hhmmssString, "%02d:%02d:%02d", hh, mm, ss);
+    sprintf(hhmmssString, hhmmssStringTpl, hh, mm, ss);
   #endif
 
-  sprintf(UpTimeString, "%02d:%02d", hh, mm);
-  //Serial.println("Time:" + String(hhmmString) + " Uptime:" + String(UpTimeString));
+  sprintf(UpTimeString, UpTimeStringTpl, hh, mm);
+  log_d("Time:%s, Uptime:", hhmmString, UpTimeString );
 }
 
 
 bool RTCSetup() {
   #if RTC_PROFILE == HOBO
-    Serial.println("[RTC] Hobo mode, no time to waste :)");
+    log_d("[RTC] Hobo mode, no time to waste :)");
     return false;
   #else
     // RTC wired to SDA, SCL (26,27 on Wrover Kit)
@@ -206,23 +245,28 @@ bool RTCSetup() {
     }*/
     delay(100); // why the fsck is this needed
     if (!RTC.isrunning()) { // false positives here, why ??
-      Serial.println("[RTC] NOT running, will try to adjust from hardcoded value");
+      log_d("[RTC] NOT running, will try to adjust from hardcoded value");
       RTC.adjust(DateTime(__DATE__, __TIME__));
       logTimeActivity(SOURCE_COMPILER);
       #if RTC_PROFILE == CHRONOMANIAC // chronomaniac mode
         if (RTC.isrunning()) {
-          Serial.println("[RTC] alive, will load the NTP Sync binary and adjust time");
-          rollBackOrUpdateFromFS( BLE_FS, "/NTPMenu.bin" );
+          log_d("[RTC] alive, will load the NTP Sync binary and adjust time");
+          rollBackOrUpdateFromFS( BLE_FS, NTP_MENU_FILENAME );
           ESP.restart(); // TODO: adjust from a BLE characteristic or a GPS
         } else {
-          Serial.println("[RTC] broken or bad wiring, adjusting from NTP is futile.");
+          log_e("[RTC] broken or bad wiring, adjusting from NTP is futile.");
         }
       #endif
       RTC_is_running = RTC.isrunning();
     } else {
-      Serial.println("[RTC] running :-)");
+      log_d("[RTC] running :-)");
       RTC_is_running = true;
     }
+    DateTime _nowDateTime = RTC.now();
+    time_t rtc = _nowDateTime.unixtime();
+    timeval tv = { rtc, 0 };
+    timezone tz = { TZ_MN + DST_MN, 0 };
+    settimeofday(&tv, &tz);
     return RTC_is_running;
   #endif
 }
@@ -237,7 +281,7 @@ bool SDSetup() {
     if (BLE_FS.begin() ) {
       sd_mounted = true;
     } else {
-      Serial.println("[SD] Mount Failed");
+      log_e("[SD] Mount Failed");
       //delay(max_wait);
       if(attempts%2==0) {
         tft.drawJpg( disk00_jpg, disk00_jpg_len, (tft.width()-30)/2, 100, 30, 30);
@@ -273,7 +317,7 @@ bool SDSetup() {
     #else 
       if(!RTCSetup()) {
         // RTC failure ....
-        Serial.println("RTC Failure, switching to hobo mode");
+        log_e("RTC Failure, switching to hobo mode");
       }
       if(!SDSetup()) {
         // SD Card failure
@@ -314,22 +358,22 @@ bool SDSetup() {
  
   // used to retrieve DB files from the webs :]
   void wget(String bin_url, String appName, const char* &ca ) {
-    Serial.printf("[%s] Will check %s and save to SD as %s if filesizes differ\n", __func__, bin_url.c_str(), appName.c_str());
+    log_d("Will check %s and save to SD as %s if filesizes differ", bin_url.c_str(), appName.c_str());
     http.begin(bin_url, ca);
     int httpCode = http.GET();
     if(httpCode <= 0) {
-      Serial.println("[HTTP] GET... failed");
+      log_e("[HTTP] GET... failed");
       http.end();
       return;
     }
     if(httpCode != HTTP_CODE_OK) {
-      Serial.printf("[%s][HTTP] GET... failed, error: %s\n", __func__, http.errorToString(httpCode).c_str() ); 
+      log_e("[HTTP] GET... failed, error: %s", http.errorToString(httpCode).c_str() ); 
       http.end();
       return;
     }
     int len = http.getSize();
     if(len<=0) {
-      Serial.printf("[%s] Failed to read %s content is empty, aborting\n", __func__, bin_url.c_str() );
+      log_e("Failed to read %s content is empty, aborting", bin_url.c_str() );
       http.end();
       return;
     }
@@ -338,7 +382,7 @@ bool SDSetup() {
     WiFiClient * stream = http.getStreamPtr();
     File myFile = BLE_FS.open(appName, FILE_WRITE);
     if(!myFile) {
-      Serial.printf("[%s] Failed to open %s for writing, aborting\n", __func__, appName.c_str() );
+      log_e("Failed to open %s for writing, aborting", appName.c_str() );
       http.end();
       myFile.close();
       return;
@@ -360,7 +404,7 @@ bool SDSetup() {
       delay(1);
     }
     myFile.close();
-    Serial.println("Copy done...");
+    log_d("Copy done...");
     http.end();
   }
 
@@ -369,7 +413,7 @@ bool SDSetup() {
     http.begin(bin_url, ca);
     int httpCode = http.sendRequest("HEAD");
     if(httpCode <= 0) {
-      Serial.printf("[%s][HTTP] HEAD... failed\n", __func__);
+      log_e("[HTTP] HEAD... failed");
       http.end();
       return 0;
     }
@@ -385,13 +429,13 @@ bool SDSetup() {
     File fileBin = BLE_FS.open(fileName);
     if (fileBin) {
       sdFileSize = fileBin.size();
-      Serial.printf("[%s][SD] %s : %d bytes\n", __func__, fileName.c_str(), sdFileSize);
+      log_d("[SD] %s : %d bytes", fileName.c_str(), sdFileSize);
       fileBin.close();
     } else {
-      Serial.printf("[%s][SD] %s not found, will proceed to initial download\n", __func__, fileName);
+      log_e("[SD] %s not found, will proceed to initial download", fileName);
     }
     remoteFileSize = getRemoteFileSize( fileURL, raw_github_ca );
-    Serial.printf("[%s] Remote file size is : %d\n", __func__, remoteFileSize);
+    log_d("Remote file size is : %d", remoteFileSize);
     if( remoteFileSize == 0 ) return; // shit happens
     if( remoteFileSize != sdFileSize || force ) {
       wget( fileURL, fileName, raw_github_ca );
@@ -446,7 +490,7 @@ bool SDSetup() {
       configTzTime(TZ_INFO, NTP_SERVER);
       WiFiConnected = true;
       if (getLocalTime(&timeinfo, 10000)) {  // wait up to 10sec to sync
-        Serial.println(&timeinfo, "Time set: %B %d %Y %H:%M:%S (%A)");
+        log_d(&timeinfo, "Time set: %B %d %Y %H:%M:%S (%A)");
         NTPTimeSet = true;
         RTC.adjust(DateTime(timeinfo.tm_year+1900, timeinfo.tm_mon+1, timeinfo.tm_mday, timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec));
         if( RTC.isrunning() ) {
