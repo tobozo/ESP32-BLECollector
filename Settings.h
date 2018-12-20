@@ -36,7 +36,7 @@
     different modes, see "#define BUILD_NTPMENU_BIN"
  
 */
-
+// don't edit those
 #define HOBO 1 // No TinyRTC module in your build, only uptime will be displayed
 #define ROGUE 2 // TinyRTC module adjusted after flashing, no WiFi, no NTP Sync
 #define CHRONOMANIAC 3 // TinyRTC module adjusts itself via NTP (by sd-loading a separate binary, see NTP_MENU)
@@ -48,18 +48,14 @@
 //#define RTC_PROFILE CHRONOMANIAC // to build the BLEMenu.bin with RTC support and NTP Sync
 //#define RTC_PROFILE ROGUE // to build the BLEMenu.bin with RTC support, but *without* NTP sync
 //#define RTC_PROFILE HOBO // to build the NTPMenu.bin *without* RTC/NTP support
-byte SCAN_DURATION = 20; // seconds 
+byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define MIN_SCAN_DURATION 10 // seconds min
 #define MAX_SCAN_DURATION 120 // seconds max
-#define MAX_DEVICES_PER_SCAN 4 // also max displayed devices on the screen, affects initial scan duration
-#define BLEDEVCACHE_PSRAM_SIZE 1024 // use PSram to cache BLECards
-#define BLEDEVCACHE_HEAP_SIZE 32 // use some heap to cache BLECards. min = 5, max = 64, higher value = smaller uptime
 #define VENDORCACHE_SIZE 16 // use some heap to cache vendor query responses, min = 5, max = 256
 #define OUICACHE_SIZE 8 // use some heap to cache mac query responses, min = 16, max = 4096
 #define MAX_FIELD_LEN 32 // max chars returned by field
 #define MAC_LEN 17 // chars used by a mac address
 #define SHORT_MAC_LEN 7 // chars used by the oui part of a mac address
-#define USE_NVS // comment this out if you have NVS problems (or just do an erase_flash)
 
 #define NTP_MENU_NAME "NTPMenu"
 #define BLE_MENU_NAME "BLEMenu"
@@ -68,6 +64,15 @@ byte SCAN_DURATION = 20; // seconds
 
 
 // don't edit anything below this
+#define MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN 4
+#define MAX_BLECARDS_WITHOUT_TIMESTAMPS_ON_SCREEN 5
+#define BLEDEVCACHE_PSRAM_SIZE 1024 // use PSram to cache BLECards
+#define BLEDEVCACHE_HEAP_SIZE 32 // use some heap to cache BLECards. min = 5, max = 64, higher value = smaller uptime
+#if RTC_PROFILE > HOBO
+  #define MAX_DEVICES_PER_SCAN MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN // also max displayed devices on the screen, affects initial scan duration
+#else
+  #define MAX_DEVICES_PER_SCAN MAX_BLECARDS_WITHOUT_TIMESTAMPS_ON_SCREEN // also max displayed devices on the screen, affects initial scan duration
+#endif
 #if RTC_PROFILE==HOBO // no NTP for Hobo mode
   #define BUILD_TYPE BLE_MENU_NAME
 #elif RTC_PROFILE==ROGUE // no NTP for Rogue mode
@@ -95,6 +100,8 @@ const char* needle = BUILD_NEEDLE;
 const char* welcomeMessage = WELCOME_MESSAGE;
 const char* buildSignature = BUILD_SIGNATURE;
 
+// used to get the resetReason
+#include <rom/rtc.h>
 #include "Display.h"
 
 
@@ -148,17 +155,13 @@ Preferences preferences;
 
 
 
-
-// used to get the resetReason
-#include <rom/rtc.h>
-
 // because ESP.getFreeHeap() is inconsistent across SDK versions
 // use the primitive... eats 25Kb memory
 #define freeheap heap_caps_get_free_size(MALLOC_CAP_INTERNAL)
 #define freepsheap ESP.getFreePsram()
 #define resetReason (int)rtc_get_reset_reason(0)
-#define takeMuxSemaphore() if( mux ) { xSemaphoreTake(mux, portMAX_DELAY); /*Serial.println("[" + String(__func__)+ "] Took semaphore");*/ }
-#define giveMuxSemaphore() if( mux ) { xSemaphoreGive(mux); /*Serial.println("[" + String(__func__)+ "] Gave semaphore");*/ }
+#define takeMuxSemaphore() if( mux ) { xSemaphoreTake(mux, portMAX_DELAY); log_v("Took Semaphore"); }
+#define giveMuxSemaphore() if( mux ) { xSemaphoreGive(mux); log_v("Gave Semaphore"); }
 
 // statistical values
 static int devicesCount = 0; // devices count per scan

@@ -283,7 +283,7 @@ class DBUtils {
       BLEMacsDbSQLitePath = (char*)malloc(32);
       setBLEDBPath();
       
-      hasPsram = psramInit();
+      //hasPsram = psramInit();
       sqlite3_initialize();
       initial_free_heap = freeheap;
 
@@ -317,9 +317,9 @@ class DBUtils {
           epoch.month(),
           epoch.day()
         );
-        Serial.printf(" [%s] Assigning db path : %s\n", __func__, BLEMacsDbSQLitePath);
+        log_d("Assigning db path : %s", BLEMacsDbSQLitePath);
       #else
-        BLEMacsDbSQLitePath = "/sdcard/blemacs.db";
+        sprintf(BLEMacsDbSQLitePath, "%s", "/sdcard/blemacs.db");
       #endif
     }
 
@@ -327,13 +327,13 @@ class DBUtils {
 
       if( hasPsram ) {
         BLEDEVCACHE_SIZE = BLEDEVCACHE_PSRAM_SIZE;
-        Serial.println("[PSRAM] OK");
+        log_d("[PSRAM] OK");
 
         OuiPsramCache = (OUIPsramCacheStruct**)ps_calloc(OUIDBSize, sizeof( OUIPsramCacheStruct ) );
         for(int i=0; i<OUIDBSize; i++) {
           OuiPsramCache[i] = (OUIPsramCacheStruct*)ps_calloc(1, sizeof( OUIPsramCacheStruct ));
           if( OuiPsramCache[i] == NULL ) {
-            Serial.printf("[ERROR][%d][%d][%d] can't allocate\n", i, freeheap, freepsheap);
+            log_e("[ERROR][%d][%d][%d] can't allocate", i, freeheap, freepsheap);
             continue;
           }
           OuiPsramCache[i]->mac        = (char*)ps_calloc(SHORT_MAC_LEN+1, sizeof(char));
@@ -345,7 +345,7 @@ class DBUtils {
         for(int i=0; i<VendorDBSize; i++) {
           VendorPsramCache[i] = (VendorPsramCacheStruct*)ps_calloc(1, sizeof( VendorPsramCacheStruct ));
           if( VendorPsramCache[i] == NULL ) {
-            Serial.printf("[ERROR][%d][%d][%d] can't allocate\n", i, freeheap, freepsheap);
+            log_e("[ERROR][%d][%d][%d] can't allocate", i, freeheap, freepsheap);
             continue;
           }
           VendorPsramCache[i]->devid  = (uint16_t*)ps_malloc(sizeof(uint16_t));
@@ -357,7 +357,7 @@ class DBUtils {
         for(uint16_t i=0; i<BLEDEVCACHE_SIZE; i++) {
           BLEDevCache[i] = (BlueToothDevice*)ps_calloc(1, sizeof( BlueToothDevice ) );
           if( BLEDevCache[i] == NULL ) {
-            Serial.printf("[ERROR][%d][%d][%d] can't allocate\n", i, freeheap, freepsheap);
+            log_e("[ERROR][%d][%d][%d] can't allocate", i, freeheap, freepsheap);
             continue;
           }
           BLEDevHelper.init( BLEDevCache[i] );
@@ -369,7 +369,7 @@ class DBUtils {
         for(uint16_t i=0; i<MAX_DEVICES_PER_SCAN; i++) {
           BLEDevTmpCache[i] = (BlueToothDevice*)ps_calloc(1, sizeof( BlueToothDevice ) );
           if( BLEDevTmpCache[i] == NULL ) {
-            Serial.printf("[ERROR][%d][%d][%d] can't allocate\n", i, freeheap, freepsheap);
+            log_e("[ERROR][%d][%d][%d] can't allocate", i, freeheap, freepsheap);
             continue;
           }
           BLEDevHelper.init( BLEDevTmpCache[i] );
@@ -378,13 +378,13 @@ class DBUtils {
 
       } else {
         BLEDEVCACHE_SIZE = BLEDEVCACHE_HEAP_SIZE;
-        Serial.println("[PSRAM] NOT DETECTED, will use heap"); // TODO: adjust cache sizes accordingly
+        log_w("[PSRAM] NOT DETECTED, will use heap"); // TODO: adjust cache sizes accordingly
 
         BLEDevCache = (BlueToothDevice**)calloc(BLEDEVCACHE_SIZE, sizeof( BlueToothDevice ) );
         for(uint16_t i=0; i<BLEDEVCACHE_SIZE; i++) {
           BLEDevCache[i] = (BlueToothDevice*)calloc(1, sizeof( BlueToothDevice ) );
           if( BLEDevCache[i] == NULL ) {
-            Serial.printf("[ERROR][%d][%d][%d] can't allocate\n", i, freeheap, freepsheap);
+            log_e("[ERROR][%d][%d][%d] can't allocate", i, freeheap, freepsheap);
             continue;
           }
           BLEDevHelper.init( BLEDevCache[i], false );
@@ -395,7 +395,7 @@ class DBUtils {
         for(uint16_t i=0; i<MAX_DEVICES_PER_SCAN; i++) {
           BLEDevTmpCache[i] = (BlueToothDevice*)calloc(1, sizeof( BlueToothDevice ) );
           if( BLEDevTmpCache[i] == NULL ) {
-            Serial.printf("[ERROR][%d][%d][%d] can't allocate\n", i, freeheap, freepsheap);
+            log_e("[ERROR][%d][%d][%d] can't allocate", i, freeheap, freepsheap);
             continue;
           }
           BLEDevHelper.init( BLEDevTmpCache[i], false );
@@ -419,14 +419,14 @@ class DBUtils {
 
     void maintain() {
       if( isOOM ) {
-        Serial.println("[DB ERROR] restarting");
-        Serial.printf("During this session (%d), %d out of %d devices were added to the DB\n", UpTimeString, newDevicesCount-AnonymousCacheHit, sessDevicesCount);
+        log_e("[DB ERROR] restarting");
+        log_i("During this session (%d), %d out of %d devices were added to the DB", UpTimeString, newDevicesCount-AnonymousCacheHit, sessDevicesCount);
         delay(1000);
         ESP.restart();
       }
       if( isCorrupt ) {
-        Serial.println("[I/O ERROR] this DB file is too big");
-        Serial.printf("During this session (%d), %d out of %d devices were added to the DB\n", UpTimeString, newDevicesCount-AnonymousCacheHit, sessDevicesCount);
+        log_e("[I/O ERROR] this DB file is too big");
+        log_i("During this session (%d), %d out of %d devices were added to the DB", UpTimeString, newDevicesCount-AnonymousCacheHit, sessDevicesCount);
         resetDB();
         delay(1000);
         ESP.restart();
@@ -459,7 +459,7 @@ class DBUtils {
       BLEDevCacheUsed = BLEDevCacheUsed*100 / BLEDEVCACHE_SIZE;
       VendorCacheUsed = VendorCacheUsed*100 / VENDORCACHE_SIZE;
       OuiCacheUsed = OuiCacheUsed*100 / OUICACHE_SIZE;
-      //Serial.println("Circular-Buffered Cache Fill: BLEDevCache: "+String(BLEDevCacheUsed)+"%, "+String(VendorCacheUsed)+"%, "+String(OuiCacheUsed)+"%");
+      log_v("Circular-Buffered Cache Fill: BLEDevCache: %s%s, VendorCache: %s%s, OUICache: %s%s", BLEDevCacheUsed, "%", VendorCacheUsed, "%", OuiCacheUsed, "%");
     }
 
 
@@ -475,17 +475,17 @@ class DBUtils {
         case BLE_VENDOR_NAMES_DB: // https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers
           rc = sqlite3_open("/sdcard/ble-oui.db", &BLEVendorsDB); 
         break;
-        default: Serial.println("Can't open null DB"); UI.DBStateIconSetColor(-1); return rc;
+        default: log_e("Can't open null DB"); UI.DBStateIconSetColor(-1); return rc;
       }
       if (rc) {
-        Serial.print("Can't open database "); Serial.println(dbName);
+        log_e("Can't open database %d", dbName);
         // SD Card removed ? File corruption ? OOM ?
         // isOOM = true;
         UI.DBStateIconSetColor(-1); // OOM or I/O error
         delay(1);
         return rc;
       } else {
-        //Serial.println("Opened database successfully");
+        log_v("Opened database %d successfully", dbName);
         if(readonly) {
           UI.DBStateIconSetColor(1); // R/O
         } else {
@@ -503,7 +503,7 @@ class DBUtils {
         case BLE_COLLECTOR_DB:    sqlite3_close(BLECollectorDB); break;
         case MAC_OUI_NAMES_DB:    sqlite3_close(OUIVendorsDB); break;
         case BLE_VENDOR_NAMES_DB: sqlite3_close(BLEVendorsDB); break;
-        default: /* duh ! */ Serial.println("Can't open null DB");
+        default: /* duh ! */ log_e("Can't open null DB");
       }
       delay(1);
     }
@@ -523,18 +523,17 @@ class DBUtils {
     int deviceExists(const char* address) {
       results = 0;
       if( isEmpty( address ) || strlen( address ) > MAC_LEN+1 || strlen( address ) < 17 || address[0]==3) {
-        Serial.printf("Cowardly refusing to perform an empty or invalid request : %s / %s\n", address, currentBLEAddress);
+        log_w("Cowardly refusing to perform an empty or invalid request : %s / %s", address, currentBLEAddress);
         return -1;
       }
       open(BLE_COLLECTOR_DB);
       #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
-        //Serial.printf("[%s] will run on template %s\n", __func__, searchDeviceTemplate );
+        log_v("will run on template %s", searchDeviceTemplate );
         sprintf(searchDeviceQuery, searchDeviceTemplate, "%s", "%s", address);
       #else
-        //Serial.printf("[%s] will run on template %s\n", __func__, searchDeviceTemplate );
+        log_v("will run on template %s", searchDeviceTemplate );
         sprintf(searchDeviceQuery, searchDeviceTemplate, address);
       #endif
-      //Serial.print( address ); Serial.print( " => " ); Serial.println(searchDeviceQuery);
       int rc = sqlite3_exec(BLECollectorDB, searchDeviceQuery, BLEDevDBCallback, (void*)dataBLE, &zErrMsg);
       if (rc != SQLITE_OK) {
         error(zErrMsg);
@@ -565,7 +564,7 @@ class DBUtils {
       close(BLE_VENDOR_NAMES_DB);
       for(byte i=0;i<8;i++) {
         uint32_t rnd = random(0, VendorDBSize);
-        Serial.printf("[%s] Testing random vendor mac #%d: %d / %s\n", __func__, rnd, VendorPsramCache[rnd]->devid[0], VendorPsramCache[rnd]->vendor );
+        log_i("Testing random vendor mac #%d: %d / %s", rnd, VendorPsramCache[rnd]->devid[0], VendorPsramCache[rnd]->vendor );
       }
     }
 
@@ -587,13 +586,13 @@ class DBUtils {
       close(MAC_OUI_NAMES_DB);
       for(byte i=0;i<8;i++) {
         uint32_t rnd = random(0, OUIDBSize);
-        Serial.printf("[%s] Testing random mac #%06X: %s / %s\n", __func__, rnd, OuiPsramCache[rnd]->mac, OuiPsramCache[rnd]->assignment );
+        log_i("Testing random mac #%06X: %s / %s", rnd, OuiPsramCache[rnd]->mac, OuiPsramCache[rnd]->assignment );
       }
     }
 
     // shit happens
     void error(const char* zErrMsg) {
-      Serial.printf("SQL error: %s\n", zErrMsg);
+      log_e("SQL error: %s", zErrMsg);
       if (strcmp(zErrMsg, "database disk image is malformed")==0) {
         resetDB();
       } else if (strcmp(zErrMsg, "no such table: blemacs")==0) {
@@ -689,8 +688,7 @@ class DBUtils {
 
       int rc = DBExec( BLECollectorDB, insertQuery );
       if (rc != SQLITE_OK) {
-        Serial.print("SQlite Error occured when heap level was at:"); Serial.println(freeheap);
-        Serial.println(insertQuery);
+        log_e("SQlite Error occured when heap level was at %d : %s", freeheap, insertQuery);
         close(BLE_COLLECTOR_DB);
         CacheItem[_index]->in_db = false;
         return INSERTION_FAILED;
@@ -763,14 +761,14 @@ class DBUtils {
 
     void createDB() {
       open(BLE_COLLECTOR_DB, false);
-      //Serial.printf("[%s] created %s if no exists:  : %s\n", __func__, BLEMacsDbSQLitePath, createTableQuery);
+      log_d("created %s if no exists:  : %s", BLEMacsDbSQLitePath, createTableQuery);
       DBExec(BLECollectorDB, createTableQuery);
       close(BLE_COLLECTOR_DB);
     }
 
     void dropDB() {
       open(BLE_COLLECTOR_DB, false);
-      Serial.printf("[%s] dropped if exists: %s DB\n", __func__, BLEMacsDbSQLitePath);
+      log_d("dropped if exists: %s DB", BLEMacsDbSQLitePath);
       DBExec(BLECollectorDB, dropTableQuery);
       close(BLE_COLLECTOR_DB);      
     }
@@ -855,7 +853,7 @@ class DBUtils {
       VendorHeapCache[cacheindex].devid = devid;
       memset( VendorHeapCache[cacheindex].vendor, '\0', MAX_FIELD_LEN+1);
       memcpy( VendorHeapCache[cacheindex].vendor, manufname, strlen(manufname) );
-      //Serial.print("[+] VendorHeapCacheSet: "); Serial.println( manufname );
+      log_d("[+] VendorHeapCacheSet: %s", manufname );
     }
     static uint16_t getNextVendorCacheIndex() {
       VendorCacheIndex++;
@@ -914,7 +912,7 @@ class DBUtils {
     int vendorPsramExists(uint16_t devid) {
       // try fast answer first
       for(int i=0;i<VendorDBSize;i++) {
-        //Serial.printf("[%s] comparing %d / %s with %d\n", __func__, VendorPsramCache[i]->devid, VendorPsramCache[i]->vendor, devid );
+        log_v("comparing %d / %s with %d", VendorPsramCache[i]->devid, VendorPsramCache[i]->vendor, devid );
         if( VendorPsramCache[i]->devid[0] == devid) {
           VendorCacheHit++;
           return i;
@@ -943,7 +941,7 @@ class DBUtils {
       memcpy( OuiHeapCache[cacheindex].mac, shortmac, strlen(shortmac) );
       memset( OuiHeapCache[cacheindex].assignment, '\0', MAX_FIELD_LEN+1);
       memcpy( OuiHeapCache[cacheindex].assignment, assignment, strlen(assignment) );
-      //Serial.print("[+] OUICacheSet: "); Serial.println( assignment );
+      log_d("[+] OUICacheSet: %s", assignment );
     }
     static uint16_t getNextOUICacheIndex() {
       OuiCacheIndex++;
@@ -974,9 +972,7 @@ class DBUtils {
           bytepos++;
         }
       }
-      if(bytepos!=6) {
-        Serial.printf("Bad getHeapOUI query with %d chars instead of %s vs %s\n", bytepos, mac, shortmac);
-      }
+
       int OUICacheIdIfExists = OUIHeapExists( shortmac );
       if(OUICacheIdIfExists>-1) {
         byte OUICacheLen = strlen( OuiHeapCache[OUICacheIdIfExists].assignment );
@@ -1012,7 +1008,7 @@ class DBUtils {
     int OUIPsramExists(const char* shortmac) {
       // try fast answer first
       for(int i=0; i<OUIDBSize; i++) {
-        //Serial.printf("[%s] comparing %s / %s with %s\n", __func__, OuiPsramCache[i]->mac, OuiPsramCache[i]->assignment, shortmac );
+        log_v("comparing %s / %s with %s", OuiPsramCache[i]->mac, OuiPsramCache[i]->assignment, shortmac );
         if( strstr(OuiPsramCache[i]->mac, shortmac) /*==0*/ ) {
           OuiCacheHit++;
           return i;
@@ -1032,9 +1028,7 @@ class DBUtils {
           bytepos++;
         }
       }
-      if(bytepos!=6) {
-        Serial.printf("Bad getPsramOUI query with %d chars instead of %s vs %s\n", bytepos, mac, shortmac);
-      }
+
       int OUICacheIdIfExists = OUIPsramExists( shortmac );
       if(OUICacheIdIfExists>-1) {
         byte OUICacheLen = strlen( OuiPsramCache[OUICacheIdIfExists]->assignment );
@@ -1051,26 +1045,16 @@ class DBUtils {
       results++;
       if(results < BLEDEVCACHE_SIZE) {
         BLEDevCacheIndex = BLEDevHelper.getNextCacheIndex(BLEDevCache, BLEDevCacheIndex);
-        //BLEDevHelper.reset( BLEDevCache[BLEDevCacheIndex] ); // avoid mixing new and old data
-        BLEDevHelper.reset( BLEDevCache[BLEDevCacheIndex] );
+        BLEDevHelper.reset( BLEDevCache[BLEDevCacheIndex] ); // avoid mixing new and old data
         for (int i = 0; i < argc; i++) {
-          //BLEDevHelper.set( BLEDevCache[BLEDevCacheIndex], azColName[i], argv[i] ? argv[i] : '\0');
           BLEDevHelper.set( BLEDevCache[BLEDevCacheIndex], azColName[i], argv[i] ? argv[i] : '\0');;
         }
-        //BLEDevCache[BLEDevCacheIndex].hits = 1;
-        //BLEDevCache[BLEDevCacheIndex].in_db = true;
-
         BLEDevCache[BLEDevCacheIndex]->hits = 1;
         BLEDevCache[BLEDevCacheIndex]->in_db = true;
-        #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
-          //BLEDevCache[BLEDevCacheIndex]->created_at = nowDateTime;
-        #endif
-        
-        
       } else {
-        Serial.print("Device Pool Size Exceeded, ignoring: ");
+        log_e("Device Pool Size Exceeded, ignoring: ");
         for (int i = 0; i < argc; i++) {
-          Serial.printf("    %s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
+          log_e("    %s = %s", (azColName[i], argv[i] ? argv[i] : "NULL"));
         }
       }
       return 0;
@@ -1081,12 +1065,12 @@ class DBUtils {
       results++;
       for (int i = 0; i < argc; i++) {
         if( strcmp( azColName[i], "id" ) == 0 ) {
-          //Serial.printf("[%s][%d] Attempting to copy result # %d %s, %d\n", __func__, freepsheap, results, argv[i], atoi( argv[i] ) );
+          log_v("[%d] Attempting to copy result # %d %s, %d", freepsheap, results, argv[i], atoi( argv[i] ) );
           VendorPsramCache[results-1]->devid[0] = atoi( argv[i] );
           //copy( VendorPsramCache[results-1]->devid, atoi( argv[i] ) );
         }
         if( strcmp( azColName[i], "vendor" ) == 0 ) {
-          //Serial.printf("[%s][%d] Attempting to copy result # %d %s\n", __func__, freepsheap, results, argv[i] );
+          log_v("[%d] Attempting to copy result # %d %s", freepsheap, results, argv[i] );
           copy( VendorPsramCache[results-1]->vendor, argv[i], MAX_FIELD_LEN+1);
         }
       }
@@ -1113,7 +1097,7 @@ class DBUtils {
       if(results%100==0) {
         float percent = results*100 / OUIDBSize;
         UI.PrintProgressBar( (Out.width * percent) / 100 );
-        //Serial.printf("[Copied %d as %s / %s]\n", results, OuiPsramCache[results-1]->mac, OuiPsramCache[results-1]->assignment );
+        log_v("[Copied %d as %s / %s]", results, OuiPsramCache[results-1]->mac, OuiPsramCache[results-1]->assignment );
       }
       return 0;
     }
