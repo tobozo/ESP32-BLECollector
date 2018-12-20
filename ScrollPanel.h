@@ -74,7 +74,7 @@ class ScrollableOutput {
       scrollBottomFixedArea = BFA;
       yStart = scrollTopFixedArea;
       yArea = height - scrollTopFixedArea - scrollBottomFixedArea;
-      //Serial.printf("*** NEW Scroll Setup: Top=%d Bottom=%d YArea=%d\n", TFA, BFA, yArea);
+      log_d("*** NEW Scroll Setup: Top=%d Bottom=%d YArea=%d", TFA, BFA, yArea);
       if (clear) {
         tft.fillRect(0, TFA, width, yArea, BLE_BLACK);
       }

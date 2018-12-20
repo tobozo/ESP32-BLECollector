@@ -82,9 +82,9 @@ class FoundDeviceCallback: public BLEAdvertisedDeviceCallbacks {
           DB.getVendor( BLEDevTmpCache[scan_cursor]->manufid, BLEDevTmpCache[scan_cursor]->manufname );
         }
         BLEDevTmpCache[scan_cursor]->is_anonymous = BLEDevHelper.isAnonymous( BLEDevTmpCache[scan_cursor] );
-        Serial.printf(  "  [%s] stored and populated #%02d : %s\n", __func__, scan_cursor, advertisedDevice.toString().c_str());
+        log_i(  "  stored and populated #%02d : %s", scan_cursor, advertisedDevice.toString().c_str());
       } else {
-        Serial.printf(  "  [%s] stored #%02d : %s\n", __func__, scan_cursor, advertisedDevice.toString().c_str());
+        log_i(  "  stored #%02d : %s", scan_cursor, advertisedDevice.toString().c_str());
       }
       scan_cursor++;
       processedDevicesCount++;
@@ -136,19 +136,19 @@ class BLEScanUtils {
     static void startScanTask() {
       xTaskCreatePinnedToCore(scanTask, "scanTask", 10000, NULL, 5, NULL, 1); /* last = Task Core */
       while(scanTaskStopped) {
-        Serial.printf("[%s] Waiting for scan to start...\n", __func__);
+        log_d("Waiting for scan to start...");
         vTaskDelay(1000);
       }
-      Serial.printf("[%s] Scan started...\n", __func__);
+      log_d("Scan started...");
     }
     static void stopScanTask() {
       scanTaskRunning = false;
       BLEDevice::getScan()->stop();
       while(!scanTaskStopped) {
-        Serial.printf("[%s] Waiting for scan to stop...\n", __func__);
+        log_d("Waiting for scan to stop...");
         vTaskDelay(1000);
       }
-      Serial.printf("[%s] Scan stopped...\n", __func__);
+      log_d("Scan stopped...");
     }
 
     static void startDumpTask() {
@@ -166,7 +166,7 @@ class BLEScanUtils {
       static byte idx = 0;
       char eol = '\n';
       char c;
-      Serial.printf("[%s] Listening to Serial...\n", __func__ );
+      log_d("Listening to Serial..." );
       while( 1 ) {
         while (Serial.available() > 0) {
           c = Serial.read();
@@ -180,7 +180,7 @@ class BLEScanUtils {
             serialBuffer[idx] = '\0'; // null terminate
             memcpy(tempBuffer, serialBuffer, idx+1);
             if( !serialParseBuffer() ) {
-              Serial.printf("[%s] Serial data received and ignored: %s / %s\n", __func__, serialBuffer, tempBuffer );
+              log_d("Serial data received and ignored: %s / %s", serialBuffer, tempBuffer );
             }
             idx = 0;            
           }
@@ -193,7 +193,7 @@ class BLEScanUtils {
     static bool serialParseBuffer() {
       if(strstr(tempBuffer, "stop")) {
         if( scanTaskRunning ) {
-          Serial.printf("[%s] Stopping scan\n", __func__ );
+          log_d("Stopping scan" );
           stopScanTask();
           return true;
         }
@@ -201,7 +201,7 @@ class BLEScanUtils {
         ESP.restart();
       } else if(strstr(tempBuffer, "start")) {
         if( !scanTaskRunning ) {
-          Serial.printf("[%s] Starting scan\n", __func__ );
+          log_d("Starting scan" );
           startScanTask();
           return true;
         }
@@ -211,7 +211,7 @@ class BLEScanUtils {
         ESP.restart();
       #endif
       } else if(strstr(tempBuffer, "dump")) {
-        Serial.printf("[%s] Stopping scan\n", __func__ );
+        log_d("Stopping scan" );
         startDumpTask();
         return true;
       } else if(strstr(tempBuffer, "resetDB")) {
@@ -255,13 +255,13 @@ class BLEScanUtils {
       byte onAfterScanStep = 0;
       while( scanTaskRunning ) {
         if( onAfterScanSteps( onAfterScanStep, scan_cursor ) ) continue;
-        Serial.print("BeforeScan::");dumpStats();
+        dumpStats("BeforeScan::");
         onBeforeScan();
         pBLEScan->start(SCAN_DURATION);
         onAfterScan();
         UI.update(); // run after-scan display stuff
         DB.maintain();
-        Serial.print("AfterScan:::");dumpStats();
+        dumpStats("AfterScan:::");
         scan_rounds++;
       }
       scanTaskStopped = true;
@@ -296,7 +296,7 @@ class BLEScanUtils {
           }
         break;
         default:
-          Serial.printf("[%s] Exit flat loop on afterScanStep value : %d\n", __func__, onAfterScanStep);
+          log_w("Exit flat loop on afterScanStep value : %d", onAfterScanStep);
           onAfterScanStep = 0;
         break;
       }
@@ -306,17 +306,17 @@ class BLEScanUtils {
 
     static bool onScanPopulate( uint16_t _scan_cursor ) {
       if( onScanPopulated ) {
-        //Serial.printf("[%s] %s\n", __func__, " onScanPopulated = true ");
+        log_v("%s", " onScanPopulated = true ");
         return false;
       }
       if( scan_cursor >= devicesCount) {
         onScanPopulated = true;
-        Serial.printf("[%s] %s\n", __func__, "done all");
+        log_d("%s", "done all");
         return false;
       }
       uint16_t BLEDevTmpCacheIndex = _scan_cursor;
       if( isEmpty( BLEDevTmpCache[_scan_cursor]->address ) ) {
-        Serial.printf("  [%s] %s\n", __func__, "empty addess");
+        log_w("empty addess");
         return true; // end of cache
       }
       populate( BLEDevTmpCache[BLEDevTmpCacheIndex] );
@@ -326,16 +326,16 @@ class BLEScanUtils {
 
     static bool onScanIfExists( int _scan_cursor ) {
       if( onScanPostPopulated ) {
-        //Serial.printf("[%s] %s\n", __func__, " onScanPostPopulated = true ");
+        log_v("onScanPostPopulated = true");
         return false;
       }
       if( scan_cursor >= devicesCount) {
-        Serial.printf("[%s] %s\n", __func__, "done all");
+        log_d("done all");
         onScanPostPopulated = true;
         return false;
       }
       if( BLEDevTmpCache[scan_cursor]->hits > 0 ) {
-        Serial.printf("  [%s] %s\n", __func__, "skipping, has hits");
+        log_v("skipping, has hits");
         return true;
       }
       int deviceIndexIfExists = -1;
@@ -350,14 +350,14 @@ class BLEScanUtils {
         #endif
         BLEDevTmpCache[_scan_cursor]->hits = BLEDevCache[deviceIndexIfExists]->hits;
         BLEDevTmpCache[_scan_cursor]->in_db = BLEDevCache[deviceIndexIfExists]->in_db;
-        Serial.printf( "  [%s] Device %d exists in cache with %d hits\n", __func__, _scan_cursor, BLEDevTmpCache[_scan_cursor]->hits );
+        log_d( "Device %d exists in cache with %d hits", _scan_cursor, BLEDevTmpCache[_scan_cursor]->hits );
       } else {
         if( BLEDevTmpCache[_scan_cursor]->is_anonymous ) {
           // won't land in DB but can land in cache
           uint16_t nextCacheIndex = BLEDevHelper.getNextCacheIndex( BLEDevCache, BLEDevCacheIndex );
           BLEDevTmpCache[_scan_cursor]->hits = 1;
           BLEDevCache[nextCacheIndex] = BLEDevTmpCache[_scan_cursor];
-          Serial.printf( "  [%s] Device %d is anonymous, won't be inserted, set %d hits to 1 and copied\n", __func__, _scan_cursor, BLEDevTmpCache[scan_cursor]->hits );
+          log_d( "Device %d is anonymous, won't be inserted, set %d hits to 1 and copied", _scan_cursor, BLEDevTmpCache[scan_cursor]->hits );
         } else {
           deviceIndexIfExists = DB.deviceExists( BLEDevTmpCache[_scan_cursor]->address ); // will load returning devices from DB if necessary
           if(deviceIndexIfExists>-1) {
@@ -365,16 +365,13 @@ class BLEScanUtils {
             BLEDevCache[deviceIndexIfExists]->hits++;
             #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
             BLEDevCache[deviceIndexIfExists]->updated_at = nowDateTime;
-            //BLEDevTmpCache[_scan_cursor]->updated_at = BLEDevCache[deviceIndexIfExists]->updated_at;
-            //BLEDevTmpCache[_scan_cursor]->created_at = BLEDevCache[deviceIndexIfExists]->created_at;
             #endif
             BLEDevTmpCache[_scan_cursor]->hits = BLEDevCache[deviceIndexIfExists]->hits;
             BLEDevTmpCache[_scan_cursor]->in_db = BLEDevCache[deviceIndexIfExists]->in_db;
-            Serial.printf( "  [%s] Device %d is already in DB, increased hits to %d\n", __func__, _scan_cursor, BLEDevTmpCache[scan_cursor]->hits );
+            log_d( "Device %d is already in DB, increased hits to %d", _scan_cursor, BLEDevTmpCache[scan_cursor]->hits );
           } else {
-            Serial.printf( "  [%s] Device %d is not in DB\n", __func__, _scan_cursor );
-            //BLEDevTmpCache[_scan_cursor]->updated_at = BLEDevCache[deviceIndexIfExists]->updated_at;
-            //BLEDevTmpCache[_scan_cursor]->created_at = BLEDevCache[deviceIndexIfExists]->created_at;
+            log_d( "Device %d is not in DB", _scan_cursor );
+
           }
         }
       }
@@ -384,11 +381,11 @@ class BLEScanUtils {
 
     static bool onScanRender( uint16_t _scan_cursor ) {
       if( onScanRendered ) {
-        //Serial.printf("[%s] %s\n", __func__, " onScanRendered = true ");
+        log_v("onScanRendered = true");
         return false;
       }
       if( scan_cursor >= devicesCount) {
-        Serial.printf("[%s] %s\n", __func__, "done all");
+        log_d("done all");
         onScanRendered = true;
         return false;
       }
@@ -409,11 +406,11 @@ class BLEScanUtils {
 
     static bool onScanPropagate( uint16_t _scan_cursor ) {
       if( onScanPropagated ) {
-        //Serial.printf("[%s] %s\n", __func__, " onScanPropagated = true ");
+        log_v("onScanPropagated = true");
         return false;
       }
       if( scan_cursor >= devicesCount) {
-        Serial.printf("[%s] %s\n", __func__, "done all");
+        log_d("done all");
         onScanPropagated = true;
         scan_cursor = 0;
         return false;
@@ -428,10 +425,10 @@ class BLEScanUtils {
       } else {
         if( DB.insertBTDevice( BLEDevTmpCache, BLEDevTmpCacheIndex ) == DBUtils::INSERTION_SUCCESS ) {
           sprintf( processMessage, processTemplateLong, "Saved ", _scan_cursor+1, " / ", devicesCount );
-          Serial.printf( "  [%s] Device %d successfully inserted in DB\n", __func__, _scan_cursor );
+          log_d( "Device %d successfully inserted in DB", _scan_cursor );
           entries++;
         } else {
-          Serial.printf( "  [!!! BD INSERT FAIL !!!][%s] Device %d could not be inserted\n", __func__, _scan_cursor );
+          log_e( "  [!!! BD INSERT FAIL !!!] Device %d could not be inserted", _scan_cursor );
           sprintf( processMessage, processTemplateLong, "Failed ", _scan_cursor+1, " / ", devicesCount );
         }
       }
@@ -468,7 +465,7 @@ class BLEScanUtils {
         if( SCAN_DURATION-1 >= MIN_SCAN_DURATION ) {
           SCAN_DURATION--;
         }
-        //Serial.printf("[%s] Cache overflow (%d results vs %d slots), truncating results...\n", __func__, devicesCount, MAX_DEVICES_PER_SCAN);
+        log_w("Cache overflow (%d results vs %d slots), truncating results...", devicesCount, MAX_DEVICES_PER_SCAN);
         devicesCount = MAX_DEVICES_PER_SCAN;
       } else {
         // same amount
@@ -485,9 +482,8 @@ class BLEScanUtils {
       if( isEmpty( address ) )  return -1;
       for(int i=0; i<BLEDEVCACHE_SIZE; i++) {
         if( strcmp(address, BLEDevCache[i]->address )==0  ) {
-          //BLEDevCache[i]->hits++;
           BLEDevCacheHit++;
-          //Serial.printf("[CACHE HIT] BLEDevCache ID #%s has %d cache hits\n", address, BLEDevCache[i].hits);
+          log_v("[CACHE HIT] BLEDevCache ID #%s has %d cache hits", address, BLEDevCache[i]->hits);
           return i;
         }
         delay(1);
@@ -496,7 +492,7 @@ class BLEScanUtils {
     }
 
     // used for serial debugging
-    static void dumpStats(uint8_t indent=0) {
+    static void dumpStats(const char* prefixStr) {
       if(lastheap > freeheap) {
         // heap decreased
         sprintf(heapsign, "%s", "↘");
@@ -518,7 +514,8 @@ class BLEScanUtils {
       lastheap = freeheap;
       lastscanduration = SCAN_DURATION;
 
-      Serial.printf("[Scan#%02d][%s][Duration%s%d][Processed:%d of %d][Heap%s%d / %d] [Cache hits][Screen:%d][BLEDevCards:%d][Anonymous:%d][Oui:%d][Vendor:%d]\n", 
+      log_i("%s[Scan#%02d][%s][Duration%s%d][Processed:%d of %d][Heap%s%d / %d] [Cache hits][Screen:%d][BLEDevCards:%d][Anonymous:%d][Oui:%d][Vendor:%d]\n", 
+        prefixStr,
         scan_rounds,
         hhmmssString,
         scantimesign,
@@ -541,20 +538,19 @@ class BLEScanUtils {
     // completes unpopulated fields of a given entry by performing DB oui/vendor lookups
     static void populate( BlueToothDevice *CacheItem ) {
       if( strcmp( CacheItem->ouiname, "[unpopulated]" )==0 ){
-        Serial.printf("  [populating OUI for %s]\n", CacheItem->address);
+        log_d("  [populating OUI for %s]", CacheItem->address);
         DB.getOUI( CacheItem->address, CacheItem->ouiname );
       }
       if( strcmp( CacheItem->manufname, "[unpopulated]" )==0 ) {
         if( CacheItem->manufid!=-1 ) {
-          Serial.printf("  [populating Vendor for :%d]\n", CacheItem->manufid );
+          log_d("  [populating Vendor for :%d]", CacheItem->manufid );
           DB.getVendor( CacheItem->manufid, CacheItem->manufname );
         } else {
           BLEDevHelper.set( CacheItem, "manufname", '\0');
         }
       }
-      //Serial.printf("[populating anon state :%d]\n", CacheItemIndex);
       CacheItem->is_anonymous = BLEDevHelper.isAnonymous( CacheItem );
-      //Serial.printf("[populated :%d]\n", CacheItemIndex);
+      log_d("[populated :%s]", CacheItem->address);
     }
 
 };

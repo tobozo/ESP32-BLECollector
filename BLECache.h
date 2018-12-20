@@ -177,7 +177,7 @@ class BlueToothDeviceHelper {
       else if(strcmp(prop, "uuid")==0)       { copy( CacheItem->uuid, val, MAX_FIELD_LEN ); }
       else if(strcmp(prop, "rssi")==0)       { CacheItem->rssi = atoi(val);} // coming from BLE
       #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
-      else if(strcmp(prop, "created_at")==0) { CacheItem->created_at = DateTime( atoi(val) );}
+       else if(strcmp(prop, "created_at")==0) { CacheItem->created_at = DateTime( atoi(val) );}
       else if(strcmp(prop, "updated_at")==0) { CacheItem->created_at = DateTime( atoi(val) );}
       #endif
     }
@@ -185,16 +185,13 @@ class BlueToothDeviceHelper {
     // stores in cache a given advertised device
     static void store( BlueToothDevice *CacheItem, BLEAdvertisedDevice advertisedDevice ) {
       reset(CacheItem);// avoid mixing new and old data
-      //Serial.printf("[%s] OUI Lookup for %s returned : %s\n", __func__, advertisedDevice.getAddress().toString().c_str(), ouiStrDirty.c_str() );
       set(CacheItem, "address", advertisedDevice.getAddress().toString().c_str());
       set(CacheItem, "rssi", advertisedDevice.getRSSI());
       set(CacheItem, "ouiname", "[unpopulated]");
       
       #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
-      CacheItem->created_at = (DateTime) nowDateTime;
-      //CacheItem->created_at = (DateTime) nowDateTime;
-      //Serial.printf("[%s] Stored created_at DateTime %d\n", __func__, (unsigned long)nowDateTime.unixtime());
-      //Serial.printf(YYYYMMDD_HHMMSS_Tpl, nowDateTime.
+        CacheItem->created_at = (DateTime) nowDateTime;
+        log_v("Stored created_at DateTime %d", (unsigned long)nowDateTime.unixtime());
       #endif
 
       if ( advertisedDevice.haveName() ) {

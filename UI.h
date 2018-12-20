@@ -48,7 +48,6 @@
 
 // heap map settings
 #define HEAPMAP_BUFFLEN 61 // graph width (+ 1 for hscroll)
-#define MAX_ROW_LEN 30 // max chars per line on display, used to position/cut text
 // heap management (used by graph)
 static uint32_t min_free_heap = 90000; // sql out of memory errors eventually occur under 100000
 static uint32_t initial_free_heap = freeheap;
@@ -108,25 +107,13 @@ class UIUtils {
       uint16_t textColor = BLE_WHITE;
       uint16_t borderColor = BLE_WHITE;
       uint16_t bgColor = BLECARD_BGCOLOR;
-      void setTheme( byte themeID ) {
+      void setTheme( BLECardThemes themeID ) {
         bgColor = BLECARD_BGCOLOR;
         switch ( themeID ) {
-          case IN_CACHE_ANON:// = 0,
-            borderColor = IN_CACHE_COLOR;
-            textColor = ANONYMOUS_COLOR;
-            break;
-          case IN_CACHE_NOT_ANON:// = 1,
-            borderColor = IN_CACHE_COLOR;
-            textColor = NOT_ANONYMOUS_COLOR;
-            break;
-          case NOT_IN_CACHE_ANON:// = 2,
-            borderColor = NOT_IN_CACHE_COLOR;
-            textColor = ANONYMOUS_COLOR;
-            break;
-          case NOT_IN_CACHE_NOT_ANON:// = 3
-            borderColor = NOT_IN_CACHE_COLOR;
-            textColor = NOT_ANONYMOUS_COLOR;
-            break;
+          case IN_CACHE_ANON:         borderColor = IN_CACHE_COLOR;     textColor = ANONYMOUS_COLOR;     break; // = 0,
+          case IN_CACHE_NOT_ANON:     borderColor = IN_CACHE_COLOR;     textColor = NOT_ANONYMOUS_COLOR; break; // = 1,
+          case NOT_IN_CACHE_ANON:     borderColor = NOT_IN_CACHE_COLOR; textColor = ANONYMOUS_COLOR;     break; // = 2,
+          case NOT_IN_CACHE_NOT_ANON: borderColor = NOT_IN_CACHE_COLOR; textColor = NOT_ANONYMOUS_COLOR; break; // = 3
         }
       }
     };
@@ -139,7 +126,7 @@ class UIUtils {
       if (resetReason == 12) { // SW Reset
         clearScreen = false;
       }
-      //GO.begin();
+
       tft.begin();
       tft.setRotation( 0 ); // required to get smooth scrolling
       tft.setTextColor(BLE_YELLOW);
@@ -183,7 +170,7 @@ class UIUtils {
     void update() {
       if ( freeheap + heap_tolerance < min_free_heap ) {
         headerStats("Out of heap..!");
-        Serial.printf("[FATAL] Heap too low: %d\n", freeheap);
+        log_e("[FATAL] Heap too low: %d", freeheap);
         delay(1000);
         ESP.restart();
       }
@@ -261,8 +248,8 @@ class UIUtils {
       int16_t posX = tft.getCursorX();
       int16_t posY = tft.getCursorY();
 
-      alignTextAt( hhmmString,   95, 288, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
-      alignTextAt( UpTimeString, 95, 298, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+      alignTextAt( hhmmString,   85, 288, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+      alignTextAt( UpTimeString, 85, 298, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
       alignTextAt("(c+) tobozo", 77, 308, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
 
       char sessDevicesCountStr[16] = {'\0'};
@@ -374,7 +361,7 @@ class UIUtils {
 
     static void PrintDBStateIcon() {
       if( lastdbIconColor != dbIconColor ) {
-        //Serial.printf("[%s] blinked at %d\n", __func__, dbIconColor);
+        log_v("blinked at %d", dbIconColor);
         takeMuxSemaphore();
         tft.fillCircle(ICON_DB_X, ICON_DB_Y, ICON_R, dbIconColor);
         giveMuxSemaphore();
@@ -449,9 +436,9 @@ class UIUtils {
           vTaskDelay( 100 );
           continue;
         }
-        //takeMuxSemaphore();
+        takeMuxSemaphore();
         updateTimeString();
-        //giveMuxSemaphore();
+        giveMuxSemaphore();
         lastClockTick = millis();
         vTaskDelay( 100 );
       }
@@ -563,16 +550,16 @@ class UIUtils {
     void printBLECard( BlueToothDevice *_BLEDevTmp ) {
       // don't render if already on screen
       if( BLECardIsOnScreen( _BLEDevTmp->address ) ) {
-        Serial.printf("  [printBLECard] %s is already on screen, skipping rendering\n", _BLEDevTmp->address);
+        log_d("  [printBLECard] %s is already on screen, skipping rendering", _BLEDevTmp->address);
         return;
       }
 
       if ( isEmpty( _BLEDevTmp->address ) ) {
-        Serial.printf("  [printBLECard] Cowardly refusing to render %d with an empty address\n", 0);
+        log_w("  [printBLECard] Cowardly refusing to render %d with an empty address", 0);
         return;        
       }
 
-      Serial.printf("  [printBLECard] %s will be rendered\n", _BLEDevTmp->address);
+      log_d("  [printBLECard] %s will be rendered", _BLEDevTmp->address);
 
       takeMuxSemaphore();
 
@@ -718,24 +705,24 @@ class UIUtils {
 
 
     static bool BLECardIsOnScreen( const char* address ) {
-      //Serial.printf("[BLECardIsOnScreen] Checking if %s is onScreen\n", CacheItem[CacheItemIndex].address);
+      log_d("Checking if %s is onScreen", address);
       bool onScreen = false;
       for (uint16_t j = 0; j < BLECARD_MAC_CACHE_SIZE; j++) {
         if ( strcmp( address, lastPrintedMac[j] ) == 0) {
-          //Serial.printf("  [BLECardIsOnScreen] %s is onScreen\n", address);
+          log_d("%s is onScreen", address);
           onScreen = true;
           return true;
         }
         delay(1);
       }
-      //Serial.printf("  [BLECardIsOnScreen] %s is NOT onScreen\n", address);
+      log_d("%s is NOT onScreen", address);
       return onScreen;      
     }
 
 
     static bool BLECardIsOnScreen( BlueToothDevice *CacheItem, uint16_t CacheItemIndex ) {
       if( isEmpty( CacheItem[CacheItemIndex].address ) ) {
-        Serial.print("[BLECardIsOnScreen] Empty address !!");
+        log_w("Empty address !!");
         return false;
       }
       return BLECardIsOnScreen( CacheItem[CacheItemIndex].address );

@@ -101,12 +101,12 @@ static char* getPartitionBuildSignature(const esp_partition_t* &currentpartition
 static char* getBinarySignature(fs::FS &fs, String fileName ) {
   char *signature = (char*)malloc(sizeoftrail);
   if(!fs.exists(fileName)) {
-    Serial.println("[FAIL] getBinarySignature() file not found: " + fileName);
+    log_e("[FAIL] getBinarySignature() file not found: %s", fileName.c_str());
     return signature;  
   }
   File binaryFile = fs.open(fileName);
   if(!binaryFile) {
-    Serial.println("[FAIL] getBinarySignature() can't open file: " + fileName);
+    log_e("[FAIL] getBinarySignature() can't open file: ", fileName.c_str());
     binaryFile.close();
     return signature;      
   }
@@ -212,21 +212,19 @@ static bool rollBackOrUpdateFromFS(fs::FS &fs, String fileName = MENU_BIN ) {
   const char* binarySignature = getBinarySignature( fs, fileName );
   const esp_partition_t* partition = esp_ota_get_next_update_partition(NULL);
   const char* partitionSignature = getPartitionBuildSignature( partition );
-  Serial.print("[rollBackOrUpdateFromFS] SD binary signature for " + fileName + " is: ");
-  Serial.println( binarySignature );
-  Serial.print("[rollBackOrUpdateFromFS] Next partition signature is: " );
-  Serial.println( partitionSignature );
+  log_d("[rollBackOrUpdateFromFS] SD binary signature for %s is %s", fileName.c_str(), binarySignature );
+  log_d("[rollBackOrUpdateFromFS] Next partition signature is: %s", partitionSignature );
   if(strcmp(binarySignature, partitionSignature)==0) {
-    Serial.println("[rollBackOrUpdateFromFS][INFO] Both signatures match");
+    log_d("[rollBackOrUpdateFromFS][INFO] Both signatures match");
     if( Update.canRollBack() )  {
-      Serial.println("[rollBackOrUpdateFromFS][ROLLBACK OK] Using rollback update"); // much faster than re-flashing
+      log_d("[rollBackOrUpdateFromFS][ROLLBACK OK] Using rollback update"); // much faster than re-flashing
       Update.rollBack();
       return true;
     } else {
-      Serial.println("[rollBackOrUpdateFromFS][ROLLBACK FAIL] Looks like rollback is not possible");
+      log_w("[rollBackOrUpdateFromFS][ROLLBACK FAIL] Looks like rollback is not possible");
     }
   } else {
-    Serial.println("[rollBackOrUpdateFromFS][ROLLBACK FAIL] None of the signatures match");
+    log_w("[rollBackOrUpdateFromFS][ROLLBACK FAIL] None of the signatures match");
   }
   SDUpdater sdUpdater;
   return sdUpdater.updateFromFS(fs, fileName);
@@ -246,7 +244,7 @@ void SDUpdater::SDMenuProgress(int state, int size) {
   uint32_t percent = (state*100) / size;
   if(SDU_LAST_PERCENT==percent) return;
   SDU_LAST_PERCENT = percent;
-  Serial.printf("percent = %d\n", percent);
+  log_d("percent = %d", percent);
   uint16_t x = tft.getCursorX();
   uint16_t y = tft.getCursorY();
   uint16_t wpercent = (SDU_PROGRESS_W * percent) / 100;
@@ -269,12 +267,12 @@ bool SDUpdater::performUpdate(Stream &updateSource, size_t updateSize, String fi
    if (Update.begin(updateSize)) {
       size_t written = Update.writeStream(updateSource);
       if (written == updateSize) {
-         Serial.println("Written : " + String(written) + " successfully");
+         log_d("Written : %s successfully", written);
       } else {
-         Serial.println("Written only : " + String(written) + "/" + String(updateSize) + ". Retry?");
+         log_w("Written only : %d of %d", written, updateSize);
       }
       if (Update.end()) {
-         Serial.println("OTA done!");
+         log_d("OTA done!");
          if (Update.isFinished()) {
             Out.println(); Out.println(" [INFO] Update successful"); Out.println(" [INFO] Rebooting."); Out.println();
             return true;
