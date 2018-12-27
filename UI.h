@@ -57,6 +57,7 @@ static uint16_t heapindex = 0; // index in the circular buffer
 static bool blinkit = false; // task blinker state
 static bool blinktoggler = true;
 static bool appIconVisible = false;
+static bool foundTimeServer = false;
 static uint16_t blestateicon;
 static uint16_t lastblestateicon;
 static uint16_t dbIconColor;
@@ -103,6 +104,8 @@ enum BLECardThemes {
 class UIUtils {
   public:
 
+    bool filterVendors = false;
+
     struct BLECardStyle {
       uint16_t textColor = BLE_WHITE;
       uint16_t borderColor = BLE_WHITE;
@@ -142,6 +145,7 @@ class UIUtils {
       tft.fillRect(0, Out.height - FOOTER_HEIGHT, Out.width, FOOTER_HEIGHT, FOOTER_BGCOLOR);
       tft.fillRect(0, PROGRESSBAR_Y, Out.width, 2, BLE_GREENYELLOW);
 
+
       AmigaBall.init();
 
       alignTextAt( "BLE Collector", 6, 4, BLE_YELLOW, HEADER_BGCOLOR, ALIGN_FREE );
@@ -152,17 +156,19 @@ class UIUtils {
       }
       Out.setupScrollArea(HEADER_HEIGHT, FOOTER_HEIGHT);
       tft.setTextColor( BLE_WHITE, BLECARD_BGCOLOR );
+      
+      SDSetup();
       timeSetup();
-      updateTimeString( true );
+      #if RTC_PROFILE > ROGUE // NTP_MENU and CHRONOMANIAC SD-mirror themselves
+        selfReplicateToSD();
+      #endif
       timeStateIcon();
       footerStats();
-
-      #if RTC_PROFILE!=NTP_MENU
-        xTaskCreatePinnedToCore(taskHeapGraph, "taskHeapGraph", 2048, NULL, 2, NULL, 1);
-      #endif
-
+      xTaskCreatePinnedToCore(taskHeapGraph, "taskHeapGraph", 2048, NULL, 2, NULL, 1);
       if ( clearScreen ) {
         playIntro();
+      } else {
+        Out.scrollNextPage();
       }
     }
 
@@ -180,21 +186,25 @@ class UIUtils {
 
 
     void playIntro() {
+      takeMuxSemaphore();
       uint16_t pos = 0;
       tft.setTextColor(BLE_GREENYELLOW, BGCOLOR);
       for (int i = 0; i < 5; i++) {
         pos += Out.println();
       }
-      pos += Out.println("         /---------------------\\");
-      pos += Out.println("         | ESP32 BLE Collector |");
-      pos += Out.println("         | ------------------- |");
-      pos += Out.println("         | (c+)  tobozo  2018  |");
-      pos += Out.println("         \\---------------------/");
+      pos += Out.println("         ");
+      pos += Out.println("           ESP32 BLE Collector  ");
+      pos += Out.println("         ");
+      pos += Out.println("           (c+)  tobozo  2018   ");
+      pos += Out.println("         ");
       tft.drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, 106, Out.scrollPosY - pos + 8, 28,  28);
+      drawRoundRect( 56, Out.scrollPosY, 128, pos, 8, BLECardTheme.borderColor );
+      //drawRoundRect( 1,  Out.scrollPosY-blockHeight, Out.width - 2,  blockHeight -2, 4, BLECardTheme.borderColor );
       for (int i = 0; i < 5; i++) {
         Out.println(SPACE);
       }
       AmigaBall.animate( 5000 );
+      giveMuxSemaphore();
     }
 
 
@@ -258,7 +268,7 @@ class UIUtils {
 
       sprintf( sessDevicesCountStr, sessDevicesCountTpl, sessDevicesCount );
       sprintf( devicesCountStr, devicesCountTpl, devicesCount );
-      sprintf( newDevicesCountStr, newDevicesCountTpl, scan_rounds/*newDevicesCount*/ );
+      sprintf( newDevicesCountStr, newDevicesCountTpl, scan_rounds );
 
       alignTextAt( devicesCountStr, 0, 288, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
       alignTextAt( sessDevicesCountStr, 0, 298, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
@@ -274,6 +284,11 @@ class UIUtils {
       percentBox(164, 284, 10, 10, BLEDevCacheUsed, BLE_CYAN, BLE_BLACK);
       percentBox(164, 296, 10, 10, VendorCacheUsed, BLE_ORANGE, BLE_BLACK);
       percentBox(164, 308, 10, 10, OuiCacheUsed, BLE_GREENYELLOW, BLE_BLACK);
+      if( filterVendors ) {
+        tft.drawJpg( filter_jpeg, filter_jpeg_len, 152, 308, 10,  8);
+      } else {
+        tft.fillRect( 152, 308, 10,  8, FOOTER_BGCOLOR );
+      }
       giveMuxSemaphore();
     }
 
@@ -345,7 +360,6 @@ class UIUtils {
       }
     }
 
-
     static void BLEStateIconSetColor(uint16_t color) {
       blestateicon = color;
     }
@@ -376,8 +390,18 @@ class UIUtils {
         lastblestateicon = blestateicon;
         if (fill) {
           tft.fillCircle(ICON_BLE_X, ICON_BLE_Y, ICON_R, blestateicon);
+          if( foundTimeServer ) {
+            tft.drawCircle(ICON_RTC_X, ICON_RTC_Y, ICON_R, BLE_GREEN);
+          }
         } else {
+          if( foundTimeServer ) {
+            tft.drawCircle(ICON_RTC_X, ICON_RTC_Y, ICON_R, BLE_ORANGE);
+          }
           tft.fillCircle(ICON_BLE_X, ICON_BLE_Y, ICON_R - 1, blestateicon);
+        }
+        if( !foundTimeServer ) {
+          tft.drawCircle(ICON_RTC_X, ICON_RTC_Y, ICON_R, HEADER_BGCOLOR);
+          tft.drawJpg( clock_jpeg, clock_jpeg_len, ICON_RTC_X-ICON_R, ICON_RTC_Y-ICON_R+1, 8,  8);
         }
         giveMuxSemaphore();
       }
@@ -437,7 +461,7 @@ class UIUtils {
           continue;
         }
         takeMuxSemaphore();
-        updateTimeString();
+        timeHousekeeping();
         giveMuxSemaphore();
         lastClockTick = millis();
         vTaskDelay( 100 );
@@ -547,27 +571,34 @@ class UIUtils {
     }
 
 
-    void printBLECard( BlueToothDevice *_BLEDevTmp ) {
+    void printBLECard( BlueToothDevice *BleCard ) {
       // don't render if already on screen
-      if( BLECardIsOnScreen( _BLEDevTmp->address ) ) {
-        log_d("  [printBLECard] %s is already on screen, skipping rendering", _BLEDevTmp->address);
+      if( BLECardIsOnScreen( BleCard->address ) ) {
+        log_d("%s is already on screen, skipping rendering", BleCard->address);
         return;
       }
 
-      if ( isEmpty( _BLEDevTmp->address ) ) {
-        log_w("  [printBLECard] Cowardly refusing to render %d with an empty address", 0);
-        return;        
+      if ( isEmpty( BleCard->address ) ) {
+        log_w("Cowardly refusing to render %d with an empty address", 0);
+        return;
       }
 
-      log_d("  [printBLECard] %s will be rendered", _BLEDevTmp->address);
+      if( filterVendors ) {
+        if(strcmp( BleCard->ouiname, "[random]")==0 ) {
+          log_e("Filtering %s with random vendorname", BleCard->address);
+          return;
+        }
+      }
+
+      log_d("  [printBLECard] %s will be rendered", BleCard->address);
 
       takeMuxSemaphore();
 
       uint16_t randomcolor = tft.color565( random(128, 255), random(128, 255), random(128, 255) );
-      uint16_t pos = 0;
+      uint16_t blockHeight = 0;
       uint16_t hop;
 
-      if( _BLEDevTmp->is_anonymous ) {
+      if( BleCard->is_anonymous ) {
         BLECardTheme.setTheme( IN_CACHE_ANON );
       } else {
         BLECardTheme.setTheme( IN_CACHE_NOT_ANON );
@@ -576,30 +607,30 @@ class UIUtils {
       tft.setTextColor( BLECardTheme.textColor, BLECardTheme.bgColor );
       BGCOLOR = BLECardTheme.bgColor;
       hop = Out.println( SPACE );
-      pos += hop;
+      blockHeight += hop;
 
-      memcpy( lastPrintedMac[lastPrintedMacIndex++ % BLECARD_MAC_CACHE_SIZE], _BLEDevTmp->address, MAC_LEN+1 );
+      memcpy( lastPrintedMac[lastPrintedMacIndex++ % BLECARD_MAC_CACHE_SIZE], BleCard->address, MAC_LEN+1 );
 
       char addressStr[24] = {'\0'};
-      sprintf( addressStr, addressTpl, _BLEDevTmp->address );
+      sprintf( addressStr, addressTpl, BleCard->address );
       hop = Out.println( addressStr );
-      pos += hop;
+      blockHeight += hop;
       char dbmStr[16];
 
-      sprintf( dbmStr, dbmTpl, _BLEDevTmp->rssi );
+      sprintf( dbmStr, dbmTpl, BleCard->rssi );
       alignTextAt( dbmStr, 0, Out.scrollPosY - hop, BLECardTheme.textColor, BLECardTheme.bgColor, ALIGN_RIGHT );
       tft.setCursor( 0, Out.scrollPosY );
-      drawRSSI( Out.width - 18, Out.scrollPosY - hop - 1, _BLEDevTmp->rssi, BLECardTheme.textColor );
-      if ( _BLEDevTmp->in_db ) { // 'already seen this' icon
+      drawRSSI( Out.width - 18, Out.scrollPosY - hop - 1, BleCard->rssi, BLECardTheme.textColor );
+      if ( BleCard->in_db ) { // 'already seen this' icon
         tft.drawJpg( update_jpeg, update_jpeg_len, 138, Out.scrollPosY - hop, 8,  8);
       } else { // 'just inserted this' icon
         tft.drawJpg( insert_jpeg, insert_jpeg_len, 138, Out.scrollPosY - hop, 8,  8);
       }
-      if ( !isEmpty( _BLEDevTmp->uuid ) ) { // 'has service UUID' Icon
+      if ( !isEmpty( BleCard->uuid ) ) { // 'has service UUID' Icon
         tft.drawJpg( service_jpeg, service_jpeg_len, 128, Out.scrollPosY - hop, 8,  8);
       }
 
-      switch( _BLEDevTmp->hits ) {
+      switch( BleCard->hits ) {
         case 0:
           tft.drawJpg( ghost_jpeg, ghost_jpeg_len, 118, Out.scrollPosY - hop, 8,  8);
         break;
@@ -612,94 +643,98 @@ class UIUtils {
       }
 
       #if RTC_PROFILE > HOBO 
-      if ( _BLEDevTmp->hits > 1 ) {
-        pos += Out.println(SPACE);
+      if ( BleCard->hits > 1 ) {
+        blockHeight += Out.println(SPACE);
 
-        char timeStampStr[48];
-        const char* timeStampTpl = "      %s: %04d/%02d/%02d %02d:%02d:%02d %s%s%s";
-        sprintf(timeStampStr, timeStampTpl, 
-          "C",
-          _BLEDevTmp->created_at.year(),
-          _BLEDevTmp->created_at.month(),
-          _BLEDevTmp->created_at.day(),
-          _BLEDevTmp->created_at.hour(),
-          _BLEDevTmp->created_at.minute(),
-          _BLEDevTmp->created_at.second(),
-          "(",
-          String(_BLEDevTmp->hits).c_str(),
-          " hits)"
+        char hitsTimeStampStr[48];
+        const char* hitsTimeStampTpl = "      %04d/%02d/%02d %02d:%02d:%02d %s";
+        char hitsStr[16];
+
+        if( BleCard->hits > 999 ) {
+          sprintf(hitsStr, "(%dK hits)", BleCard->hits/1000);
+        } else {
+          sprintf(hitsStr, "(%d hits)", BleCard->hits);
+        }
+
+        if( BleCard->updated_at.unixtime() > 0 ) {
+          unsigned long age_in_seconds = abs( BleCard->created_at.unixtime() - BleCard->updated_at.unixtime() );
+          unsigned long age_in_minutes = age_in_seconds / 60;
+          unsigned long age_in_hours   = age_in_minutes / 60;
+          unsigned long seconds_since_boot = (millis() / 1000)+1;
+          float freq = ((float)BleCard->hits / (float)scan_rounds+1) * ((float)age_in_seconds / (float)seconds_since_boot+1);
+          Serial.printf(" C: %d, U:%d, (%d / %d) * (%d / %d) = ",
+            BleCard->created_at.unixtime(),
+            BleCard->updated_at.unixtime(),
+            BleCard->hits,
+            scan_rounds+1,
+            age_in_seconds+1,
+            millis() / 1000
+          );
+          Serial.println( freq * 1000 );
+        }
+        
+        sprintf(hitsTimeStampStr, hitsTimeStampTpl, 
+          BleCard->created_at.year(),
+          BleCard->created_at.month(),
+          BleCard->created_at.day(),
+          BleCard->created_at.hour(),
+          BleCard->created_at.minute(),
+          BleCard->created_at.second(),
+          hitsStr
         );
-        hop = Out.println( timeStampStr );
-        pos += hop;
+        hop = Out.println( hitsTimeStampStr );
+        blockHeight += hop;
 
         tft.drawJpg( clock_jpeg, clock_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
-
-/*
-        pos += Out.println(SPACE);
-        sprintf(timeStampStr, timeStampTpl, 
-          "U",
-          _BLEDevTmp->updated_at.year(),
-          _BLEDevTmp->updated_at.month(),
-          _BLEDevTmp->updated_at.day(),
-          _BLEDevTmp->updated_at.hour(),
-          _BLEDevTmp->updated_at.minute(),
-          _BLEDevTmp->updated_at.second(),
-          "", "", ""
-        );
-        hop = Out.println( timeStampStr );
-        pos += hop;
-
-        tft.drawJpg( clock_jpeg, clock_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
- */       
         
       }
       #endif
 
-      if ( !isEmpty( _BLEDevTmp->ouiname ) ) {
-        pos += Out.println( SPACE );
+      if ( !isEmpty( BleCard->ouiname ) ) {
+        blockHeight += Out.println( SPACE );
         char ouiStr[38] = {'\0'};
-        sprintf( ouiStr, ouiTpl, _BLEDevTmp->ouiname );
+        sprintf( ouiStr, ouiTpl, BleCard->ouiname );
         hop = Out.println( ouiStr );
-        pos += hop;
+        blockHeight += hop;
         tft.drawJpg( nic16_jpeg, nic16_jpeg_len, 10, Out.scrollPosY - hop, 13, 8 );
       }
       
-      if ( _BLEDevTmp->appearance != 0 ) {
-        pos += Out.println(SPACE);
+      if ( BleCard->appearance != 0 ) {
+        blockHeight += Out.println(SPACE);
         char appearanceStr[48];
-        sprintf( appearanceStr, appearanceTpl, _BLEDevTmp->appearance );
+        sprintf( appearanceStr, appearanceTpl, BleCard->appearance );
         hop = Out.println( appearanceStr );
-        pos += hop;
+        blockHeight += hop;
       }
-      if ( !isEmpty( _BLEDevTmp->manufname ) ) {
-        pos += Out.println(SPACE);
+      if ( !isEmpty( BleCard->manufname ) ) {
+        blockHeight += Out.println(SPACE);
         char manufStr[38] = {'\0'};
-        sprintf( manufStr, manufTpl, _BLEDevTmp->manufname );
+        sprintf( manufStr, manufTpl, BleCard->manufname );
         hop = Out.println( manufStr );
-        pos += hop;
-        if ( strstr( _BLEDevTmp->manufname, "Apple" ) ) {
+        blockHeight += hop;
+        if ( strstr( BleCard->manufname, "Apple" ) ) {
           tft.drawJpg( apple16_jpeg, apple16_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
-        } else if ( strstr( _BLEDevTmp->manufname, "IBM" ) ) {
+        } else if ( strstr( BleCard->manufname, "IBM" ) ) {
           tft.drawJpg( ibm8_jpg, ibm8_jpg_len, 10, Out.scrollPosY - hop, 20,  8);
-        } else if ( strstr (_BLEDevTmp->manufname, "Microsoft" ) ) {
+        } else if ( strstr (BleCard->manufname, "Microsoft" ) ) {
           tft.drawJpg( crosoft_jpeg, crosoft_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
-        } else if ( strstr( _BLEDevTmp->manufname, "Bose" ) ) {
+        } else if ( strstr( BleCard->manufname, "Bose" ) ) {
           tft.drawJpg( speaker_icon_jpg, speaker_icon_jpg_len, 12, Out.scrollPosY - hop, 6,  8 );
         } else {
           tft.drawJpg( generic_jpeg, generic_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
         }
       }
-      if ( !isEmpty( _BLEDevTmp->name ) ) {
+      if ( !isEmpty( BleCard->name ) ) {
         char nameStr[38] = {'\0'};
-        sprintf(nameStr, nameTpl, _BLEDevTmp->name);
-        pos += Out.println(SPACE);
+        sprintf(nameStr, nameTpl, BleCard->name);
+        blockHeight += Out.println(SPACE);
         hop = Out.println( nameStr );
-        pos += hop;
+        blockHeight += hop;
         tft.drawJpg( name_jpeg, name_jpeg_len, 12, Out.scrollPosY - hop, 7,  8);
       }
       hop = Out.println( SPACE) ;
-      pos += hop;
-      drawRoundRect( pos, 4, BLECardTheme.borderColor );
+      blockHeight += hop;
+      drawRoundRect( 0, Out.scrollPosY, Out.width - 2, blockHeight, 4, BLECardTheme.borderColor );
       giveMuxSemaphore();
     }
 
@@ -731,7 +766,7 @@ class UIUtils {
 
   private:
 
-    void alignTextAt(const char* text, uint16_t x, uint16_t y, int16_t color = BLE_YELLOW, int16_t bgcolor = BLE_BLACK, byte textAlign = ALIGN_FREE) {
+    void alignTextAt(const char* text, uint16_t x, uint16_t y, int16_t color = BLE_YELLOW, int16_t bgcolor = BGCOLOR, byte textAlign = ALIGN_FREE) {
       tft.setTextColor(color, bgcolor);
       tft.getTextBounds(text, x, y, &Out.x1_tmp, &Out.y1_tmp, &Out.w_tmp, &Out.h_tmp);
       switch (textAlign) {
@@ -752,34 +787,34 @@ class UIUtils {
     }
 
     // draw rounded corners boxes over the scroll limit
-    void drawRoundRect(uint16_t pos, uint16_t radius, uint16_t color) {
-      if (Out.scrollPosY - pos >= Out.scrollTopFixedArea) {
+    void drawRoundRect(uint16_t x, int y, uint16_t width, uint16_t height, uint16_t radius, uint16_t color) {
+      int scrollPosY = y/*Out.scrollPosY*/ - height;
+      if (scrollPosY >= Out.scrollTopFixedArea) {
         // no scroll loop point overlap, just render the box
-        tft.drawRoundRect(1, Out.scrollPosY - pos + 1, Out.width - 2, pos - 2, 4, color);
+        tft.drawRoundRect(x+1, scrollPosY + 1, width, height - 2, radius, color);
       } else {
         // last block overlaps scroll loop point and has been split
-        int h1 = (Out.scrollTopFixedArea - (Out.scrollPosY - pos));
-        int h2 = pos - h1;
-        int lwidth = Out.width - 2;
+        int h1 = (Out.scrollTopFixedArea - scrollPosY);
+        int h2 = height - h1;
         h1 -= 2; //margin
         h2 -= 2;; //margin
-        int vpos1 = Out.scrollPosY - pos + Out.yArea + 1;
-        int vpos2 = Out.scrollPosY - 2;
-        tft.drawFastHLine(1 + radius, vpos1, lwidth - 2 * radius, color); // upper hline
-        tft.drawFastHLine(1 + radius, vpos2, lwidth - 2 * radius, color); // lower hline
+        int vpos1 = scrollPosY + Out.yArea + 1;
+        int vpos2 = y/*Out.scrollPosY*/ - 2;
+        tft.drawFastHLine(x+1 + radius, vpos1, width - 2 * radius, color); // upper hline
+        tft.drawFastHLine(x+1 + radius, vpos2, width - 2 * radius, color); // lower hline
         if (h1 > radius) {
-          tft.drawFastVLine(1,      vpos1 + radius, h1 - radius + 1, color); // upper left vline
-          tft.drawFastVLine(lwidth, vpos1 + radius, h1 - radius + 1, color); // upper right vline
+          tft.drawFastVLine(x+1,      vpos1 + radius, h1 - radius + 1, color); // upper left vline
+          tft.drawFastVLine(x+width,  vpos1 + radius, h1 - radius + 1, color); // upper right vline
         }
         if (h2 > radius) {
-          tft.drawFastVLine(1,      vpos2 - h2, h2 - radius + 1, color); // lower left vline
-          tft.drawFastVLine(lwidth, vpos2 - h2, h2 - radius + 1, color); // lower right vline
+          tft.drawFastVLine(x+1,      vpos2 - h2, h2 - radius + 1, color); // lower left vline
+          tft.drawFastVLine(x+width,  vpos2 - h2, h2 - radius + 1, color); // lower right vline
         }
         tft.startWrite();//BLEDev.borderColor
-        tft.drawCircleHelper(1 + radius,      vpos1 + radius, radius, 1, color); // upper left
-        tft.drawCircleHelper(lwidth - radius, vpos1 + radius, radius, 2, color); // upper right
-        tft.drawCircleHelper(lwidth - radius, vpos2 - radius, radius, 4, color); // lower right
-        tft.drawCircleHelper(1 + radius,      vpos2 - radius, radius, 8, color); // lower left
+        tft.drawCircleHelper(x+1 + radius,      vpos1 + radius, radius, 1, color); // upper left
+        tft.drawCircleHelper(x+width - radius,  vpos1 + radius, radius, 2, color); // upper right
+        tft.drawCircleHelper(x+width - radius,  vpos2 - radius, radius, 4, color); // lower right
+        tft.drawCircleHelper(x+1 + radius,      vpos2 - radius, radius, 8, color); // lower left
         tft.endWrite();
       }
     }

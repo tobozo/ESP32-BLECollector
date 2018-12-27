@@ -33,14 +33,14 @@
 
 
 struct AmigaBallConfig {
-  float BGColor = tft.color565(0x22, 0x22, 0x44);
-  float Framelength = 25;
-  float ScreenWidth = tft.width();
-  float ScreenHeight = tft.height();
-  float VCentering = 245.0;
-  float Scale = 32.0;
-  float Amplitude = 50;
-  byte Wires = 5;
+  long Framelength = 25;
+  byte Wires = 0; // 0 = no wireframes
+  uint16_t BGColor = tft.color565(0x22, 0x22, 0x44);
+  uint16_t ScreenWidth = tft.width();
+  uint16_t ScreenHeight = tft.height();
+  uint16_t VCentering = 245;
+  uint16_t Scale = 32;
+  uint16_t Amplitude = 50;
 } amigaBallConfig;
 
 
@@ -51,115 +51,120 @@ class AmigaRulez {
       float x = 0.00;
       float y = 0.00;
     };
-    
-    Points points[10][10];
-    
-    float deg2rad = PI / 180.0;
-    float phase8Rad = PI/8; // 22.5 deg
-    float phase4Rad = PI/4; // 45 deg
-    float phase2Rad = PI/2; // 90 deg
-    float AmigaBallScreenWidth;
-    float AmigaBallScreenHeight;
-    float AmigaBallVCentering;
-    float AmigaBallScale;
-    float AmigaBallAmplitude;
-    float AmigaBallTiltDeg;
-    float AmigaBallTiltRad;
-    float oldx;
-    float oldy;
-    float hCenter;
-    float canvasVstart;
-    float canvasVend;
-    float canvasHeight;
-    float cVsteps;
-    float canvasHstart;
-    float canvasHend;
-    float canvasWidth;
-    float cHsteps;
-    float boxVstart;
-    float boxVend;
-    float boxHeight;
-    float vSteps;
-    float boxHstart;
-    float boxHend;
-    float boxWidth;
-    float hSteps;
-    float vectorx;
-    float vectory;
-    float xtoyratio;
-    float ytoxratio;
-    float perspective[4];
-    byte bytecounter = 0;
-    byte AmigaBallWires;
-    uint16_t AmigaBallBGColor;
-    int AmigaBallBounceMargin;
-    long AmigaBallFramelength;
 
-    bool done;
-    float phase;
-    float phase_velocity;
-    float x;
-    float y;
-    float x_velocity;
-    bool right;
-    float y_ang;
-    float y_velocity;
-    long started = millis();
-    long last = millis();
-    long processtime = 0;
+    Points points[10][10];
+
+    float deg2rad   = PI/180.0;
+    float phase8Rad = PI/8.0; // 22.5 deg
+    float phase4Rad = PI/4.0; // 45 deg
+    float phase2Rad = PI/2.0; // 90 deg
+    float twopi     = PI*2;
+    float Phase     = 0.0;
+    float velocityX = 2.1;
+    float velocityY = 0.07;
+    float angleY    = 0.0;
+    
+    float PhaseVelocity;
+    float perspective[4];
+    float XtoYratio;
+    float YtoXratio;
+    float TiltRad;
+
+    bool AnimationDone;
+    bool isMovingRight;
+    bool doWireFrame = false;
+    
+    byte Wires;
+    byte bytecounter = 0;
+
+    int BounceMargin;
+
+    long Framelength;
+    long startedTick = millis();
+    long lastTick    = millis();
+    long processTicks = 0;
+
+    uint16_t TiltDeg = 17; // 17 degrees tilting to the right
+    uint16_t ScreenWidth;
+    uint16_t ScreenHeight;
+    uint16_t VCentering;
+    uint16_t Scale;
+    uint16_t Amplitude;
+    uint16_t BGColor;
+    uint16_t lastPositionX;
+    uint16_t lastPositionY;
+    uint16_t hCenter;
+    uint16_t canvasVstart;
+    uint16_t canvasVend;
+    uint16_t canvasHeight;
+    uint16_t cVsteps;
+    uint16_t canvasHstart = 0;
+    uint16_t canvasHend;
+    uint16_t canvasWidth;
+    uint16_t cHsteps;
+    uint16_t boxVstart;
+    uint16_t boxVend;
+    uint16_t boxHeight;
+    uint16_t vSteps;
+    uint16_t boxHstart;
+    uint16_t boxHend;
+    uint16_t boxWidth;
+    uint16_t hSteps;
+    uint16_t vectorX;
+    uint16_t vectorY;
+    uint16_t positionX;
+    uint16_t positionY;
 
     void init( AmigaBallConfig conf=amigaBallConfig ) {
-      AmigaBallBGColor      = amigaBallConfig.BGColor;//tft.color565(0x22, 0x22, 0x44);
-      AmigaBallFramelength  = amigaBallConfig.Framelength;//33; // millis
-      AmigaBallScreenWidth  = amigaBallConfig.ScreenWidth;//tft.width(); // 640
-      AmigaBallScreenHeight = amigaBallConfig.ScreenHeight;//tft.height(); // 480
-      AmigaBallVCentering   = amigaBallConfig.VCentering;// 245.0;
-      AmigaBallScale        = amigaBallConfig.Scale;// 32.0;
-      AmigaBallAmplitude    = amigaBallConfig.Amplitude;// 50;
-      AmigaBallWires        = amigaBallConfig.Wires;
+      BGColor      = amigaBallConfig.BGColor;//tft.color565(0x22, 0x22, 0x44);
+      Framelength  = amigaBallConfig.Framelength;//33; // millis
+      ScreenWidth  = amigaBallConfig.ScreenWidth;//tft.width(); // 640
+      ScreenHeight = amigaBallConfig.ScreenHeight;//tft.height(); // 480
+      VCentering   = amigaBallConfig.VCentering;// 245.0;
+      Scale        = amigaBallConfig.Scale;// 32.0;
+      Amplitude    = amigaBallConfig.Amplitude;// 50;
+      Wires        = amigaBallConfig.Wires;
       setupValues();
     }
 
     void setupValues() {
-      AmigaBallBounceMargin = AmigaBallScale+8; // 135
-      AmigaBallTiltDeg = 17.0; // 17 degrees tilting to the right
-      AmigaBallTiltRad = AmigaBallTiltDeg * deg2rad;
-      oldx = 0;
-      oldy = 0;
-      hCenter = AmigaBallScreenWidth / 2;
-      canvasVstart = AmigaBallVCentering - (AmigaBallScale + AmigaBallAmplitude );
-      canvasVend   = AmigaBallVCentering + (AmigaBallScale );
+      BounceMargin = Scale+8; // 135
+      TiltRad = TiltDeg * deg2rad;
+      lastPositionX = 0;
+      lastPositionY = 0;
+      hCenter = ScreenWidth / 2;
+      canvasVstart = VCentering - (Scale + Amplitude );
+      canvasVend   = VCentering + (Scale );
       canvasHeight = canvasVend - canvasVstart;
-      cVsteps      = canvasHeight / AmigaBallWires;
-      canvasHstart = 0;
-      canvasHend   = AmigaBallScreenWidth;
+      canvasHend   = ScreenWidth;
       canvasWidth  = canvasHend - canvasHstart;
-      cHsteps      = canvasWidth / AmigaBallWires;
-      boxVstart = AmigaBallVCentering - (AmigaBallScale/4 + AmigaBallAmplitude );
-      boxVend   = AmigaBallVCentering + (AmigaBallScale/4 );
+      boxVstart = VCentering - (Scale/4 + Amplitude );
+      boxVend   = VCentering + (Scale/4 );
       boxHeight = boxVend - boxVstart;
-      vSteps    = boxHeight / AmigaBallWires;
-      boxHstart = hCenter - (AmigaBallScale + AmigaBallAmplitude );
-      boxHend   = hCenter + (AmigaBallScale + AmigaBallAmplitude );
+      boxHstart = hCenter - (Scale + Amplitude );
+      boxHend   = hCenter + (Scale + Amplitude );
       boxWidth  = boxHend - boxHstart;
-      hSteps    = boxWidth / AmigaBallWires;
-      vectorx = boxHstart-canvasHstart;
-      vectory = boxVstart-canvasVstart;
-      xtoyratio = vectorx / vectory;
-      ytoxratio = vectory / vectorx;
+      if( Wires > 0 ) {
+        doWireFrame = true;
+        cVsteps = canvasHeight / Wires;
+        cHsteps = canvasWidth / Wires;
+        vSteps  = boxHeight / Wires;
+        hSteps  = boxWidth / Wires;
+      } else {
+        doWireFrame = false;
+      }
+      vectorX = boxHstart-canvasHstart;
+      vectorY = boxVstart-canvasVstart;
+      XtoYratio = vectorX / vectorY;
+      YtoXratio = vectorY / vectorX;
       perspective[0] = 0;
-      perspective[1] = AmigaBallScale/8;
-      perspective[2] = AmigaBallScale/4;
-      perspective[3] = AmigaBallScale/2;
-
-      phase = 0.0;
-      phase_velocity = 2.5 * deg2rad;
-      x = AmigaBallScreenWidth/2;
-      y;
-      x_velocity = 2.1;
-      right = true;
-      y_ang = 0.0;
-      y_velocity = 0.07;
+      perspective[1] = Scale/8;
+      perspective[2] = Scale/4;
+      perspective[3] = Scale/2;
+      PhaseVelocity = 2.5 * deg2rad;
+      positionX = ScreenWidth/2;
+      positionY;
+      isMovingRight = true;
     }
 
     float getLat(float phase, int i) {
@@ -203,7 +208,7 @@ class AmigaRulez {
       }
     }
 
-    float scaleTranslate(float s, float tx, float ty) {
+    float scaleTranslate(float s, uint16_t tx, uint16_t ty) {
       for( int i=0; i<10; i++) {
         for( int j=0; j<9; j++ ) {
           float _x = points[i][j].x * s + tx;
@@ -214,55 +219,47 @@ class AmigaRulez {
       }
     }
 
-    void transform(float s, float tx, float ty) {
-      tiltSphere( AmigaBallTiltRad );
+    void transform(float s, uint16_t tx, uint16_t ty) {
+      tiltSphere( TiltRad );
       scaleTranslate( s, tx, ty );
     }
 
     void fillTiles(bool alter) {
       for( int j=0; j<8; j++ ) {
         for( int i=0; i<9; i++) {
-          /*
-          Points p1 = points[i][j];
-          Points p2 = points[i+1][j];
-          Points p3 = points[i+1][j+1];
-          Points p4 = points[i][j+1];
-          */
           uint16_t color = alter ? BLE_RED : BLE_WHITE;
-          tft.fillTriangle(points[i][j].x, points[i][j].y, points[i+1][j].x, points[i+1][j].y, points[i+1][j+1].x, points[i+1][j+1].y, color);
-          //tft.fillTriangle(p2.x, p2.y, p3.x, p3.y, p4.x, p4.y, color);
-          tft.fillTriangle(points[i+1][j+1].x, points[i+1][j+1].y, points[i][j+1].x, points[i][j+1].y, points[i][j].x, points[i][j].y, color);
-          //tft.fillTriangle(p4.x, p4.y, p1.x, p1.y, p2.x, p2.y, color);
+          tft.fillTriangle(points[i][j].x,     points[i][j].y,     points[i+1][j].x, points[i+1][j].y, points[i+1][j+1].x, points[i+1][j+1].y, color);
+          tft.fillTriangle(points[i+1][j+1].x, points[i+1][j+1].y, points[i][j+1].x, points[i][j+1].y, points[i][j].x,     points[i][j].y, color);
           alter = !alter;
         }
       }
     }
 
     void drawWireFrame() {
-      for( int i=0; i<=AmigaBallWires; i++ ) {
+      for( int i=0; i<=Wires; i++ ) {
         tft.drawFastHLine(boxHstart, boxVstart + i*vSteps, boxWidth, BLE_PURPLE);
         tft.drawLine(boxHstart, boxVstart + i*vSteps, canvasHstart, canvasVstart + i*cVsteps, BLE_PURPLE);
         tft.drawLine(boxHend,   boxVstart + i*vSteps, canvasHend,   canvasVstart + i*cVsteps, BLE_PURPLE);
         tft.drawFastVLine(boxHstart + i*hSteps, boxVstart, boxHeight, BLE_PURPLE);
         tft.drawLine(boxHstart + i*hSteps, boxVstart, canvasHstart + i*cHsteps, canvasVstart, BLE_PURPLE);
-        tft.drawLine(boxHstart + i*hSteps, boxVend, canvasHstart + i*cHsteps, canvasVend, BLE_PURPLE);
+        tft.drawLine(boxHstart + i*hSteps, boxVend,   canvasHstart + i*cHsteps, canvasVend, BLE_PURPLE);
       }
       for( int i=0; i<4; i++ ) {
-        float _y = perspective[i]+vSteps/2;
-        float _x =  ((AmigaBallScale/2) - (_y * ytoxratio))*2;
+        uint16_t  _y = perspective[i]+vSteps/2;
+        uint16_t  _x =  ((Scale/2) - (_y * YtoXratio))*2;
         tft.drawFastHLine(_x, boxVstart - _y, canvasWidth-(_x*2), BLE_PURPLE);
         tft.drawFastHLine(_x, boxVend   + _y, canvasWidth-(_x*2), BLE_PURPLE);
-        float boxH = (boxVend   + _y) - (boxVstart - _y);
+        uint16_t  boxH = (boxVend   + _y) - (boxVstart - _y);
         tft.drawFastVLine(_x,               boxVstart - _y, boxH, BLE_PURPLE);
         tft.drawFastVLine(canvasWidth - _x, boxVstart - _y, boxH, BLE_PURPLE);
       }
     }
 
-    void clearCrescent(float r0, float r1, float x0, float y0, float x1, float y1) {
-      float vectorx = x1 - x0;
-      float vectory = y1 - y0;
-      float vectAngleRadians = atan2(vectory, vectorx); // angle in radians
-      float d = sqrt( vectorx*vectorx + vectory*vectory ); // hypothenuse length
+    void clearCrescent(float r0, float r1, uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
+      float vectorX = x1 - x0;
+      float vectorY = y1 - y0;
+      float vectAngleRadians = atan2(vectorY, vectorX); // angle in radians
+      float d = sqrt( vectorX*vectorX + vectorY*vectorY ); // hypothenuse length
       // https://stackoverflow.com/questions/3349125/circle-circle-intersection-points
       if( d > r0+r1 ) return; // If d > r0 + r1 then there are no solutions, the circles are separate.
       if( d < abs(r0-r1) ) return; // If d < |r0 - r1| then there are no solutions because one circle is contained within the other.
@@ -271,10 +268,10 @@ class AmigaRulez {
       float h = sqrt( ( r0*r0 ) - ( a*a ) );
 
       // circle intersection points (only the first one is needed here)
-      float xx2 = x0 + a * vectorx / d;
-      float yy2 = y0 + a * vectory / d;
-      float xx3 = 0; // x2 + h * vectory / d;  // also x3=x2-h*(y1-y0)/d;
-      float yy3 = 0; // y2 - h * vectorx / d;  // also y3=y2+h*(x1-x0)/d;
+      uint16_t xx2 = x0 + a * vectorX / d;
+      uint16_t yy2 = y0 + a * vectorY / d;
+      uint16_t xx3 = 0; // x2 + h * vectorY / d;  // also x3=x2-h*(y1-y0)/d;
+      uint16_t yy3 = 0; // y2 - h * vectorX / d;  // also y3=y2+h*(x1-x0)/d;
       
       float mobAngleRadians = atan2(h, a);
       float angleRad0 = vectAngleRadians-mobAngleRadians;
@@ -288,19 +285,19 @@ class AmigaRulez {
       for( float angle=angleRad0; angle<angleRad1; angle+=angleStep ) {
         float ct = sin(angle);
         float st = cos(angle);
-        float xx0 = x0 + st * r0;
-        float yy0 = y0 + ct * r0;
-        float xx1 = x1 + st * r1;
-        float yy1 = y1 + ct * r1;
+        uint16_t xx0 = x0 + st * r0;
+        uint16_t yy0 = y0 + ct * r0;
+        uint16_t xx1 = x1 + st * r1;
+        uint16_t yy1 = y1 + ct * r1;
         if( xx2 != 0 && yy2 != 0 ) {
-          tft.fillTriangle(xx0, yy0, xx1, yy1, xx2, yy2, AmigaBallBGColor );
+          tft.fillTriangle(xx0, yy0, xx1, yy1, xx2, yy2, BGColor );
         }
         if( xx3!= 0 && xx3 != 0 ) {
-          tft.fillTriangle(xx2, yy2, xx3, yy3, xx1, yy1, AmigaBallBGColor );
+          tft.fillTriangle(xx2, yy2, xx3, yy3, xx1, yy1, BGColor );
         }
         /*
         {
-          tft.drawLine(xx0, yy0, xx1, yy1, AmigaBallBGColor );
+          tft.drawLine(xx0, yy0, xx1, yy1, BGColor );
         }
         */
         xx2 = xx0;
@@ -310,51 +307,51 @@ class AmigaRulez {
       }
     }
 
-    void draw(float phase, float scale, float x, float y) {
+    void draw(float phase, float scale, uint16_t x, uint16_t y) {
       calcPoints( fmod(phase, phase8Rad) );
       transform(scale, x, y);
-      if(bytecounter++%8==0) drawWireFrame();
+      if(doWireFrame && bytecounter++%8==0) drawWireFrame();
       fillTiles(phase >= phase8Rad);
-      if(oldx!=0 && oldy!=0) {
-        clearCrescent(scale, scale+2, x, y, oldx, oldy);
+      if(lastPositionX!=0 && lastPositionY!=0) {
+        clearCrescent(scale, scale+2, x, y, lastPositionX, lastPositionY);
       }
-      oldx = x;
-      oldy = y;
+      lastPositionX = x;
+      lastPositionY = y;
     }
 
     void animate( long duration = 5000, bool clearAfter = true ) {
 
-      done = false;
-      started = millis();
-      last = millis();
-      processtime = 0;
+      AnimationDone = false;
+      startedTick = millis();
+      lastTick = millis();
+      processTicks = 0;
 
-      while( !done ) {
-        last = millis();
-        if( right ) {
-          phase = fmod( phase + ( phase4Rad - phase_velocity ), phase4Rad );
-          x += x_velocity;
+      while( !AnimationDone ) {
+        lastTick = millis();
+        if( isMovingRight ) {
+          Phase = fmod( Phase + ( phase4Rad - PhaseVelocity ), phase4Rad );
+          positionX += velocityX;
         } else {
-          phase = fmod( phase + phase_velocity, phase4Rad );
-          x -= x_velocity;
+          Phase = fmod( Phase + PhaseVelocity, phase4Rad );
+          positionX -= velocityX;
         }
-        if ( x >= AmigaBallScreenWidth-AmigaBallBounceMargin ) {
-          right = false;
-        } else if( x <= AmigaBallBounceMargin ) {
-          right = true;
+        if ( positionX >= ScreenWidth-BounceMargin ) {
+          isMovingRight = false;
+        } else if( positionX <= BounceMargin ) {
+          isMovingRight = true;
         }
-        y_ang = fmod( y_ang + y_velocity, 2*PI );
-        y = AmigaBallVCentering - AmigaBallAmplitude * fabs( cos( y_ang ) );
-        draw( phase, AmigaBallScale, x, y );
-        processtime = millis() - last;
-        if( processtime < AmigaBallFramelength ) {
-          delay( AmigaBallFramelength - processtime );
+        angleY = fmod( angleY + velocityY, twopi );
+        positionY = VCentering - Amplitude * fabs( cos( angleY ) );
+        draw( Phase, Scale, positionX, positionY );
+        processTicks = millis() - lastTick;
+        if( processTicks < Framelength ) {
+          delay( Framelength - processTicks );
         }
-        if( millis() - started > duration ) {
+        if( millis() - startedTick > duration ) {
           if( clearAfter ) {
-            tft.fillRect( 0, canvasVstart, AmigaBallScreenWidth, canvasHeight, AmigaBallBGColor );
+            tft.fillRect( 0, canvasVstart, ScreenWidth, canvasHeight, BGColor );
           }
-          done = true;
+          AnimationDone = true;
         }
       }
     }

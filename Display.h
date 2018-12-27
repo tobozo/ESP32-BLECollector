@@ -5,6 +5,7 @@
 WROVER_KIT_LCD tft;
 #include <SD_MMC.h>
 fs::SDMMCFS &BLE_FS = SD_MMC;
+const char* BLE_FS_TYPE = "sdcard";
 
 
 /*
@@ -69,3 +70,4 @@ fs::SDMMCFS &BLE_FS = SD_MMC;
 #define BLE_DARKORANGE tft.color565(0x80, 0x40, 0x00)
 // middle scrolly zone
 #define BLECARD_BGCOLOR tft.color565(0x22, 0x22, 0x44)
+static uint16_t BGCOLOR = tft.color565(0x22, 0x22, 0x44);

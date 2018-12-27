@@ -49,12 +49,6 @@ static char *colNeedle = 0; // search criteria
 static char colValue[32] = {'\0'}; // search result
 
 
-// all DB queries
-// used by showDataSamples()
-#define nameQuery    "SELECT DISTINCT SUBSTR(name,0,32) FROM blemacs where TRIM(name)!=''"
-#define manufnameQuery   "SELECT DISTINCT SUBSTR(manufname,0,32) FROM blemacs where TRIM(manufname)!=''"
-#define ouinameQuery "SELECT DISTINCT SUBSTR(ouiname,0,32) FROM blemacs where TRIM(ouiname)!=''"
-// used by getEntries()
 #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
 
   #define BLEMAC_CREATE_FIELDNAMES " \
@@ -128,20 +122,17 @@ static char colValue[32] = {'\0'}; // search result
   "
   #define insertQueryTemplate "INSERT INTO blemacs(" BLEMAC_INSERT_FIELDNAMES ") VALUES(%d,\"%s\",\"%s\",\"%s\",%d,%d,\"%s\",\"%s\")"
 #endif
+// all DB queries
+#define nameQuery    "SELECT DISTINCT SUBSTR(name,0,32) FROM blemacs where TRIM(name)!=''"
+#define manufnameQuery   "SELECT DISTINCT SUBSTR(manufname,0,32) FROM blemacs where TRIM(manufname)!=''"
+#define ouinameQuery "SELECT DISTINCT SUBSTR(ouiname,0,32) FROM blemacs where TRIM(ouiname)!=''"
 #define allEntriesQuery "SELECT " BLEMAC_SELECT_FIELDNAMES " FROM blemacs;"
 #define countEntriesQuery "SELECT count(*) FROM blemacs;"
-// used by resetDB()
 #define dropTableQuery   "DROP TABLE IF EXISTS blemacs;"
 #define createTableQuery "CREATE TABLE IF NOT EXISTS blemacs( " BLEMAC_CREATE_FIELDNAMES " )"
-//  created_at timestamp NOT NULL DEFAULT current_timestamp, \
-//  updated_at timestamp NOT NULL DEFAULT current_timestamp) \
-// used by pruneDB()
-#define pruneTableQuery "DELETE FROM blemacs WHERE appearance='' AND name='' AND uuid='' AND ouiname='[private]' AND (manufname LIKE 'Apple%' or manufname='[unknown]')"
-// used by testVendorNames()
+#define pruneTableQuery "DELETE FROM blemacs"
 #define testVendorNamesQuery "SELECT SUBSTR(vendor,0,32)  FROM 'ble-oui' LIMIT 10"
-// used by testOUI()
 #define testOUIQuery "SELECT * FROM 'oui-light' limit 10"
-// used by insertBTDevice()
 static char insertQuery[512]; // stack overflow ? pray that 256 is enough :D
 #define searchDeviceTemplate "SELECT " BLEMAC_SELECT_FIELDNAMES " FROM blemacs WHERE address='%s'"
 static char searchDeviceQuery[160];
@@ -177,27 +168,6 @@ struct VendorPsramCacheStruct {
   char *vendor = NULL;
 };
 
-/*
-static void VendorPsramCacheStructInit( VendorPsramCacheStruct *CacheItem, bool hasPsram=true ) {
-  if( hasPsram ) {
-    CacheItem = (VendorPsramCacheStruct*)ps_calloc(1, sizeof( VendorPsramCacheStruct ));
-    if( CacheItem == NULL ) {
-      Serial.printf("[ERROR][%d][%d] can't allocate\n", freeheap, freepsheap);
-      return;
-    }
-    CacheItem->devid  = (uint16_t*)ps_malloc(sizeof(uint16_t));
-    CacheItem->vendor = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
-  } else {
-    CacheItem = (VendorPsramCacheStruct*)calloc(1, sizeof( VendorPsramCacheStruct ));
-    if( CacheItem == NULL ) {
-      Serial.printf("[ERROR][%d][%d] can't allocate\n", freeheap, freepsheap);
-      return;
-    }
-    CacheItem->devid  = (uint16_t*)malloc(sizeof(uint16_t));
-    CacheItem->vendor = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
-  }
-}
-*/
 
 #define VendorDBSize 1740 // how many entries in the OUI lookup DB
 VendorPsramCacheStruct** VendorPsramCache = NULL;
@@ -242,12 +212,14 @@ struct OUIPsramCacheStruct {
 #define OUIDBSize 25523 // how many entries in the OUI lookup DB
 OUIPsramCacheStruct** OuiPsramCache = NULL;
 
+
 class DBUtils {
   public:
 
     char currentBLEAddress[MAC_LEN+1] = "00:00:00:00:00:00"; // used to proxy BLE search term to DB query
    
     char* BLEMacsDbSQLitePath = NULL;//"/sdcard/blemacs.db";
+    char* BLEMacsDbFSPath = NULL;// "/blemacs.db";
 
     sqlite3 *BLECollectorDB; // read/write
     sqlite3 *BLEVendorsDB; // readonly
@@ -272,7 +244,10 @@ class DBUtils {
     bool isOOM = false; // for stability
     bool isCorrupt = false; // for maintenance
     bool hasPsram = false;
-    
+    bool needsPruning = false;
+    bool needsReset = false;
+
+
     void init() {
       while(SDSetup()==false) {
         UI.headerStats("Card Mount Failed");
@@ -280,14 +255,20 @@ class DBUtils {
         UI.headerStats(" ");
         delay(300);
       }
+      hasPsram = psramInit();
       BLEMacsDbSQLitePath = (char*)malloc(32);
+      BLEMacsDbFSPath = (char*)malloc(32);
+      
       setBLEDBPath();
       
-      //hasPsram = psramInit();
       sqlite3_initialize();
       initial_free_heap = freeheap;
-
-      createDB(); // only if no exists
+      if( !BLE_FS.exists( BLEMacsDbFSPath ) ) {
+        log_w("%s DB does not exist", BLEMacsDbFSPath);
+        createDB(); // only if no exists
+      } else {
+        log_d("%s DB file already exists", BLEMacsDbFSPath);
+      }
       entries = getEntries();
       cacheWarmup();
 
@@ -296,9 +277,7 @@ class DBUtils {
       } else {
         Out.println();
         Out.println("Cold boot detected");
-        Out.println();
         Out.println("Testing Database...");
-        Out.println();
         //pruneDB(); // remove unnecessary/redundant entries
         // initial boot, perform some tests
         testOUI(); // test oui database
@@ -309,26 +288,31 @@ class DBUtils {
 
     }
 
+
     void setBLEDBPath() {
       #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
         DateTime epoch = RTC.now();
-        sprintf(BLEMacsDbSQLitePath, "/sdcard/ble-%04d-%02d-%02d.db",
+        sprintf(BLEMacsDbSQLitePath, "/%s/ble-%04d-%02d-%02d.db",
+          BLE_FS_TYPE, // sdcard / sd / spiffs / littlefs
           epoch.year(),
           epoch.month(),
           epoch.day()
         );
-        log_d("Assigning db path : %s", BLEMacsDbSQLitePath);
+        sprintf(BLEMacsDbFSPath, "/ble-%04d-%02d-%02d.db",
+          epoch.year(),
+          epoch.month(),
+          epoch.day()
+        );
+        log_d("Assigning db path : %s / %s", BLEMacsDbSQLitePath, BLEMacsDbFSPath);
       #else
-        sprintf(BLEMacsDbSQLitePath, "%s", "/sdcard/blemacs.db");
+        sprintf(BLEMacsDbSQLitePath, "/%s/blemacs.db", BLE_FS_TYPE);
+        sprintf(BLEMacsDbFSPath, "%s", "/blemacs.db");
       #endif
     }
 
-    void cacheWarmup() {
 
+    void OUICacheWarmup() {
       if( hasPsram ) {
-        BLEDEVCACHE_SIZE = BLEDEVCACHE_PSRAM_SIZE;
-        log_d("[PSRAM] OK");
-
         OuiPsramCache = (OUIPsramCacheStruct**)ps_calloc(OUIDBSize, sizeof( OUIPsramCacheStruct ) );
         for(int i=0; i<OUIDBSize; i++) {
           OuiPsramCache[i] = (OUIPsramCacheStruct*)ps_calloc(1, sizeof( OUIPsramCacheStruct ));
@@ -339,8 +323,16 @@ class DBUtils {
           OuiPsramCache[i]->mac        = (char*)ps_calloc(SHORT_MAC_LEN+1, sizeof(char));
           OuiPsramCache[i]->assignment = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
         }
-        loadOUIToPSRam();
+      } else {
+        for(uint16_t i=0; i<OUICACHE_SIZE; i++) {
+          OuiHeapCache[i].init( false );
+        }            
+      }
+    }
 
+
+    void VendorCacheWarmup() {
+      if( hasPsram ) {
         VendorPsramCache = (VendorPsramCacheStruct**)ps_calloc(VendorDBSize, sizeof( VendorPsramCacheStruct ) );
         for(int i=0; i<VendorDBSize; i++) {
           VendorPsramCache[i] = (VendorPsramCacheStruct*)ps_calloc(1, sizeof( VendorPsramCacheStruct ));
@@ -351,75 +343,73 @@ class DBUtils {
           VendorPsramCache[i]->devid  = (uint16_t*)ps_malloc(sizeof(uint16_t));
           VendorPsramCache[i]->vendor = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
         }
-        loadVendorsToPSRam();
-
-        BLEDevCache = (BlueToothDevice**)ps_calloc(BLEDEVCACHE_SIZE, sizeof( BlueToothDevice ) );
-        for(uint16_t i=0; i<BLEDEVCACHE_SIZE; i++) {
-          BLEDevCache[i] = (BlueToothDevice*)ps_calloc(1, sizeof( BlueToothDevice ) );
-          if( BLEDevCache[i] == NULL ) {
-            log_e("[ERROR][%d][%d][%d] can't allocate", i, freeheap, freepsheap);
-            continue;
-          }
-          BLEDevHelper.init( BLEDevCache[i] );
-          delay(1);
-        }
-        // TODO: loadBLEDevToPSRam()
-
-        BLEDevTmpCache = (BlueToothDevice**)ps_calloc(MAX_DEVICES_PER_SCAN, sizeof( BlueToothDevice ) );
-        for(uint16_t i=0; i<MAX_DEVICES_PER_SCAN; i++) {
-          BLEDevTmpCache[i] = (BlueToothDevice*)ps_calloc(1, sizeof( BlueToothDevice ) );
-          if( BLEDevTmpCache[i] == NULL ) {
-            log_e("[ERROR][%d][%d][%d] can't allocate", i, freeheap, freepsheap);
-            continue;
-          }
-          BLEDevHelper.init( BLEDevTmpCache[i] );
-          delay(1);
-        }
-
       } else {
-        BLEDEVCACHE_SIZE = BLEDEVCACHE_HEAP_SIZE;
-        log_w("[PSRAM] NOT DETECTED, will use heap"); // TODO: adjust cache sizes accordingly
-
-        BLEDevCache = (BlueToothDevice**)calloc(BLEDEVCACHE_SIZE, sizeof( BlueToothDevice ) );
-        for(uint16_t i=0; i<BLEDEVCACHE_SIZE; i++) {
-          BLEDevCache[i] = (BlueToothDevice*)calloc(1, sizeof( BlueToothDevice ) );
-          if( BLEDevCache[i] == NULL ) {
-            log_e("[ERROR][%d][%d][%d] can't allocate", i, freeheap, freepsheap);
-            continue;
-          }
-          BLEDevHelper.init( BLEDevCache[i], false );
-          delay(1);
-        }
-
-        BLEDevTmpCache = (BlueToothDevice**)calloc(MAX_DEVICES_PER_SCAN, sizeof( BlueToothDevice ) );
-        for(uint16_t i=0; i<MAX_DEVICES_PER_SCAN; i++) {
-          BLEDevTmpCache[i] = (BlueToothDevice*)calloc(1, sizeof( BlueToothDevice ) );
-          if( BLEDevTmpCache[i] == NULL ) {
-            log_e("[ERROR][%d][%d][%d] can't allocate", i, freeheap, freepsheap);
-            continue;
-          }
-          BLEDevHelper.init( BLEDevTmpCache[i], false );
-          delay(1);
-        }
-
-        for(uint16_t i=0; i<OUICACHE_SIZE; i++) {
-          OuiHeapCache[i].init( false );
-        }
-
         for(uint16_t i=0; i<VENDORCACHE_SIZE; i++) {
           VendorHeapCache[i].init( false );
         }
       }
+    }
 
+
+    void *ble_calloc(size_t n, size_t size) {
+      if( hasPsram ) {
+        return ps_calloc( n, size );
+      } else {
+        return calloc( n, size );
+      }
+    }
+
+
+    void BLEDevCacheWarmup() {
+      BLEDevCache = (BlueToothDevice**)ble_calloc(BLEDEVCACHE_SIZE, sizeof( BlueToothDevice ) );
+      for(uint16_t i=0; i<BLEDEVCACHE_SIZE; i++) {
+        BLEDevCache[i] = (BlueToothDevice*)ble_calloc(1, sizeof( BlueToothDevice ) );
+        if( BLEDevCache[i] == NULL ) {
+          log_e("[ERROR][%d][%d][%d] can't allocate", i, freeheap, freepsheap);
+          continue;
+        }
+        BLEDevHelper.init( BLEDevCache[i] );
+        delay(1);
+      }
+      BLEDevTmpCache = (BlueToothDevice**)ble_calloc(MAX_DEVICES_PER_SCAN, sizeof( BlueToothDevice ) );
+      for(uint16_t i=0; i<MAX_DEVICES_PER_SCAN; i++) {
+        BLEDevTmpCache[i] = (BlueToothDevice*)ble_calloc(1, sizeof( BlueToothDevice ) );
+        if( BLEDevTmpCache[i] == NULL ) {
+          log_e("[ERROR][%d][%d][%d] can't allocate", i, freeheap, freepsheap);
+          continue;
+        }
+        BLEDevHelper.init( BLEDevTmpCache[i] );
+        delay(1);
+      }
+    }
+
+    void setCacheSize() {
+      if( hasPsram ) {
+        BLEDEVCACHE_SIZE = BLEDEVCACHE_PSRAM_SIZE;
+        log_d("[PSRAM] OK");
+      } else {
+        BLEDEVCACHE_SIZE = BLEDEVCACHE_HEAP_SIZE;
+        log_w("[PSRAM] NOT DETECTED, will use heap");
+      }
+    }
+
+    void cacheWarmup() {
+      setCacheSize();
+      OUICacheWarmup();
+      VendorCacheWarmup();
+      BLEDevCacheWarmup();
+      if( hasPsram ) {
+        loadOUIToPSRam();
+        loadVendorsToPSRam();
+      }
       BLEDevTmp = (BlueToothDevice*)calloc(1, sizeof( BlueToothDevice ) );
-      BLEDevHelper.init(BLEDevTmp, false); // make sure the copy placeholder isn't using SPI ram
-
+      BLEDevHelper.init( BLEDevTmp, false ); // false = make sure the copy placeholder isn't using SPI ram
     }
 
 
     void maintain() {
       if( isOOM ) {
-        log_e("[DB ERROR] restarting");
+        log_e("[DB OOM] restarting");
         log_i("During this session (%d), %d out of %d devices were added to the DB", UpTimeString, newDevicesCount-AnonymousCacheHit, sessDevicesCount);
         delay(1000);
         ESP.restart();
@@ -431,29 +421,46 @@ class DBUtils {
         delay(1000);
         ESP.restart();
       }
+      if( needsPruning ) {
+        pruneDB();
+        needsPruning = false;
+      }
+      if( needsReset ) {
+        resetDB();
+        needsReset = true;
+      }
+      if( dayChangeTrigger ) {
+        dayChangeTrigger = false;
+        setBLEDBPath();
+        createDB();
+        getEntries();
+      }
       cacheState();
     }
 
 
-    static void cacheState() {
+    void cacheState() {
       BLEDevCacheUsed = 0;
-      
       for( uint16_t i=0; i<BLEDEVCACHE_SIZE; i++) {
         if( !isEmpty( BLEDevCache[i]->address ) ) {
           BLEDevCacheUsed++;
         }
-        delay(1);
       }
-      VendorCacheUsed = 0;
-      for( uint16_t i=0; i<VENDORCACHE_SIZE; i++) {
-        if( VendorHeapCache[i].devid > -1 ) {
-          VendorCacheUsed++;
+      if( hasPsram ) {
+        VendorCacheUsed = VENDORCACHE_SIZE;
+        OuiCacheUsed = OUICACHE_SIZE;
+      } else {
+        VendorCacheUsed = 0;
+        for( uint16_t i=0; i<VENDORCACHE_SIZE; i++) {
+          if( VendorHeapCache[i].devid > -1 ) {
+            VendorCacheUsed++;
+          }
         }
-      }
-      OuiCacheUsed = 0;
-      for( uint16_t i=0; i<OUICACHE_SIZE; i++) {
-        if( !isEmpty( OuiHeapCache[i].assignment ) ) {
-          OuiCacheUsed++;
+        OuiCacheUsed = 0;
+        for( uint16_t i=0; i<OUICACHE_SIZE; i++) {
+          if( !isEmpty( OuiHeapCache[i].assignment ) ) {
+            OuiCacheUsed++;
+          }
         }
       }
       BLEDevCacheUsed = BLEDevCacheUsed*100 / BLEDEVCACHE_SIZE;
@@ -551,7 +558,6 @@ class DBUtils {
       results = 0;
       open(BLE_VENDOR_NAMES_DB);
       Out.println("Cloning Vendors DB to PSRam...");
-      Out.println();
       UI.headerStats("Cloning...");
       int rc = sqlite3_exec(BLEVendorsDB, "SELECT id, SUBSTR(vendor, 0, 32) as vendor FROM 'ble-oui' where vendor!=''", VendorDBCallback, (void*)dataVendor, &zErrMsg);
       UI.PrintProgressBar( Out.width );
@@ -573,7 +579,6 @@ class DBUtils {
       results = 0;
       open(MAC_OUI_NAMES_DB);
       Out.println("Cloning Manufacturers DB to PSRam...");
-      Out.println();
       UI.headerStats("Cloning...");
       int rc = sqlite3_exec(OUIVendorsDB, "SELECT LOWER(assignment) as mac, SUBSTR(`Organization Name`, 0, 32) as ouiname FROM 'oui-light'", OUIDBCallback, (void*)dataOUI, &zErrMsg);
       UI.PrintProgressBar( Out.width );
@@ -594,15 +599,15 @@ class DBUtils {
     void error(const char* zErrMsg) {
       log_e("SQL error: %s", zErrMsg);
       if (strcmp(zErrMsg, "database disk image is malformed")==0) {
-        resetDB();
+        needsReset = true;
       } else if (strcmp(zErrMsg, "no such table: blemacs")==0) {
-        resetDB();
+        needsReset = true;
       } else if (strcmp(zErrMsg, "out of memory")==0) {
         isOOM = true;
       } else if(strcmp(zErrMsg, "disk I/O error")==0) {
         isCorrupt = true; // TODO: rename the DB file and create a new DB
       } else if(strstr("no such column", zErrMsg)) {
-        resetDB();
+        needsReset = true;
       } else {
         UI.headerStats(zErrMsg);
         delay(1000); 
@@ -646,10 +651,8 @@ class DBUtils {
       clean( CacheItem[_index]->uuid );
 
       #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
-      
-        char created_at_str[20] = "YYYY-MM-DD HH:MM:SS";
 
-        sprintf(created_at_str, YYYYMMDD_HHMMSS_Tpl, 
+        sprintf(YYYYMMDD_HHMMSS_Str, YYYYMMDD_HHMMSS_Tpl, 
           CacheItem[_index]->created_at.year(),
           CacheItem[_index]->created_at.month(),
           CacheItem[_index]->created_at.day(),
@@ -667,8 +670,8 @@ class DBUtils {
           CacheItem[_index]->manufid,
           CacheItem[_index]->manufname,
           CacheItem[_index]->uuid,
-          created_at_str,
-          created_at_str
+          YYYYMMDD_HHMMSS_Str,
+          YYYYMMDD_HHMMSS_Str
         );
 
       #else
@@ -732,7 +735,6 @@ class DBUtils {
       tft.setTextColor(BLE_PINK);
       DBExec(BLECollectorDB, ouinameQuery, true);
       close(BLE_COLLECTOR_DB);
-      Out.println();
     }
 
 
@@ -750,12 +752,11 @@ class DBUtils {
 
 
     void resetDB() {
-      Out.println();
-      Out.println("Re-creating database");
-      Out.println();
-      //BLE_FS.remove(BLEMacsDbFSPath);
-      dropDB();
-      createDB();
+      Out.println("Re-creating database :");
+      Out.println( BLEMacsDbFSPath );
+      BLE_FS.remove(BLEMacsDbFSPath);
+      //dropDB();
+      //createDB();
       ESP.restart();
     }
 
@@ -791,7 +792,6 @@ class DBUtils {
       UI.headerStats("Pruning DB");
       tft.setTextColor(BLE_GREEN);
       open(BLE_COLLECTOR_DB, false);
-      //DBExec(BLECollectorDB, cleanTableQuery, true);
       DBExec(BLECollectorDB, pruneTableQuery, true);
       close(BLE_COLLECTOR_DB);
       entries = getEntries();
@@ -805,7 +805,6 @@ class DBUtils {
     void testVendorNames() {
       open(BLE_VENDOR_NAMES_DB);
       tft.setTextColor(BLE_YELLOW);
-      Out.println();
       Out.println("Testing Vendor Names Database ...");
       tft.setTextColor(BLE_GREENYELLOW);
       DBExec(BLEVendorsDB, testVendorNamesQuery, true);
@@ -821,14 +820,12 @@ class DBUtils {
         tft.setTextColor(BLE_GREEN);
         Out.println("Vendor Names Test success!");
       }
-      Out.println();
     }
 
 
     void testOUI() {
       open(MAC_OUI_NAMES_DB);
       tft.setTextColor(BLE_YELLOW);
-      Out.println();
       Out.println("Testing MAC OUI database ...");
       tft.setTextColor(BLE_GREENYELLOW);
       DBExec(OUIVendorsDB, testOUIQuery, true);
@@ -844,7 +841,6 @@ class DBUtils {
         tft.setTextColor(BLE_GREEN);
         Out.println("MAC OUI Test success!");
       }
-      Out.println();
     }
 
   private:

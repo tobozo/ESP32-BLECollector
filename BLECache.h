@@ -59,7 +59,6 @@ static uint16_t VendorCacheUsed = 0; // for statistics
 static uint16_t OuiCacheUsed = 0; // for statistics
 
 #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
-  //static DateTime nowDateTime;
   static DateTime lastSyncDateTime;
   static DateTime nowDateTime;
 #endif
@@ -72,18 +71,18 @@ struct BlueToothDevice {
   uint16_t appearance = 0; // BLE Icon
   int rssi            = 0; // RSSI
   int manufid         = -1;// manufacturer data (or ID)
-  #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
-    DateTime created_at = 0;
-    DateTime updated_at = 0;
+  #ifndef BUILD_NTPMENU_BIN
+  esp_ble_addr_type_t addr_type;
   #endif
   char* name      = NULL;// device name
   char* address   = NULL;// device mac address
   char* ouiname   = NULL;// oui vendor name (from mac address, see oui.h)
   char* manufname = NULL;// manufacturer name (from manufacturer data, see ble-oui.db)
   char* uuid      = NULL;// service uuid
-  //String spower = "";
-  //time_t created_at;
-  //time_t updated_at;
+  #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
+    DateTime created_at = 0;
+    DateTime updated_at = 0;
+  #endif
 };
 
 
@@ -120,10 +119,6 @@ class BlueToothDeviceHelper {
       CacheItem->appearance = 0;
       CacheItem->rssi       = 0;
       CacheItem->manufid    = -1;
-      #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
-        CacheItem->created_at = 0;
-        CacheItem->updated_at = 0;
-      #endif
       if( hasPsram ) {    
         CacheItem->name      = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
         CacheItem->address   = (char*)ps_calloc(MAC_LEN+1, sizeof(char));
@@ -137,6 +132,10 @@ class BlueToothDeviceHelper {
         CacheItem->manufname = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
         CacheItem->uuid      = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
       }
+      #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
+        CacheItem->created_at = 0;
+        CacheItem->updated_at = 0;
+      #endif
     }
 
     static void reset( BlueToothDevice *CacheItem ) {
@@ -146,21 +145,24 @@ class BlueToothDeviceHelper {
       CacheItem->appearance = 0;
       CacheItem->rssi       = 0;
       CacheItem->manufid    = -1;
-      #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
-      CacheItem->created_at = 0;
-      CacheItem->updated_at = 0;
-      #endif
       memset( CacheItem->name,      0, MAX_FIELD_LEN+1 );
       memset( CacheItem->address,   0, MAC_LEN+1 );
       memset( CacheItem->ouiname,   0, MAX_FIELD_LEN+1 );
       memset( CacheItem->manufname, 0, MAX_FIELD_LEN+1 );
       memset( CacheItem->uuid,      0, MAX_FIELD_LEN+1 );
+      #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
+        CacheItem->created_at = 0;
+        CacheItem->updated_at = 0;
+      #endif
     }
 
     static void set(BlueToothDevice *CacheItem, const char* prop, bool val) {
       if(strcmp(prop, "in_db")==0) { CacheItem->in_db = val;}
     }
-
+    static void set(BlueToothDevice *CacheItem, const char* prop, esp_ble_addr_type_t val) {
+      log_d( "setting address type for %s", BLEAddrToString( val ) ); // https://github.com/nkolban/ESP32_BLE_Arduino/blob/934702b6169b92c71cbc850876fd17fb9ee3236d/src/BLEAdvertisedDevice.h#L44
+      if(strcmp(prop, "addr_type")==0)   { CacheItem->addr_type = (esp_ble_addr_type_t)(val); }
+    }
     static void set(BlueToothDevice *CacheItem, const char* prop, const int val) {
       if(!prop) return;
       if     (strcmp(prop, "appearance")==0) { CacheItem->appearance = val;}
@@ -178,7 +180,7 @@ class BlueToothDeviceHelper {
       else if(strcmp(prop, "rssi")==0)       { CacheItem->rssi = atoi(val);} // coming from BLE
       #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
        else if(strcmp(prop, "created_at")==0) { CacheItem->created_at = DateTime( atoi(val) );}
-      else if(strcmp(prop, "updated_at")==0) { CacheItem->created_at = DateTime( atoi(val) );}
+       else if(strcmp(prop, "updated_at")==0) { CacheItem->created_at = DateTime( atoi(val) );}
       #endif
     }
 
@@ -187,13 +189,13 @@ class BlueToothDeviceHelper {
       reset(CacheItem);// avoid mixing new and old data
       set(CacheItem, "address", advertisedDevice.getAddress().toString().c_str());
       set(CacheItem, "rssi", advertisedDevice.getRSSI());
-      set(CacheItem, "ouiname", "[unpopulated]");
-      
-      #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
-        CacheItem->created_at = (DateTime) nowDateTime;
-        log_v("Stored created_at DateTime %d", (unsigned long)nowDateTime.unixtime());
-      #endif
-
+      set(CacheItem, "addr_type", advertisedDevice.getAddressType());
+      if(  advertisedDevice.getAddressType() == BLE_ADDR_TYPE_RANDOM 
+        || advertisedDevice.getAddressType() == BLE_ADDR_TYPE_RPA_RANDOM ) {
+        set(CacheItem, "ouiname", "[random]"); 
+      } else {
+        set(CacheItem, "ouiname", "[unpopulated]");
+      }
       if ( advertisedDevice.haveName() ) {
         set(CacheItem, "name", advertisedDevice.getName().c_str());
       } else {
@@ -222,6 +224,10 @@ class BlueToothDeviceHelper {
       } else {
         set(CacheItem, "uuid", '\0');
       }
+      #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
+        CacheItem->created_at = (DateTime) nowDateTime;
+        log_v("Stored created_at DateTime %d", (unsigned long)nowDateTime.unixtime());
+      #endif
     }
 
     // determines whether a device is worth saving or not
@@ -231,11 +237,27 @@ class BlueToothDeviceHelper {
       if( CacheItem->appearance !=0 ) return false; // has icon, let's collect
       if( strcmp( CacheItem->ouiname, "[unpopulated]" ) == 0 ) return false; // don't know yet, let's keep
       if( strcmp( CacheItem->manufname, "[unpopulated]" ) == 0 ) return false; // don't know yet, let's keep
-      if( strcmp( CacheItem->ouiname, "[private]" ) == 0 || isEmpty( CacheItem->ouiname ) ) return true; // don't care
+      if( strcmp( CacheItem->ouiname, "[private]" ) == 0 || strcmp( CacheItem->ouiname, "[random]" ) == 0 || isEmpty( CacheItem->ouiname ) ) return true; // don't care
       if( strcmp( CacheItem->manufname, "[unknown]" ) == 0 || isEmpty( CacheItem->manufname ) ) return true; // don't care
       if( !isEmpty( CacheItem->manufname ) && !isEmpty( CacheItem->ouiname ) ) return false; // anonymous but qualified device, let's collect
       return true;
     }
+
+    static const char *BLEAddrToString( esp_ble_addr_type_t type ) {
+      // implented here because the BLELibrary hides this value under debug symbols
+      switch (type) {
+        case BLE_ADDR_TYPE_PUBLIC:
+          return "BLE_ADDR_TYPE_PUBLIC";
+        case BLE_ADDR_TYPE_RANDOM:
+          return "BLE_ADDR_TYPE_RANDOM";
+        case BLE_ADDR_TYPE_RPA_PUBLIC:
+          return "BLE_ADDR_TYPE_RPA_PUBLIC";
+        case BLE_ADDR_TYPE_RPA_RANDOM:
+          return "BLE_ADDR_TYPE_RPA_RANDOM";
+        default:
+          return "Unknown addr_t";
+      }
+    }    
 
     static uint16_t getNextCacheIndex(BlueToothDevice **CacheItem, uint16_t CacheItemIndex) {
       uint16_t minCacheValue = 65535;
