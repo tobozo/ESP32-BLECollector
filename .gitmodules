@@ -1,0 +1,6 @@
+[submodule "tools/ESP32-BLEBeaconSpam"]
+	path = tools/ESP32-BLEBeaconSpam
+	url = https://github.com/tobozo/ESP32-BLEBeaconSpam
+[submodule "tools/ESP32-BLETimeServer"]
+	path = tools/ESP32-BLETimeServer
+	url = https://github.com/tobozo/ESP32-BLETimeServer
