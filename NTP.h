@@ -7,7 +7,7 @@
   HTTPClient http;
   SDUpdater sdUpdater;
   
-  #ifdef MYSSID // see Settings.h
+  #ifdef WIFI_SSID // see Settings.h
     #define WiFi_Begin() WiFi.begin(WIFI_SSID, WIFI_PASSWD);
   #else
     #define WiFi_Begin() WiFi.begin();
