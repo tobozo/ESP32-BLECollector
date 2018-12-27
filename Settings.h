@@ -59,9 +59,6 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 
 #define NTP_MENU_NAME "NTPMenu"
 #define BLE_MENU_NAME "BLEMenu"
-#define RTC_SDA 26 // pin number
-#define RTC_SCL 27 // pin number
-
 
 // don't edit anything below this
 #define MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN 4
@@ -98,10 +95,14 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define WELCOME_MESSAGE BUILD_NEEDLE BUILD_SIGNATURE
 const char* needle = BUILD_NEEDLE;
 const char* welcomeMessage = WELCOME_MESSAGE;
-const char* buildSignature = BUILD_SIGNATURE;
+const char* BUILDSIGNATURE = BUILD_SIGNATURE;
+uint32_t sizeofneedle = strlen(needle);
+uint32_t sizeoftrail = strlen(welcomeMessage) - sizeofneedle;
 
 // used to get the resetReason
 #include <rom/rtc.h>
+#include <Preferences.h>
+Preferences preferences;
 #include "Display.h"
 
 
@@ -109,13 +110,20 @@ const char* buildSignature = BUILD_SIGNATURE;
   // RTC Module: On Wrover Kit you can use the following pins (from the camera connector)
   // SCL = GPIO27 (SIO_C / SCCB Clock 4)
   // SDA = GPIO26 (SIO_D / SCCB Data)
-  #include <RTClib.h>
-  //#include <Wire.h>
-  static RTC_DS1307 RTC; // or your own RTC module
-  
+  #include <Wire.h>
+  #include <TimeLib.h> // https://github.com/PaulStoffregen/Time
+  #include "RTC.h"
+  static BLE_RTC_DS1307 RTC;
+  #define RTC_SDA 26 // pin number
+  #define RTC_SCL 27 // pin number
 #endif
 
-#ifndef BUILD_NTPMENU_BIN 
+#ifdef BUILD_NTPMENU_BIN
+  #include <WiFi.h>
+  #include <HTTPClient.h>
+  #include <NtpClientLib.h> // https://github.com/gmag11/NtpClient
+  #include "certificates.h"
+#else
   // don't load BLE stack and SQLite3 when compiling the NTP Utility
   #include <BLEDevice.h>
   #include <BLEUtils.h>
@@ -131,14 +139,6 @@ const char* buildSignature = BUILD_SIGNATURE;
   #include <sqlite3.h> // https://github.com/siara-cc/esp32_arduino_sqlite3_lib
 #endif
 
-#include <Preferences.h>
-Preferences preferences;
-/*
-#define MAX_ITEMS_IN_PREFS BLEDEVCACHE_SIZE // hopefully this will not overflow the 100k of NVRAM so don't assign a too high value or it will fail
-#if MAX_ITEMS_IN_PREFS > BLEDEVCACHE_SIZE
-  #error "MAX_ITEMS_IN_PREFS must be inferior or equal to BLEDEVCACHE_SIZE in Settings.h"
-#endif
-*/
 
 /*
  * Data sources:
@@ -153,10 +153,7 @@ Preferences preferences;
  * 
  */
 
-
-
-// because ESP.getFreeHeap() is inconsistent across SDK versions
-// use the primitive... eats 25Kb memory
+// use the primitive because ESP.getFreeHeap() is inconsistent across SDK versions
 #define freeheap heap_caps_get_free_size(MALLOC_CAP_INTERNAL)
 #define freepsheap ESP.getFreePsram()
 #define resetReason (int)rtc_get_reset_reason(0)
@@ -177,12 +174,13 @@ static bool print_tabular = true;
 // load stack
 #include "Assets.h" // bitmaps
 #include "AmigaBall.h"
+#include "SDUtils.h"
 #include "BLECache.h" // data struct
 #include "ScrollPanel.h" // scrolly methods
 #if RTC_PROFILE == CHRONOMANIAC ||  RTC_PROFILE == NTP_MENU
   #include "SDUpdater.h" // multi roms system
 #endif
-#include "TimeUtils.h" // RTC / NTP support
+#include "TimeUtils.h"
 #include "UI.h"
 #include "DB.h"
 #include "BLE.h"

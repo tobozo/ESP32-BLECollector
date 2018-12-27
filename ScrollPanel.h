@@ -31,10 +31,9 @@
 
 #define SPACE " "
 static bool isScrolling = false;
-static uint16_t BGCOLOR = tft.color565(0x22, 0x22, 0x44);
-volatile xSemaphoreHandle displayWrite = NULL; // this is needed to prevent rendering collisions 
-                                     // between scrollpanel and heap graph
-static xSemaphoreHandle mux = NULL;
+
+static xSemaphoreHandle mux = NULL; // this is needed to prevent rendering collisions 
+                                    // between scrollpanel and heap graph
 
 class ScrollableOutput {
   public:
@@ -49,6 +48,7 @@ class ScrollableOutput {
     uint16_t w_tmp, h_tmp;
     int scrollPosY = -1;
     int scrollPosX = -1;
+    bool serialEcho = true;
 
     int println() {
       return println(" ");
@@ -60,7 +60,7 @@ class ScrollableOutput {
     }
 
     int print(const char* str) {
-      if(strcmp(str, " \n")!=0) {
+      if(strcmp(str, " \n")!=0 && serialEcho) {
         Serial.print( str );
       }
       return scroll(str);
