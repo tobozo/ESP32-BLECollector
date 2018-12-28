@@ -37,13 +37,13 @@
  
 */
 // don't edit those
-#define HOBO 1 // No TinyRTC module in your build, only uptime will be displayed
+#define HOBO 1 // No TinyRTC module in your build, without external BLETimeServer only uptime will be displayed
 #define ROGUE 2 // TinyRTC module adjusted after flashing, no WiFi, no NTP Sync
 #define CHRONOMANIAC 3 // TinyRTC module adjusts itself via NTP (by sd-loading a separate binary, see NTP_MENU)
 #define NTP_MENU 4 // use this to produce the NTPMenu.bin, only if you have a RTC module !!
 
 // edit this value to fit your mode
-#define RTC_PROFILE CHRONOMANIAC
+#define RTC_PROFILE HOBO
 //#define RTC_PROFILE NTP_MENU // to build the NTPMenu.bin (will perform the NTP Sync)
 //#define RTC_PROFILE CHRONOMANIAC // to build the BLEMenu.bin with RTC support and NTP Sync
 //#define RTC_PROFILE ROGUE // to build the BLEMenu.bin with RTC support, but *without* NTP sync
@@ -65,11 +65,7 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define MAX_BLECARDS_WITHOUT_TIMESTAMPS_ON_SCREEN 5
 #define BLEDEVCACHE_PSRAM_SIZE 1024 // use PSram to cache BLECards
 #define BLEDEVCACHE_HEAP_SIZE 32 // use some heap to cache BLECards. min = 5, max = 64, higher value = smaller uptime
-#if RTC_PROFILE > HOBO
-  #define MAX_DEVICES_PER_SCAN MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN // also max displayed devices on the screen, affects initial scan duration
-#else
-  #define MAX_DEVICES_PER_SCAN MAX_BLECARDS_WITHOUT_TIMESTAMPS_ON_SCREEN // also max displayed devices on the screen, affects initial scan duration
-#endif
+#define MAX_DEVICES_PER_SCAN MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN // also max displayed devices on the screen, affects initial scan duration
 #if RTC_PROFILE==HOBO // no NTP for Hobo mode
   #define BUILD_TYPE BLE_MENU_NAME
 #elif RTC_PROFILE==ROGUE // no NTP for Rogue mode
@@ -99,19 +95,23 @@ const char* BUILDSIGNATURE = BUILD_SIGNATURE;
 uint32_t sizeofneedle = strlen(needle);
 uint32_t sizeoftrail = strlen(welcomeMessage) - sizeofneedle;
 
+int8_t timeZone = 1;
+int8_t minutesTimeZone = 0;
+const char* NTP_SERVER = "europe.pool.ntp.org";
+
 // used to get the resetReason
 #include <rom/rtc.h>
 #include <Preferences.h>
 Preferences preferences;
 #include "Display.h"
-
+#include <TimeLib.h> // https://github.com/PaulStoffregen/Time
+#include "DateTime.h"
 
 #if RTC_PROFILE > HOBO
+  #include <Wire.h>
   // RTC Module: On Wrover Kit you can use the following pins (from the camera connector)
   // SCL = GPIO27 (SIO_C / SCCB Clock 4)
   // SDA = GPIO26 (SIO_D / SCCB Data)
-  #include <Wire.h>
-  #include <TimeLib.h> // https://github.com/PaulStoffregen/Time
   #include "RTC.h"
   static BLE_RTC_DS1307 RTC;
   #define RTC_SDA 26 // pin number

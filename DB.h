@@ -49,79 +49,47 @@ static char *colNeedle = 0; // search criteria
 static char colValue[32] = {'\0'}; // search result
 
 
-#if RTC_PROFILE > HOBO // all profiles manage time except HOBO
+#define BLEMAC_CREATE_FIELDNAMES " \
+  appearance INTEGER, \
+  name, \
+  address, \
+  ouiname, \
+  rssi INTEGER, \
+  manufid INTEGER, \
+  manufname, \
+  uuid, \
+  created_at DATETIME, \
+  updated_at DATETIME, \
+  hits INTEGER \
+"
+#define BLEMAC_INSERT_FIELDNAMES " \
+  appearance, \
+  name, \
+  address, \
+  ouiname, \
+  rssi, \
+  manufid, \
+  manufname, \
+  uuid, \
+  created_at, \
+  updated_at, \
+  hits \
+"
+#define BLEMAC_SELECT_FIELDNAMES " \
+  appearance, \
+  name, \
+  address, \
+  ouiname, \
+  rssi, \
+  manufid, \
+  manufname, \
+  uuid, \
+  strftime('%s', created_at) as created_at, \
+  strftime('%s', updated_at) as updated_at, \
+  hits \
+"
+#define insertQueryTemplate "INSERT INTO blemacs(" BLEMAC_INSERT_FIELDNAMES ") VALUES(%d,\"%s\",\"%s\",\"%s\",%d,%d,\"%s\",\"%s\",'%s.000000','%s.000000', '%d')"
 
-  #define BLEMAC_CREATE_FIELDNAMES " \
-    appearance INTEGER, \
-    name, \
-    address, \
-    ouiname, \
-    rssi INTEGER, \
-    manufid INTEGER, \
-    manufname, \
-    uuid, \
-    created_at DATETIME, \
-    updated_at DATETIME \
-  "
-  #define BLEMAC_INSERT_FIELDNAMES " \
-    appearance, \
-    name, \
-    address, \
-    ouiname, \
-    rssi, \
-    manufid, \
-    manufname, \
-    uuid, \
-    created_at, \
-    updated_at \
-  "
-  #define BLEMAC_SELECT_FIELDNAMES " \
-    appearance, \
-    name, \
-    address, \
-    ouiname, \
-    rssi, \
-    manufid, \
-    manufname, \
-    uuid, \
-    strftime('%s', created_at) as created_at, \
-    strftime('%s', updated_at) as updated_at \
-  "
-  #define insertQueryTemplate "INSERT INTO blemacs(" BLEMAC_INSERT_FIELDNAMES ") VALUES(%d,\"%s\",\"%s\",\"%s\",%d,%d,\"%s\",\"%s\",'%s.000000','%s.000000')"
-#else
-
-  #define BLEMAC_CREATE_FIELDNAMES " \
-    appearance INTEGER, \
-    name, \
-    address, \
-    ouiname, \
-    rssi INTEGER, \
-    manufid INTEGER, \
-    manufname, \
-    uuid \
-  "
-  #define BLEMAC_INSERT_FIELDNAMES " \
-    appearance, \
-    name, \
-    address, \
-    ouiname, \
-    rssi, \
-    manufid, \
-    manufname, \
-    uuid \
-  "
-  #define BLEMAC_SELECT_FIELDNAMES " \
-    appearance, \
-    name, \
-    address, \
-    ouiname, \
-    rssi, \
-    manufid, \
-    manufname, \
-    uuid \
-  "
-  #define insertQueryTemplate "INSERT INTO blemacs(" BLEMAC_INSERT_FIELDNAMES ") VALUES(%d,\"%s\",\"%s\",\"%s\",%d,%d,\"%s\",\"%s\")"
-#endif
 // all DB queries
 #define nameQuery    "SELECT DISTINCT SUBSTR(name,0,32) FROM blemacs where TRIM(name)!=''"
 #define manufnameQuery   "SELECT DISTINCT SUBSTR(manufname,0,32) FROM blemacs where TRIM(manufname)!=''"
@@ -246,6 +214,8 @@ class DBUtils {
     bool hasPsram = false;
     bool needsPruning = false;
     bool needsReset = false;
+    bool needsReplication = false;
+    bool needsRestart = false;
 
 
     void init() {
@@ -290,8 +260,9 @@ class DBUtils {
 
 
     void setBLEDBPath() {
-      #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
-        DateTime epoch = RTC.now();
+      if( Time_is_set ) {
+        //DateTime epoch = RTC.now();
+        DateTime epoch = DateTime(year(), month(), day(), hour(), minute(), second());
         sprintf(BLEMacsDbSQLitePath, "/%s/ble-%04d-%02d-%02d.db",
           BLE_FS_TYPE, // sdcard / sd / spiffs / littlefs
           epoch.year(),
@@ -304,10 +275,10 @@ class DBUtils {
           epoch.day()
         );
         log_d("Assigning db path : %s / %s", BLEMacsDbSQLitePath, BLEMacsDbFSPath);
-      #else
+      } else {
         sprintf(BLEMacsDbSQLitePath, "/%s/blemacs.db", BLE_FS_TYPE);
         sprintf(BLEMacsDbFSPath, "%s", "/blemacs.db");
-      #endif
+      }
     }
 
 
@@ -361,24 +332,24 @@ class DBUtils {
 
 
     void BLEDevCacheWarmup() {
-      BLEDevCache = (BlueToothDevice**)ble_calloc(BLEDEVCACHE_SIZE, sizeof( BlueToothDevice ) );
+      BLEDevRAMCache = (BlueToothDevice**)ble_calloc(BLEDEVCACHE_SIZE, sizeof( BlueToothDevice ) );
       for(uint16_t i=0; i<BLEDEVCACHE_SIZE; i++) {
-        BLEDevCache[i] = (BlueToothDevice*)ble_calloc(1, sizeof( BlueToothDevice ) );
-        if( BLEDevCache[i] == NULL ) {
+        BLEDevRAMCache[i] = (BlueToothDevice*)ble_calloc(1, sizeof( BlueToothDevice ) );
+        if( BLEDevRAMCache[i] == NULL ) {
           log_e("[ERROR][%d][%d][%d] can't allocate", i, freeheap, freepsheap);
           continue;
         }
-        BLEDevHelper.init( BLEDevCache[i] );
+        BLEDevHelper.init( BLEDevRAMCache[i] );
         delay(1);
       }
-      BLEDevTmpCache = (BlueToothDevice**)ble_calloc(MAX_DEVICES_PER_SCAN, sizeof( BlueToothDevice ) );
+      BLEDevScanCache = (BlueToothDevice**)ble_calloc(MAX_DEVICES_PER_SCAN, sizeof( BlueToothDevice ) );
       for(uint16_t i=0; i<MAX_DEVICES_PER_SCAN; i++) {
-        BLEDevTmpCache[i] = (BlueToothDevice*)ble_calloc(1, sizeof( BlueToothDevice ) );
-        if( BLEDevTmpCache[i] == NULL ) {
+        BLEDevScanCache[i] = (BlueToothDevice*)ble_calloc(1, sizeof( BlueToothDevice ) );
+        if( BLEDevScanCache[i] == NULL ) {
           log_e("[ERROR][%d][%d][%d] can't allocate", i, freeheap, freepsheap);
           continue;
         }
-        BLEDevHelper.init( BLEDevTmpCache[i] );
+        BLEDevHelper.init( BLEDevScanCache[i] );
         delay(1);
       }
     }
@@ -403,7 +374,9 @@ class DBUtils {
         loadVendorsToPSRam();
       }
       BLEDevTmp = (BlueToothDevice*)calloc(1, sizeof( BlueToothDevice ) );
+      BLEDevDBCache = (BlueToothDevice*)calloc(1, sizeof( BlueToothDevice ) );
       BLEDevHelper.init( BLEDevTmp, false ); // false = make sure the copy placeholder isn't using SPI ram
+      BLEDevHelper.init( BLEDevDBCache, false ); // false = make sure the copy placeholder isn't using SPI ram
     }
 
 
@@ -431,9 +404,17 @@ class DBUtils {
       }
       if( dayChangeTrigger ) {
         dayChangeTrigger = false;
+        updateDBFromCache( BLEDevRAMCache );
         setBLEDBPath();
         createDB();
         getEntries();
+      }
+      if( needsReplication ) {
+        updateDBFromCache( BLEDevRAMCache );
+        needsReplication = false;
+      }
+      if( needsRestart ) {
+        ESP.restart();
       }
       cacheState();
     }
@@ -442,7 +423,7 @@ class DBUtils {
     void cacheState() {
       BLEDevCacheUsed = 0;
       for( uint16_t i=0; i<BLEDEVCACHE_SIZE; i++) {
-        if( !isEmpty( BLEDevCache[i]->address ) ) {
+        if( !isEmpty( BLEDevRAMCache[i]->address ) ) {
           BLEDevCacheUsed++;
         }
       }
@@ -466,7 +447,7 @@ class DBUtils {
       BLEDevCacheUsed = BLEDevCacheUsed*100 / BLEDEVCACHE_SIZE;
       VendorCacheUsed = VendorCacheUsed*100 / VENDORCACHE_SIZE;
       OuiCacheUsed = OuiCacheUsed*100 / OUICACHE_SIZE;
-      log_v("Circular-Buffered Cache Fill: BLEDevCache: %s%s, VendorCache: %s%s, OUICache: %s%s", BLEDevCacheUsed, "%", VendorCacheUsed, "%", OuiCacheUsed, "%");
+      log_v("Circular-Buffered Cache Fill: BLEDevRAMCache: %s%s, VendorCache: %s%s, OUICache: %s%s", BLEDevCacheUsed, "%", VendorCacheUsed, "%", OuiCacheUsed, "%");
     }
 
 
@@ -534,14 +515,11 @@ class DBUtils {
         return -1;
       }
       open(BLE_COLLECTOR_DB);
-      #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
-        log_v("will run on template %s", searchDeviceTemplate );
-        sprintf(searchDeviceQuery, searchDeviceTemplate, "%s", "%s", address);
-      #else
-        log_v("will run on template %s", searchDeviceTemplate );
-        sprintf(searchDeviceQuery, searchDeviceTemplate, address);
-      #endif
-      int rc = sqlite3_exec(BLECollectorDB, searchDeviceQuery, BLEDevDBCallback, (void*)dataBLE, &zErrMsg);
+
+      log_v("will run on template %s", searchDeviceTemplate );
+      sprintf(searchDeviceQuery, searchDeviceTemplate, "%s", "%s", address);
+
+      int rc = sqlite3_exec(BLECollectorDB, searchDeviceQuery, BLEDevDBCacheCallback, (void*)dataBLE, &zErrMsg);
       if (rc != SQLITE_OK) {
         error(zErrMsg);
         sqlite3_free(zErrMsg);
@@ -549,7 +527,7 @@ class DBUtils {
         return -2;
       }
       close(BLE_COLLECTOR_DB);
-      // if the device exists, it's been loaded into BLEDevCache[BLEDevCacheIndex]
+      // if the device exists, it's been loaded into BLEDevRAMCache[BLEDevCacheIndex]
       return results>0 ? BLEDevCacheIndex : -1;
     }
 
@@ -650,44 +628,28 @@ class DBUtils {
       clean( CacheItem[_index]->manufname );
       clean( CacheItem[_index]->uuid );
 
-      #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
+      sprintf(YYYYMMDD_HHMMSS_Str, YYYYMMDD_HHMMSS_Tpl, 
+        CacheItem[_index]->created_at.year(),
+        CacheItem[_index]->created_at.month(),
+        CacheItem[_index]->created_at.day(),
+        CacheItem[_index]->created_at.hour(),
+        CacheItem[_index]->created_at.minute(),
+        CacheItem[_index]->created_at.second()
+      );
 
-        sprintf(YYYYMMDD_HHMMSS_Str, YYYYMMDD_HHMMSS_Tpl, 
-          CacheItem[_index]->created_at.year(),
-          CacheItem[_index]->created_at.month(),
-          CacheItem[_index]->created_at.day(),
-          CacheItem[_index]->created_at.hour(),
-          CacheItem[_index]->created_at.minute(),
-          CacheItem[_index]->created_at.second()
-        );
-
-        sprintf(insertQuery, insertQueryTemplate,
-          CacheItem[_index]->appearance,
-          CacheItem[_index]->name,
-          CacheItem[_index]->address,
-          CacheItem[_index]->ouiname,
-          CacheItem[_index]->rssi,
-          CacheItem[_index]->manufid,
-          CacheItem[_index]->manufname,
-          CacheItem[_index]->uuid,
-          YYYYMMDD_HHMMSS_Str,
-          YYYYMMDD_HHMMSS_Str
-        );
-
-      #else
-      
-        sprintf(insertQuery, insertQueryTemplate,
-          CacheItem[_index]->appearance,
-          CacheItem[_index]->name,
-          CacheItem[_index]->address,
-          CacheItem[_index]->ouiname,
-          CacheItem[_index]->rssi,
-          CacheItem[_index]->manufid,
-          CacheItem[_index]->manufname,
-          CacheItem[_index]->uuid
-        );
-
-      #endif
+      sprintf(insertQuery, insertQueryTemplate,
+        CacheItem[_index]->appearance,
+        CacheItem[_index]->name,
+        CacheItem[_index]->address,
+        CacheItem[_index]->ouiname,
+        CacheItem[_index]->rssi,
+        CacheItem[_index]->manufid,
+        CacheItem[_index]->manufname,
+        CacheItem[_index]->uuid,
+        YYYYMMDD_HHMMSS_Str,
+        YYYYMMDD_HHMMSS_Str,
+        CacheItem[_index]->hits
+      );
 
       int rc = DBExec( BLECollectorDB, insertQuery );
       if (rc != SQLITE_OK) {
@@ -754,7 +716,7 @@ class DBUtils {
     void resetDB() {
       Out.println("Re-creating database :");
       Out.println( BLEMacsDbFSPath );
-      BLE_FS.remove(BLEMacsDbFSPath);
+      BLE_FS.remove( BLEMacsDbFSPath );
       //dropDB();
       //createDB();
       ESP.restart();
@@ -763,28 +725,16 @@ class DBUtils {
     void createDB() {
       open(BLE_COLLECTOR_DB, false);
       log_d("created %s if no exists:  : %s", BLEMacsDbSQLitePath, createTableQuery);
-      DBExec(BLECollectorDB, createTableQuery);
+      DBExec( BLECollectorDB, createTableQuery) ;
       close(BLE_COLLECTOR_DB);
     }
 
     void dropDB() {
       open(BLE_COLLECTOR_DB, false);
       log_d("dropped if exists: %s DB", BLEMacsDbSQLitePath);
-      DBExec(BLECollectorDB, dropTableQuery);
+      DBExec( BLECollectorDB, dropTableQuery );
       close(BLE_COLLECTOR_DB);      
     }
-
-/*
-    void moveDB() {
-      // TODO: give a timestamp to the destination filename
-      if(BLE_FS.rename(BLEMacsDbFSPath, "/blemacs.corrupt.db") !=0) {
-        Serial.println("[I/O ERROR] renaming failed, will reset");
-        resetDB();
-      } else {
-        ESP.restart();
-      }
-    }
-*/
 
     void pruneDB() {
       unsigned int before_pruning = getEntries();
@@ -800,7 +750,6 @@ class DBUtils {
       UI.headerStats("DB Pruned");
       UI.footerStats();
     }
-
 
     void testVendorNames() {
       open(BLE_VENDOR_NAMES_DB);
@@ -822,7 +771,6 @@ class DBUtils {
       }
     }
 
-
     void testOUI() {
       open(MAC_OUI_NAMES_DB);
       tft.setTextColor(BLE_YELLOW);
@@ -842,6 +790,52 @@ class DBUtils {
         Out.println("MAC OUI Test success!");
       }
     }
+
+
+    void updateItemFromCache( BlueToothDevice* CacheItem ) {
+      open(BLE_COLLECTOR_DB);
+      char updateItemStr[256] = {'\0'};
+      if( CacheItem->created_at.year() <= 1970 ) {
+        // only update hitcount
+        const char* updateItemTpl = "UPDATE blemacs SET hits='%d' WHERE address='%s'";
+        sprintf(updateItemStr, updateItemTpl, CacheItem->hits, CacheItem->address);        
+      } else {
+        // update hits and time
+        sprintf(YYYYMMDD_HHMMSS_Str, YYYYMMDD_HHMMSS_Tpl, 
+          CacheItem->created_at.year(),
+          CacheItem->created_at.month(),
+          CacheItem->created_at.day(),
+          CacheItem->created_at.hour(),
+          CacheItem->created_at.minute(),
+          CacheItem->created_at.second()
+        );
+        Serial.println( YYYYMMDD_HHMMSS_Str );
+        const char* updateItemTpl = "UPDATE blemacs SET created_at='%s.000000', hits='%d' WHERE address='%s'";
+        sprintf(updateItemStr, updateItemTpl, YYYYMMDD_HHMMSS_Str, CacheItem->hits, CacheItem->address);
+      }
+      Serial.println( updateItemStr );
+      DBExec(BLECollectorDB, updateItemStr);
+      close(BLE_COLLECTOR_DB);
+    }
+
+    bool updateDBFromCache( BlueToothDevice** SourceCache ) {
+      for(uint16_t i=0; i<BLEDEVCACHE_SIZE ;i++) {
+        if( isEmpty( SourceCache[i]->address ) ) continue;
+        if( SourceCache[i]->is_anonymous ) {
+          BLEDevHelper.reset( SourceCache[i] );
+          continue;
+        }
+        BLEDevTmp = SourceCache[i];
+        UI.printBLECard( BLEDevTmp ); // render 
+        updateItemFromCache( SourceCache[i] );
+        BLEDevHelper.reset( SourceCache[i] );
+        cacheState();
+        UI.cacheStats();
+      }
+      return true;
+    }
+
+    
 
   private:
 
@@ -1037,16 +1031,16 @@ class DBUtils {
     }
 
     // loads a DB entry into a BLEDevice struct
-    static int BLEDevDBCallback(void *dataBLE, int argc, char **argv, char **azColName) {
+    static int BLEDevDBCacheCallback( void *dataBLE, int argc, char **argv, char **azColName) {
       results++;
-      if(results < BLEDEVCACHE_SIZE) {
-        BLEDevCacheIndex = BLEDevHelper.getNextCacheIndex(BLEDevCache, BLEDevCacheIndex);
-        BLEDevHelper.reset( BLEDevCache[BLEDevCacheIndex] ); // avoid mixing new and old data
+      if(results < 2) {
+        //BLEDevCacheIndex = BLEDevHelper.getNextCacheIndex(BLEDevRAMCache, BLEDevCacheIndex);
+        BLEDevHelper.reset( BLEDevDBCache ); // avoid mixing new and old data
         for (int i = 0; i < argc; i++) {
-          BLEDevHelper.set( BLEDevCache[BLEDevCacheIndex], azColName[i], argv[i] ? argv[i] : '\0');;
+          BLEDevHelper.set( BLEDevDBCache, azColName[i], argv[i] ? argv[i] : '\0' );
         }
-        BLEDevCache[BLEDevCacheIndex]->hits = 1;
-        BLEDevCache[BLEDevCacheIndex]->in_db = true;
+        BLEDevHelper.set( BLEDevDBCache, "in_db", true );
+        BLEDevHelper.set( BLEDevDBCache, "is_anonymous", false );
       } else {
         log_e("Device Pool Size Exceeded, ignoring: ");
         for (int i = 0; i < argc; i++) {
