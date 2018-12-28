@@ -32,8 +32,8 @@ static void listDir() {
   // blah
 }
 
-static void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
-  Serial.printf("Listing directory: %s\n", dirname);
+static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char* needle=NULL){
+  Serial.printf("\nListing directory: %s\n\n", dirname);
 
   File root = fs.open(dirname);
   if(!root){
@@ -46,13 +46,21 @@ static void listDir(fs::FS &fs, const char * dirname, uint8_t levels){
   }
 
   File file = root.openNextFile();
+  Serial.println("    NAME                             |     SIZE");
+  Serial.println("-----------------------------------------------------");
+  unsigned long totalSize = 0;
   while(file){
     if(!file.isDirectory()) {
-      Serial.print("  FILE: ");
-      Serial.print(file.name());
-      Serial.print("  SIZE: ");
-      Serial.println(file.size());
+      const char* fileName = file.name();
+      unsigned long fileSize = file.size();
+      if( needle!=NULL && strcmp( fileName, needle ) == 0 ) {
+        Serial.printf("*   %-32s | %8d Bytes\n", fileName, fileSize);
+      } else {
+        Serial.printf("    %-32s | %8d Bytes\n", fileName, fileSize);
+      }
+      totalSize += fileSize;
     }
     file = root.openNextFile();
   }
+  Serial.printf("\nTotal space used: %d Bytes\n\n", totalSize);
 }

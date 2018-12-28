@@ -598,10 +598,18 @@ class UIUtils {
       uint16_t blockHeight = 0;
       uint16_t hop;
 
-      if( BleCard->is_anonymous ) {
-        BLECardTheme.setTheme( IN_CACHE_ANON );
+      if( BleCard->in_db ) {
+        if( BleCard->is_anonymous ) {
+          BLECardTheme.setTheme( IN_CACHE_ANON );
+        } else {
+          BLECardTheme.setTheme( IN_CACHE_NOT_ANON );
+        }
       } else {
-        BLECardTheme.setTheme( IN_CACHE_NOT_ANON );
+        if( BleCard->is_anonymous ) {
+          BLECardTheme.setTheme( NOT_IN_CACHE_ANON );
+        } else {
+          BLECardTheme.setTheme( NOT_IN_CACHE_ANON );
+        }
       }
       
       tft.setTextColor( BLECardTheme.textColor, BLECardTheme.bgColor );
@@ -642,53 +650,53 @@ class UIUtils {
         break;
       }
 
-      #if RTC_PROFILE > HOBO 
-      if ( BleCard->hits > 1 ) {
-        blockHeight += Out.println(SPACE);
-
-        char hitsTimeStampStr[48];
-        const char* hitsTimeStampTpl = "      %04d/%02d/%02d %02d:%02d:%02d %s";
-        char hitsStr[16];
-
-        if( BleCard->hits > 999 ) {
-          sprintf(hitsStr, "(%dK hits)", BleCard->hits/1000);
-        } else {
-          sprintf(hitsStr, "(%d hits)", BleCard->hits);
-        }
-
-        if( BleCard->updated_at.unixtime() > 0 ) {
-          unsigned long age_in_seconds = abs( BleCard->created_at.unixtime() - BleCard->updated_at.unixtime() );
-          unsigned long age_in_minutes = age_in_seconds / 60;
-          unsigned long age_in_hours   = age_in_minutes / 60;
-          unsigned long seconds_since_boot = (millis() / 1000)+1;
-          float freq = ((float)BleCard->hits / (float)scan_rounds+1) * ((float)age_in_seconds / (float)seconds_since_boot+1);
-          Serial.printf(" C: %d, U:%d, (%d / %d) * (%d / %d) = ",
-            BleCard->created_at.unixtime(),
-            BleCard->updated_at.unixtime(),
-            BleCard->hits,
-            scan_rounds+1,
-            age_in_seconds+1,
-            millis() / 1000
+      if( Time_is_set ) {
+        if ( BleCard->hits > 1 && BleCard->created_at.year() > 1970) {
+          blockHeight += Out.println(SPACE);
+  
+          char hitsTimeStampStr[48];
+          const char* hitsTimeStampTpl = "      %04d/%02d/%02d %02d:%02d:%02d %s";
+          char hitsStr[16];
+  
+          if( BleCard->hits > 999 ) {
+            sprintf(hitsStr, "(%dK hits)", BleCard->hits/1000);
+          } else {
+            sprintf(hitsStr, "(%d hits)", BleCard->hits);
+          }
+  
+          if( BleCard->updated_at.unixtime() > 0 ) {
+            unsigned long age_in_seconds = abs( BleCard->created_at.unixtime() - BleCard->updated_at.unixtime() );
+            unsigned long age_in_minutes = age_in_seconds / 60;
+            unsigned long age_in_hours   = age_in_minutes / 60;
+            unsigned long seconds_since_boot = (millis() / 1000)+1;
+            float freq = ((float)BleCard->hits / (float)scan_rounds+1) * ((float)age_in_seconds / (float)seconds_since_boot+1);
+            Serial.printf(" C: %d, U:%d, (%d / %d) * (%d / %d) = ",
+              BleCard->created_at.unixtime(),
+              BleCard->updated_at.unixtime(),
+              BleCard->hits,
+              scan_rounds+1,
+              age_in_seconds+1,
+              millis() / 1000
+            );
+            Serial.println( freq * 1000 );
+          }
+          
+          sprintf(hitsTimeStampStr, hitsTimeStampTpl, 
+            BleCard->created_at.year(),
+            BleCard->created_at.month(),
+            BleCard->created_at.day(),
+            BleCard->created_at.hour(),
+            BleCard->created_at.minute(),
+            BleCard->created_at.second(),
+            hitsStr
           );
-          Serial.println( freq * 1000 );
+          hop = Out.println( hitsTimeStampStr );
+          blockHeight += hop;
+  
+          tft.drawJpg( clock_jpeg, clock_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
+          
         }
-        
-        sprintf(hitsTimeStampStr, hitsTimeStampTpl, 
-          BleCard->created_at.year(),
-          BleCard->created_at.month(),
-          BleCard->created_at.day(),
-          BleCard->created_at.hour(),
-          BleCard->created_at.minute(),
-          BleCard->created_at.second(),
-          hitsStr
-        );
-        hop = Out.println( hitsTimeStampStr );
-        blockHeight += hop;
-
-        tft.drawJpg( clock_jpeg, clock_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
-        
       }
-      #endif
 
       if ( !isEmpty( BleCard->ouiname ) ) {
         blockHeight += Out.println( SPACE );
@@ -696,7 +704,13 @@ class UIUtils {
         sprintf( ouiStr, ouiTpl, BleCard->ouiname );
         hop = Out.println( ouiStr );
         blockHeight += hop;
-        tft.drawJpg( nic16_jpeg, nic16_jpeg_len, 10, Out.scrollPosY - hop, 13, 8 );
+        
+        if ( strstr( BleCard->ouiname, "Espressif" ) ) {
+          tft.drawJpg( espressif_jpeg  , espressif_jpeg_len, 11, Out.scrollPosY - hop, 8, 8 );
+        } else {
+          tft.drawJpg( nic16_jpeg, nic16_jpeg_len, 10, Out.scrollPosY - hop, 13, 8 );
+        }
+        
       }
       
       if ( BleCard->appearance != 0 ) {

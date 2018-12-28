@@ -30,26 +30,7 @@
 
 */
 
-// for debug
-void dumpTime(const char* message, tmElements_t tm) {
-  Serial.printf("[%s]: %04d-%02d-%02d %02d:%02d:%02d\n", 
-    message,
-    tm.Year + 1970,
-    tm.Month,
-    tm.Day,
-    tm.Hour,
-    tm.Minute,
-    tm.Second
-  );
-}
-
-void dumpTime(const char* message, time_t epoch) {
-  tmElements_t nowUnixDateTime;
-  breakTime( epoch, nowUnixDateTime );
-  dumpTime( message, nowUnixDateTime );
-}
-
-// helpers
+// helper
 static uint8_t DateTimeConv2d(const char* p) {
   uint8_t v = 0;
   if ('0' <= *p && *p <= '9')
@@ -57,6 +38,7 @@ static uint8_t DateTimeConv2d(const char* p) {
   return 10 * v + *++p - '0';
 }
 
+static bool Time_is_set = false;
 
 // Simple general-purpose date/time class (no TZ / DST / leap second handling!)
 class DateTime {
@@ -137,4 +119,38 @@ uint32_t DateTime::unixtime() const {
 uint32_t DateTime::tm2unixtime(tmElements_t tm_)  {
   uint32_t unixtime = makeTime(tm_); // convert time elements into time_t
   return unixtime;
+}
+
+
+
+// for debug
+
+void dumpTime(const char* message, DateTime dateTime) { 
+   Serial.printf("[%s]: %04d-%02d-%02d %02d:%02d:%02d\n", 
+    message,
+    dateTime.year(),
+    dateTime.month(),
+    dateTime.day(),
+    dateTime.hour(),
+    dateTime.minute(),
+    dateTime.second()
+  );
+}
+
+void dumpTime(const char* message, tmElements_t tm) {
+  Serial.printf("[%s]: %04d-%02d-%02d %02d:%02d:%02d\n", 
+    message,
+    tm.Year + 1970,
+    tm.Month,
+    tm.Day,
+    tm.Hour,
+    tm.Minute,
+    tm.Second
+  );
+}
+
+void dumpTime(const char* message, time_t epoch) {
+  tmElements_t nowUnixDateTime;
+  breakTime( epoch, nowUnixDateTime );
+  dumpTime( message, nowUnixDateTime );
 }

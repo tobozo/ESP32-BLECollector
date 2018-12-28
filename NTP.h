@@ -1,9 +1,5 @@
-  /*
-  #warning "NTP Sync Mode enabled !!"
-  #warning "This sketch binary should be named '" NTP_MENU_FILENAME "' and saved on the SD Card"
-  #warning "It will only adjust time from NTP and reload the '" BLE_MENU_FILENAME "' sketch afterwards"
-  #warning "If you need to compile the BLECollector, set 'RTC_PROFILE' to 'NTP_MENU' in settings.h"
-  */
+
+
   HTTPClient http;
   SDUpdater sdUpdater;
   
@@ -13,9 +9,6 @@
     #define WiFi_Begin() WiFi.begin();
   #endif
 
-  int8_t timeZone = 1;
-  int8_t minutesTimeZone = 0;
-  const char* NTP_SERVER = "europe.pool.ntp.org";
   //const char* TZ_INFO = "CET-1CEST,M3.3.0,M10.5.0/3"; // build your TZ String here e.g. https://phpsecu.re/tz/get.php?timezone=Europe/Paris
   // Paris, France = CET-1CEST-2,M3.5.0/02:00:00,M10.5.0/03:00:00 // or pick it from here https://sites.google.com/a/usapiens.com/opnode/time-zones
   boolean NTPSyncEventTriggered = false; // True if a time even has been triggered
@@ -140,10 +133,13 @@
   void NTPSyncEvent(NTPSyncEvent_t ntpEvent) {
     if( ntpEvent ) {
       Serial.print ("Time Sync error: ");
-      if( ntpEvent == noResponse )
+      if( ntpEvent == noResponse ) {
         Serial.println ("NTP server not reachable");
-      else if( ntpEvent == invalidAddress )
+        ESP.restart();
+      } else if( ntpEvent == invalidAddress ) {
         Serial.println ("Invalid NTP server address");
+        ESP.restart();
+      }
     } else {
       delay(100);
       time_t nowUnixTime = NTP.getTime();
