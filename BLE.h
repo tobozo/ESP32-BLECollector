@@ -29,10 +29,6 @@
 
 */
 
-
-//#include <string>
-//#include <sstream>
-//#include <sys/time.h>
 #define TICKS_TO_DELAY 1000
 
 #ifdef BUILD_NTPMENU_BIN
@@ -86,12 +82,6 @@ enum AfterScanSteps {
   PROPAGATE = 3
 };
 
-/*
-static BLEUUID serviceUUID("4fafc201-1fb5-459e-8fcc-c5c9c331914b");
-static BLEUUID    charUUID1("beb5483e-36e1-4688-b7f5-ea07361b26a8");
-static BLEUUID    charUUID2("beb5483e-36e2-4688-b7f5-ea07361b26a8");
-static BLEUUID    charUUID3("beb5483e-36e3-4688-b7f5-ea07361b26a8");
-*/
 static BLEUUID    timeServiceUUID((uint16_t)0x1805);
 static BLEUUID    timeCharacteristicUUID((uint16_t)0x2a2b);
 
@@ -144,14 +134,18 @@ static void TimeClientNotifyCallback( BLERemoteCharacteristic* pBLERemoteCharact
 
 class TimeClientCallback : public BLEClientCallbacks {
   void onConnect(BLEClient* pC){
-    // xTaskCreate(scan1, "scan", 4048, NULL, 5, NULL);
     log_e("[Heap: %06d] Connect!!", freeheap);
   }
   void onDisconnect(BLEClient* pC) {
     if( !hasBTTime ) {
       foundTimeServer = false;
+      log_e("[Heap: %06d] Disconnect without time!!", freeheap);
+      // oh that's dirty
+      ESP.restart();
+    } else {
+      foundTimeServer = true;
+      log_e("[Heap: %06d] Disconnect with time!!", freeheap);
     }
-    log_e("[Heap: %06d] Disconnect!!", freeheap);
     //pBLEScan->erase(pC->getPeerAddress());
   }
 };
@@ -216,7 +210,6 @@ class FoundDeviceCallback: public BLEAdvertisedDeviceCallbacks {
     } else {
       UI.BLEStateIconSetColor(BLE_DARKGREEN);
     }
-    vTaskDelay(100);
   }
 };
 
@@ -283,9 +276,9 @@ class BLEScanUtils {
       }
     }
     static void restartCB( void * param = NULL ) {
-      stopScanCB();
       DB.needsReplication = true;
       DB.needsRestart = true;
+      stopScanCB();
     }
     #if RTC_PROFILE > ROGUE //
       static void updateCB( void * param = NULL ) {
@@ -301,8 +294,8 @@ class BLEScanUtils {
       DB.needsReset = true;
       Serial.println("DB Scheduled for reset");
       stopScanCB();
-      delay(1);
-      startScanCB();
+      delay(100);
+      //startScanCB();
     }
     static void pruneCB( void * param = NULL ) {
       DB.needsPruning = true;
@@ -323,23 +316,45 @@ class BLEScanUtils {
         delay(1000);
       }
       startScanCB();
-      //xTaskCreatePinnedToCore(dumpTask, "dumpTask", 10000, NULL, 5, NULL, 1); /* last = Task Core */
     }
     static void toggleEchoCB( void * param = NULL ) {
       Out.serialEcho = !Out.serialEcho;
       setPrefs();
       Serial.printf("Out.serialEcho = %s\n", Out.serialEcho ? "true" : "false" );
     }
+    static void rmFileCB( void * param = NULL ) {
+      stopScanCB();
+      delay(100);
+      xTaskCreatePinnedToCore(rmFileTask, "rmFileTask", 5000, param, 2, NULL, 1); /* last = Task Core */ 
+    }
+    static void rmFileTask( void * param = NULL ) {
+      // YOLO style
+      if( param != NULL ) {
+        if( BLE_FS.remove( (const char*)param ) ) {
+          Serial.printf("File %s deleted\n", param);
+        } else {
+          Serial.printf("File %s could not be deleted\n", param);
+        }
+      } else {
+        Serial.println("Nothing to delete");
+      }
+      startScanCB();
+      vTaskDelete( NULL );
+    }
     static void listDirCB( void * param = NULL ) {
       stopScanCB();
+      delay(100);
       xTaskCreatePinnedToCore(listDirTask, "listDirTask", 5000, NULL, 2, NULL, 1); /* last = Task Core */      
     }
     static void listDirTask( void * param = NULL ) {
       listDir(BLE_FS, "/", 0, DB.BLEMacsDbFSPath);
       startScanCB();
-      vTaskDelete( NULL );      
+      vTaskDelete( NULL );    
     }
     static void nullCB( void * param = NULL ) {
+      if( param != NULL ) {
+        Serial.printf("nullCB param: %s\n", param);
+      }
       // zilch, niente, nada, que dalle, nothing
     }
     static void startSerialTask() {
@@ -357,6 +372,7 @@ class BLEScanUtils {
         { "toggleEcho",   toggleEchoCB,   "Toggle BLECards in serial console (persistent)" },
         { "dump",         startDumpCB,    "Dump returning BLE devices to the display and updates DB" },
         { "ls",           listDirCB,      "Show the SD root dir Content" },
+        { "rm",           rmFileCB,       "Delete a file from the SD" },
         { "restart",      restartCB,      "Restart BLECollector" },
         { "bletime",      startTimeClient,"Get time from another BLE Device" },
         #if RTC_PROFILE > ROGUE
@@ -403,24 +419,28 @@ class BLEScanUtils {
         }
         Serial.println();
       } else {
+        char *token;
+        char delim[2];
+        char *args;
+        strncpy(delim," ",2); // strtok_r needs a null-terminated string
+        
+        if( strstr(command, delim) ) {
+          // command has arg
+          token = strtok_r(command, delim, &args); // Search for command at start of buffer
+          if( token != NULL ) {
+            Serial.printf("Ignoring: %s %s\n", token, args);
+          }
+        }
         for( uint16_t i=0; i<Csize; i++ ) {
           if( strcmp( SerialCommands[i].command, command )==0 ) {
             Serial.printf( "Running '%s' command\n", SerialCommands[i].command );
-            SerialCommands[i].cb.function( NULL );
+            SerialCommands[i].cb.function( args );
             sprintf(command, "%s", "");
             return;
           }
         }
         Serial.printf( "Command '%s' not found\n", command );
       }
-    }
-
-
-    static void dumpTask( void * parameter ) {
-      DB.needsReplication = true;
-      while( DB.needsReplication ) { ; }
-      startScanCB();
-      vTaskDelete( NULL );
     }
 
 
@@ -434,12 +454,9 @@ class BLEScanUtils {
     }
 
     static void TimeClientTask( void * param ) {
-
       log_e("[Heap: %06d] Will connect to address %s", freeheap, stdBLEAddress.c_str());
-      
-      //charBleAddress
-      //pClient->connect( *(BLEAddress*)pClientAddress, pClientType );
-      pClient->connect( /* *(BLEAddress*) */stdBLEAddress, pClientType );
+      pClient->connect( stdBLEAddress, pClientType );
+      log_e("[Heap: %06d] Connected to address %s", freeheap, stdBLEAddress.c_str());
       BLERemoteService* pRemoteService = pClient->getService( timeServiceUUID );
       if (pRemoteService == nullptr) {
         log_e("Failed to find our service UUID: %s", timeServiceUUID.toString().c_str());
@@ -448,7 +465,6 @@ class BLEScanUtils {
         vTaskDelete( NULL );
         return;
       }
-
       BLERemoteCharacteristic* pRemoteCharacteristic = pRemoteService->getCharacteristic( timeCharacteristicUUID );
       if (pRemoteCharacteristic == nullptr) {
         log_e("Failed to find our characteristic timeCharacteristicUUID: %s, disconnecting", timeCharacteristicUUID.toString().c_str());
@@ -476,6 +492,8 @@ class BLEScanUtils {
 
 
     static void scanTask( void * parameter ) {
+      UI.update(); // run after-scan display stuff
+      DB.maintain();
       scanTaskRunning = true;
       scanTaskStopped = false;
       pBLEScan = BLEDevice::getScan(); //create new scan
@@ -568,6 +586,9 @@ class BLEScanUtils {
         inCacheCount++;
         BLEDevRAMCache[deviceIndexIfExists]->hits++;
         if( Time_is_set ) {
+          if( BLEDevRAMCache[deviceIndexIfExists]->created_at.year() <= 1970 ) {
+            BLEDevRAMCache[deviceIndexIfExists]->created_at = nowDateTime;
+          }
           BLEDevRAMCache[deviceIndexIfExists]->updated_at = nowDateTime;
         }
         BLEDevHelper.copyItem( BLEDevRAMCache[deviceIndexIfExists], BLEDevScanCache[_scan_cursor] );
@@ -585,6 +606,9 @@ class BLEScanUtils {
             uint16_t nextCacheIndex = BLEDevHelper.getNextCacheIndex( BLEDevRAMCache, BLEDevCacheIndex );
             BLEDevDBCache->hits++;
             if( Time_is_set ) {
+              if( BLEDevDBCache->created_at.year() <= 1970 ) {
+                BLEDevDBCache->created_at = nowDateTime;
+              }
               BLEDevDBCache->updated_at = nowDateTime;
             }
             BLEDevHelper.copyItem( BLEDevDBCache, BLEDevScanCache[_scan_cursor] );

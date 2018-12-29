@@ -178,6 +178,7 @@ static void timeHousekeeping(bool checkNTP=false) {
     if( abs( seconds_since_boot - internalDateTime.unixtime() ) > 2 ) {
       sprintf(hhmmString, hhmmStringTpl, internalDateTime.hour(), internalDateTime.minute());
       Time_is_set = true;
+      nowDateTime = internalDateTime;
     }
     sprintf(hhmmssString, hhmmssStringTpl, hh, mm, ss);
   #endif // RTC_PROFILE > HOBO
