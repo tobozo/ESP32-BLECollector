@@ -36,11 +36,11 @@ struct AmigaBallConfig {
   long Framelength = 25;
   byte Wires = 0; // 0 = no wireframes
   uint16_t BGColor = tft.color565(0x22, 0x22, 0x44);
-  uint16_t ScreenWidth = tft.width();
-  uint16_t ScreenHeight = tft.height();
-  uint16_t VCentering = 245;
-  uint16_t Scale = 32;
-  uint16_t Amplitude = 50;
+  uint16_t YPos = 150;
+  uint16_t XPos = 0;
+  uint16_t Width = tft.width();
+  uint16_t Height = 132;
+
 } amigaBallConfig;
 
 
@@ -72,7 +72,6 @@ class AmigaRulez {
 
     bool AnimationDone;
     bool isMovingRight;
-    bool doWireFrame = false;
     
     byte Wires;
     byte bytecounter = 0;
@@ -84,86 +83,54 @@ class AmigaRulez {
     long lastTick    = millis();
     long processTicks = 0;
 
+    uint16_t variableScale = Scale;
+    uint16_t oldScale = Scale;
+    uint16_t ScaleAmplitude = 8;
+    uint16_t MaxScaleAmplitude;
     uint16_t TiltDeg = 17; // 17 degrees tilting to the right
-    uint16_t ScreenWidth;
-    uint16_t ScreenHeight;
+    uint16_t LeftBoundary;
+    uint16_t RightBoundary;
+    uint16_t XPos;
+    uint16_t YPos;
+    uint16_t Width;
+    uint16_t Height;
+    
     uint16_t VCentering;
     uint16_t Scale;
-    uint16_t Amplitude;
+    uint16_t YPosAmplitude;
     uint16_t BGColor;
     uint16_t lastPositionX;
     uint16_t lastPositionY;
-    uint16_t hCenter;
-    uint16_t canvasVstart;
-    uint16_t canvasVend;
-    uint16_t canvasHeight;
-    uint16_t cVsteps;
-    uint16_t canvasHstart = 0;
-    uint16_t canvasHend;
-    uint16_t canvasWidth;
-    uint16_t cHsteps;
-    uint16_t boxVstart;
-    uint16_t boxVend;
-    uint16_t boxHeight;
-    uint16_t vSteps;
-    uint16_t boxHstart;
-    uint16_t boxHend;
-    uint16_t boxWidth;
-    uint16_t hSteps;
-    uint16_t vectorX;
-    uint16_t vectorY;
     uint16_t positionX;
     uint16_t positionY;
 
     void init( AmigaBallConfig conf=amigaBallConfig ) {
-      BGColor      = amigaBallConfig.BGColor;//tft.color565(0x22, 0x22, 0x44);
-      Framelength  = amigaBallConfig.Framelength;//33; // millis
-      ScreenWidth  = amigaBallConfig.ScreenWidth;//tft.width(); // 640
-      ScreenHeight = amigaBallConfig.ScreenHeight;//tft.height(); // 480
-      VCentering   = amigaBallConfig.VCentering;// 245.0;
-      Scale        = amigaBallConfig.Scale;// 32.0;
-      Amplitude    = amigaBallConfig.Amplitude;// 50;
-      Wires        = amigaBallConfig.Wires;
+      BGColor        = amigaBallConfig.BGColor;//tft.color565(0x22, 0x22, 0x44);
+      Framelength    = amigaBallConfig.Framelength;//33; // millis
+      XPos   = amigaBallConfig.XPos;
+      YPos   = amigaBallConfig.YPos;
+      Width  = amigaBallConfig.Width;
+      Height = amigaBallConfig.Height;
       setupValues();
+      tft.fillRect( XPos, YPos, Width, Height, BGColor );
     }
 
     void setupValues() {
-      BounceMargin = Scale+8; // 135
+      Scale = Height/5;// 
+      ScaleAmplitude = Scale/3; // ball diameter will vary on this
+      MaxScaleAmplitude = Scale + ScaleAmplitude;
+      YPosAmplitude = (Height-(Scale+ScaleAmplitude))/2; // ball will bounce on this span pixels
+      VCentering = YPos + Height - MaxScaleAmplitude;// -(YPosAmplitude/2 + Scale + ScaleAmplitude);
+      
+      BounceMargin = 4+Scale+ScaleAmplitude; // 135
+      LeftBoundary = XPos + BounceMargin;
+      RightBoundary = XPos + Width - BounceMargin;
+     
       TiltRad = TiltDeg * deg2rad;
       lastPositionX = 0;
       lastPositionY = 0;
-      hCenter = ScreenWidth / 2;
-      canvasVstart = VCentering - (Scale + Amplitude );
-      canvasVend   = VCentering + (Scale );
-      canvasHeight = canvasVend - canvasVstart;
-      canvasHend   = ScreenWidth;
-      canvasWidth  = canvasHend - canvasHstart;
-      boxVstart = VCentering - (Scale/4 + Amplitude );
-      boxVend   = VCentering + (Scale/4 );
-      boxHeight = boxVend - boxVstart;
-      boxHstart = hCenter - (Scale + Amplitude );
-      boxHend   = hCenter + (Scale + Amplitude );
-      boxWidth  = boxHend - boxHstart;
-      if( Wires > 0 ) {
-        doWireFrame = true;
-        cVsteps = canvasHeight / Wires;
-        cHsteps = canvasWidth / Wires;
-        vSteps  = boxHeight / Wires;
-        hSteps  = boxWidth / Wires;
-      } else {
-        doWireFrame = false;
-      }
-      vectorX = boxHstart-canvasHstart;
-      vectorY = boxVstart-canvasVstart;
-      XtoYratio = vectorX / vectorY;
-      YtoXratio = vectorY / vectorX;
-      perspective[0] = 0;
-      perspective[1] = Scale/8;
-      perspective[2] = Scale/4;
-      perspective[3] = Scale/2;
       PhaseVelocity = 2.5 * deg2rad;
-      positionX = ScreenWidth/2;
-      positionY;
+      positionX = XPos + Width/2;
       isMovingRight = true;
     }
 
@@ -235,26 +202,6 @@ class AmigaRulez {
       }
     }
 
-    void drawWireFrame() {
-      for( int i=0; i<=Wires; i++ ) {
-        tft.drawFastHLine(boxHstart, boxVstart + i*vSteps, boxWidth, BLE_PURPLE);
-        tft.drawLine(boxHstart, boxVstart + i*vSteps, canvasHstart, canvasVstart + i*cVsteps, BLE_PURPLE);
-        tft.drawLine(boxHend,   boxVstart + i*vSteps, canvasHend,   canvasVstart + i*cVsteps, BLE_PURPLE);
-        tft.drawFastVLine(boxHstart + i*hSteps, boxVstart, boxHeight, BLE_PURPLE);
-        tft.drawLine(boxHstart + i*hSteps, boxVstart, canvasHstart + i*cHsteps, canvasVstart, BLE_PURPLE);
-        tft.drawLine(boxHstart + i*hSteps, boxVend,   canvasHstart + i*cHsteps, canvasVend, BLE_PURPLE);
-      }
-      for( int i=0; i<4; i++ ) {
-        uint16_t  _y = perspective[i]+vSteps/2;
-        uint16_t  _x =  ((Scale/2) - (_y * YtoXratio))*2;
-        tft.drawFastHLine(_x, boxVstart - _y, canvasWidth-(_x*2), BLE_PURPLE);
-        tft.drawFastHLine(_x, boxVend   + _y, canvasWidth-(_x*2), BLE_PURPLE);
-        uint16_t  boxH = (boxVend   + _y) - (boxVstart - _y);
-        tft.drawFastVLine(_x,               boxVstart - _y, boxH, BLE_PURPLE);
-        tft.drawFastVLine(canvasWidth - _x, boxVstart - _y, boxH, BLE_PURPLE);
-      }
-    }
-
     void clearCrescent(float r0, float r1, uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
       float vectorX = x1 - x0;
       float vectorY = y1 - y0;
@@ -267,9 +214,9 @@ class AmigaRulez {
       float a = ( ( r0*r0 ) - ( r1*r1 ) + ( d*d ) ) / ( 2*d );
       float h = sqrt( ( r0*r0 ) - ( a*a ) );
 
-      // circle intersection points (only the first one is needed here)
-      uint16_t xx2 = x0 + a * vectorX / d;
-      uint16_t yy2 = y0 + a * vectorY / d;
+      // circle intersection points
+      uint16_t xx2 = 0; // x0 + a * vectorX / d;
+      uint16_t yy2 = 0; // y0 + a * vectorY / d;
       uint16_t xx3 = 0; // x2 + h * vectorY / d;  // also x3=x2-h*(y1-y0)/d;
       uint16_t yy3 = 0; // y2 - h * vectorX / d;  // also y3=y2+h*(x1-x0)/d;
       
@@ -280,9 +227,9 @@ class AmigaRulez {
         angleRad0 = vectAngleRadians+mobAngleRadians;
         angleRad1 = vectAngleRadians-mobAngleRadians;
       }
-      float angleStep = mobAngleRadians/4.5;
+      float angleStep = mobAngleRadians/8;
       
-      for( float angle=angleRad0; angle<angleRad1; angle+=angleStep ) {
+      for( float angle=angleRad0-angleStep; angle<angleRad1+angleStep; angle+=angleStep ) {
         float ct = sin(angle);
         float st = cos(angle);
         uint16_t xx0 = x0 + st * r0;
@@ -295,11 +242,6 @@ class AmigaRulez {
         if( xx3!= 0 && xx3 != 0 ) {
           tft.fillTriangle(xx2, yy2, xx3, yy3, xx1, yy1, BGColor );
         }
-        /*
-        {
-          tft.drawLine(xx0, yy0, xx1, yy1, BGColor );
-        }
-        */
         xx2 = xx0;
         yy2 = yy0;
         xx3 = xx1;
@@ -307,14 +249,13 @@ class AmigaRulez {
       }
     }
 
-    void draw(float phase, float scale, uint16_t x, uint16_t y) {
+    void draw(float phase, float scale, float oldscale, uint16_t x, uint16_t y) {
       calcPoints( fmod(phase, phase8Rad) );
       transform(scale, x, y);
-      if(doWireFrame && bytecounter++%8==0) drawWireFrame();
-      fillTiles(phase >= phase8Rad);
       if(lastPositionX!=0 && lastPositionY!=0) {
-        clearCrescent(scale, scale+2, x, y, lastPositionX, lastPositionY);
+        clearCrescent(scale, oldscale+1, x, y, lastPositionX, lastPositionY);
       }
+      fillTiles(phase >= phase8Rad);
       lastPositionX = x;
       lastPositionY = y;
     }
@@ -335,21 +276,28 @@ class AmigaRulez {
           Phase = fmod( Phase + PhaseVelocity, phase4Rad );
           positionX -= velocityX;
         }
-        if ( positionX >= ScreenWidth-BounceMargin ) {
+        if ( positionX >= RightBoundary /*ScreenWidth-BounceMargin*/ ) {
           isMovingRight = false;
-        } else if( positionX <= BounceMargin ) {
+        } else if( positionX <= LeftBoundary /*BounceMargin*/ ) {
           isMovingRight = true;
         }
         angleY = fmod( angleY + velocityY, twopi );
-        positionY = VCentering - Amplitude * fabs( cos( angleY ) );
-        draw( Phase, Scale, positionX, positionY );
+        float absCosAngleY = fabs( cos( angleY ) );
+        variableScale = Scale + ScaleAmplitude * absCosAngleY;
+        positionY = VCentering - YPosAmplitude * absCosAngleY;
+        takeMuxSemaphore();
+        draw( Phase, variableScale, oldScale, positionX, positionY );
+        giveMuxSemaphore();
+        oldScale = variableScale;
         processTicks = millis() - lastTick;
         if( processTicks < Framelength ) {
           delay( Framelength - processTicks );
         }
         if( millis() - startedTick > duration ) {
           if( clearAfter ) {
-            tft.fillRect( 0, canvasVstart, ScreenWidth, canvasHeight, BGColor );
+            takeMuxSemaphore();
+            tft.fillRect( XPos, YPos, Width, Height, BGColor );
+            giveMuxSemaphore();
           }
           AnimationDone = true;
         }
