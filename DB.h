@@ -216,6 +216,7 @@ class DBUtils {
     bool needsReset = false;
     bool needsReplication = false;
     bool needsRestart = false;
+    bool initDone = false;
 
 
     void init() {
@@ -230,7 +231,6 @@ class DBUtils {
       BLEMacsDbFSPath = (char*)malloc(32);
       
       setBLEDBPath();
-      
       sqlite3_initialize();
       initial_free_heap = freeheap;
       if( !BLE_FS.exists( BLEMacsDbFSPath ) ) {
@@ -241,21 +241,6 @@ class DBUtils {
       }
       entries = getEntries();
       cacheWarmup();
-
-      if ( resetReason == 12)  { // =  SW_CPU_RESET
-        // CPU was reset by software, don't perform tests (faster load)
-      } else {
-        Out.println();
-        Out.println("Cold boot detected");
-        Out.println("Testing Database...");
-        //pruneDB(); // remove unnecessary/redundant entries
-        // initial boot, perform some tests
-        testOUI(); // test oui database
-        testVendorNames(); // test vendornames database
-        //showDataSamples(); // print some of the collected values (WARN: memory hungry)
-        // note: BLE.init() will restart on cold boot
-      }
-
     }
 
 
@@ -372,6 +357,9 @@ class DBUtils {
       if( hasPsram ) {
         loadOUIToPSRam();
         loadVendorsToPSRam();
+      } else {
+        testOUI(); // test oui database
+        testVendorNames(); // test vendornames database        
       }
       BLEDevTmp = (BlueToothDevice*)calloc(1, sizeof( BlueToothDevice ) );
       BLEDevDBCache = (BlueToothDevice*)calloc(1, sizeof( BlueToothDevice ) );
@@ -515,10 +503,8 @@ class DBUtils {
         return -1;
       }
       open(BLE_COLLECTOR_DB);
-
       log_v("will run on template %s", searchDeviceTemplate );
       sprintf(searchDeviceQuery, searchDeviceTemplate, "%s", "%s", address);
-
       int rc = sqlite3_exec(BLECollectorDB, searchDeviceQuery, BLEDevDBCacheCallback, (void*)dataBLE, &zErrMsg);
       if (rc != SQLITE_OK) {
         error(zErrMsg);
@@ -535,7 +521,7 @@ class DBUtils {
     void loadVendorsToPSRam() {
       results = 0;
       open(BLE_VENDOR_NAMES_DB);
-      Out.println("Cloning Vendors DB to PSRam...");
+      //Out.println("Cloning Vendors DB to PSRam...");
       UI.headerStats("Cloning...");
       int rc = sqlite3_exec(BLEVendorsDB, "SELECT id, SUBSTR(vendor, 0, 32) as vendor FROM 'ble-oui' where vendor!=''", VendorDBCallback, (void*)dataVendor, &zErrMsg);
       UI.PrintProgressBar( Out.width );
@@ -556,7 +542,7 @@ class DBUtils {
     void loadOUIToPSRam() {
       results = 0;
       open(MAC_OUI_NAMES_DB);
-      Out.println("Cloning Manufacturers DB to PSRam...");
+      //Out.println("Cloning Manufacturers DB to PSRam...");
       UI.headerStats("Cloning...");
       int rc = sqlite3_exec(OUIVendorsDB, "SELECT LOWER(assignment) as mac, SUBSTR(`Organization Name`, 0, 32) as ouiname FROM 'oui-light'", OUIDBCallback, (void*)dataOUI, &zErrMsg);
       UI.PrintProgressBar( Out.width );
@@ -593,9 +579,9 @@ class DBUtils {
     }
 
 
-    int DBExec(sqlite3 *db, const char *sql, bool _print_results = false, char *_colNeedle = 0) {
+    int DBExec(sqlite3 *db, const char *sql, char *_colNeedle = 0) {
       results = 0;
-      print_results = _print_results;
+      //print_results = _print_results;
       colNeedle = _colNeedle;
       *colValue = {'\0'};
       int rc = sqlite3_exec(db, sql, DBCallback, (void*)data, &zErrMsg);
@@ -650,7 +636,6 @@ class DBUtils {
         YYYYMMDD_HHMMSS_Str,
         CacheItem[_index]->hits
       );
-
       int rc = DBExec( BLECollectorDB, insertQuery );
       if (rc != SQLITE_OK) {
         log_e("SQlite Error occured when heap level was at %d : %s", freeheap, insertQuery);
@@ -682,30 +667,12 @@ class DBUtils {
     }
 
 
-    void showDataSamples() {
-      open(BLE_COLLECTOR_DB);
-      tft.setTextColor(BLE_YELLOW);
-      Out.println(" Collected Named Devices:");
-      tft.setTextColor(BLE_PINK);
-      DBExec(BLECollectorDB, nameQuery , true);
-      tft.setTextColor(BLE_YELLOW);
-      Out.println(" Collected Devices Vendors:");
-      tft.setTextColor(BLE_PINK);
-      DBExec(BLECollectorDB, manufnameQuery, true);
-      tft.setTextColor(BLE_YELLOW);
-      Out.println(" Collected Devices MAC's Vendors:");
-      tft.setTextColor(BLE_PINK);
-      DBExec(BLECollectorDB, ouinameQuery, true);
-      close(BLE_COLLECTOR_DB);
-    }
-
-
     unsigned int getEntries(bool _display_results = false) {
       open(BLE_COLLECTOR_DB);
       if (_display_results) {
-        DBExec(BLECollectorDB, allEntriesQuery, true);
+        DBExec( BLECollectorDB, allEntriesQuery );
       } else {
-        DBExec(BLECollectorDB, countEntriesQuery, true, (char*)"count(*)");
+        DBExec( BLECollectorDB, countEntriesQuery, (char*)"count(*)" );
         results = atoi(colValue);
       }
       close(BLE_COLLECTOR_DB);
@@ -717,35 +684,32 @@ class DBUtils {
       Out.println("Re-creating database :");
       Out.println( BLEMacsDbFSPath );
       BLE_FS.remove( BLEMacsDbFSPath );
-      //dropDB();
-      //createDB();
       ESP.restart();
     }
 
     void createDB() {
       open(BLE_COLLECTOR_DB, false);
       log_d("created %s if no exists:  : %s", BLEMacsDbSQLitePath, createTableQuery);
-      DBExec( BLECollectorDB, createTableQuery) ;
+      DBExec( BLECollectorDB, createTableQuery ) ;
       close(BLE_COLLECTOR_DB);
     }
 
     void dropDB() {
+      UI.headerStats("Dropping DB");
       open(BLE_COLLECTOR_DB, false);
       log_d("dropped if exists: %s DB", BLEMacsDbSQLitePath);
       DBExec( BLECollectorDB, dropTableQuery );
-      close(BLE_COLLECTOR_DB);      
+      close(BLE_COLLECTOR_DB);   
+      UI.headerStats("DB Dropped");
     }
 
     void pruneDB() {
       unsigned int before_pruning = getEntries();
-      tft.setTextColor(BLE_YELLOW);
       UI.headerStats("Pruning DB");
-      tft.setTextColor(BLE_GREEN);
       open(BLE_COLLECTOR_DB, false);
-      DBExec(BLECollectorDB, pruneTableQuery, true);
+      DBExec(BLECollectorDB, pruneTableQuery );
       close(BLE_COLLECTOR_DB);
       entries = getEntries();
-      tft.setTextColor(BLE_YELLOW);
       prune_trigger = 0;
       UI.headerStats("DB Pruned");
       UI.footerStats();
@@ -753,10 +717,7 @@ class DBUtils {
 
     void testVendorNames() {
       open(BLE_VENDOR_NAMES_DB);
-      tft.setTextColor(BLE_YELLOW);
-      Out.println("Testing Vendor Names Database ...");
-      tft.setTextColor(BLE_GREENYELLOW);
-      DBExec(BLEVendorsDB, testVendorNamesQuery, true);
+      DBExec( BLEVendorsDB, testVendorNamesQuery );
       close(BLE_VENDOR_NAMES_DB);
       char *vendorname = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
       getVendor( 0x001D /*Qualcomm*/, vendorname );
@@ -765,18 +726,12 @@ class DBUtils {
         Out.println(vendorname);
         Out.println("Vendor Names Test failed, looping");
         while (1) yield();
-      } else {
-        tft.setTextColor(BLE_GREEN);
-        Out.println("Vendor Names Test success!");
       }
     }
 
     void testOUI() {
       open(MAC_OUI_NAMES_DB);
-      tft.setTextColor(BLE_YELLOW);
-      Out.println("Testing MAC OUI database ...");
-      tft.setTextColor(BLE_GREENYELLOW);
-      DBExec(OUIVendorsDB, testOUIQuery, true);
+      DBExec( OUIVendorsDB, testOUIQuery );
       close(MAC_OUI_NAMES_DB);
       char *ouiname = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
       getOUI( "B499BA" /*Hewlett Packard */, ouiname );
@@ -785,9 +740,6 @@ class DBUtils {
         Out.println(ouiname);
         Out.println("MAC OUI Test failed, looping");
         while (1) yield();
-      } else {
-        tft.setTextColor(BLE_GREEN);
-        Out.println("MAC OUI Test success!");
       }
     }
 
@@ -795,6 +747,9 @@ class DBUtils {
     void updateItemFromCache( BlueToothDevice* CacheItem ) {
       open(BLE_COLLECTOR_DB);
       char updateItemStr[256] = {'\0'};
+      if( Time_is_set && CacheItem->created_at.year() <= 1970 ) {
+        CacheItem->created_at = DateTime(year(), month(), day(), hour(), minute(), second());
+      }
       if( CacheItem->created_at.year() <= 1970 ) {
         // only update hitcount
         const char* updateItemTpl = "UPDATE blemacs SET hits='%d' WHERE address='%s'";
@@ -809,13 +764,14 @@ class DBUtils {
           CacheItem->created_at.minute(),
           CacheItem->created_at.second()
         );
-        Serial.println( YYYYMMDD_HHMMSS_Str );
+        //Serial.println( YYYYMMDD_HHMMSS_Str );
         const char* updateItemTpl = "UPDATE blemacs SET created_at='%s.000000', hits='%d' WHERE address='%s'";
         sprintf(updateItemStr, updateItemTpl, YYYYMMDD_HHMMSS_Str, CacheItem->hits, CacheItem->address);
       }
-      Serial.println( updateItemStr );
-      DBExec(BLECollectorDB, updateItemStr);
+      //Serial.println( updateItemStr );
+      DBExec( BLECollectorDB, updateItemStr );
       close(BLE_COLLECTOR_DB);
+      UI.headerStats("Updated item");
     }
 
     bool updateDBFromCache( BlueToothDevice** SourceCache ) {
@@ -878,7 +834,7 @@ class DBUtils {
       open(BLE_VENDOR_NAMES_DB);
       char vendorRequestStr[64] = {'\0'};
       sprintf(vendorRequestStr, vendorRequestTpl, devid);
-      DBExec(BLEVendorsDB, vendorRequestStr, true, (char*)"vendor");
+      DBExec( BLEVendorsDB, vendorRequestStr, (char*)"vendor" );
       close(BLE_VENDOR_NAMES_DB);
       uint16_t colValueLen = 10; // sizeof("[unknown]")
       if ( !isEmpty(colValue) ) {
@@ -974,7 +930,7 @@ class DBUtils {
       open(MAC_OUI_NAMES_DB);
       char OUIRequestStr[76];
       sprintf( OUIRequestStr, OUIRequestTpl, shortmac);
-      DBExec(OUIVendorsDB, OUIRequestStr, true, (char*)"Organization Name");
+      DBExec( OUIVendorsDB, OUIRequestStr, (char*)"Organization Name" );
       close(MAC_OUI_NAMES_DB);
       uint16_t colValueLen = 10; // sizeof("[private]")
       if ( !isEmpty( colValue ) ) {
@@ -1096,17 +1052,6 @@ class DBUtils {
     static int DBCallback(void *data, int argc, char **argv, char **azColName) {
       results++;
       int i;
-      //String out = "";
-      if (results == 1 && colNeedle == 0 ) {
-        if (print_results && print_tabular) {
-          //out = "--- ";
-          for (i = 0; i < argc; i++) {
-            //out += String(azColName[i]) + SPACE;
-          }
-          //Out.println(out);
-          //out = "";
-        }
-      }
       for (i = 0; i < argc; i++) {
         if (colNeedle != 0) {
           if ( strcmp(colNeedle, azColName[i])==0 ) {
@@ -1118,18 +1063,7 @@ class DBUtils {
           }
           continue;
         }
-        if (print_results) {
-          if (print_tabular) {
-            //out += String(argv[i] ? argv[i] : "NULL") + SPACE;
-          } else {
-            //Out.println(" " + String(azColName[i]) + "="+ String(argv[i] ? argv[i] : "NULL"));
-          }
-        }
       }
-      if (print_results && colNeedle == 0) {
-        //Out.println(" " + out);
-      }
-      //out = "";
       return 0;
     }
 
