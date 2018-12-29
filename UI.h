@@ -198,13 +198,24 @@ class UIUtils {
       pos += Out.println("           (c+)  tobozo  2018   ");
       pos += Out.println("         ");
       tft.drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, 106, Out.scrollPosY - pos + 8, 28,  28);
-      drawRoundRect( 56, Out.scrollPosY, 128, pos, 8, BLECardTheme.borderColor );
+      drawRoundRect( 56, Out.scrollPosY, 128, pos, 8, BLE_GREENYELLOW );
       //drawRoundRect( 1,  Out.scrollPosY-blockHeight, Out.width - 2,  blockHeight -2, 4, BLECardTheme.borderColor );
       for (int i = 0; i < 5; i++) {
         Out.println(SPACE);
       }
-      AmigaBall.animate( 5000 );
       giveMuxSemaphore();
+      xTaskCreatePinnedToCore(introUntilScroll, "introUntilScroll", 2048, NULL, 1, NULL, 1);
+    }
+
+
+    static void introUntilScroll( void * param ) {
+      int initialscrollPosY = Out.scrollPosY;
+      // animate until the scroll is called
+      while(initialscrollPosY == Out.scrollPosY) {
+        AmigaBall.animate(1, false);
+        delay(1);
+      }
+      vTaskDelete(NULL);
     }
 
 
@@ -651,8 +662,7 @@ class UIUtils {
       }
 
       if( Time_is_set ) {
-        if ( BleCard->hits > 1 && BleCard->created_at.year() > 1970) {
-          blockHeight += Out.println(SPACE);
+        if ( BleCard->hits > 1 ) {
   
           char hitsTimeStampStr[48];
           const char* hitsTimeStampTpl = "      %04d/%02d/%02d %02d:%02d:%02d %s";
@@ -664,7 +674,7 @@ class UIUtils {
             sprintf(hitsStr, "(%d hits)", BleCard->hits);
           }
   
-          if( BleCard->updated_at.unixtime() > 0 ) {
+          if( BleCard->updated_at.unixtime() > 0 /* BleCard->created_at.year() > 1970 */) {
             unsigned long age_in_seconds = abs( BleCard->created_at.unixtime() - BleCard->updated_at.unixtime() );
             unsigned long age_in_minutes = age_in_seconds / 60;
             unsigned long age_in_hours   = age_in_minutes / 60;
@@ -680,20 +690,23 @@ class UIUtils {
             );
             Serial.println( freq * 1000 );
           }
-          
-          sprintf(hitsTimeStampStr, hitsTimeStampTpl, 
-            BleCard->created_at.year(),
-            BleCard->created_at.month(),
-            BleCard->created_at.day(),
-            BleCard->created_at.hour(),
-            BleCard->created_at.minute(),
-            BleCard->created_at.second(),
-            hitsStr
-          );
-          hop = Out.println( hitsTimeStampStr );
-          blockHeight += hop;
-  
-          tft.drawJpg( clock_jpeg, clock_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
+
+          if( BleCard->created_at.year() > 1970 ) {
+            blockHeight += Out.println(SPACE);
+            sprintf(hitsTimeStampStr, hitsTimeStampTpl, 
+              BleCard->created_at.year(),
+              BleCard->created_at.month(),
+              BleCard->created_at.day(),
+              BleCard->created_at.hour(),
+              BleCard->created_at.minute(),
+              BleCard->created_at.second(),
+              hitsStr
+            );
+            hop = Out.println( hitsTimeStampStr );
+            blockHeight += hop;
+    
+            tft.drawJpg( clock_jpeg, clock_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
+          }
           
         }
       }
