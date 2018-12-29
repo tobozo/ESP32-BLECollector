@@ -32,9 +32,6 @@
 #define SPACE " "
 static bool isScrolling = false;
 
-static xSemaphoreHandle mux = NULL; // this is needed to prevent rendering collisions 
-                                    // between scrollpanel and heap graph
-
 class ScrollableOutput {
   public:
     uint16_t height = tft.height();//ILI9341_HEIGHT (=320)

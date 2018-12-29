@@ -94,7 +94,8 @@ const char* welcomeMessage = WELCOME_MESSAGE;
 const char* BUILDSIGNATURE = BUILD_SIGNATURE;
 uint32_t sizeofneedle = strlen(needle);
 uint32_t sizeoftrail = strlen(welcomeMessage) - sizeofneedle;
-
+static xSemaphoreHandle mux = NULL; // this is needed to prevent rendering collisions 
+                                    // between scrollpanel and heap graph
 int8_t timeZone = 1;
 int8_t minutesTimeZone = 0;
 const char* NTP_SERVER = "europe.pool.ntp.org";
@@ -168,7 +169,7 @@ static int results = 0; // total results during last query
 static unsigned int entries = 0; // total entries in database
 static byte prune_trigger = 0; // incremented on every insertion, reset on prune()
 static byte prune_threshold = 10; // prune every x inertions
-static bool print_results = false;
+//static bool print_results = false;
 static bool print_tabular = true;
 
 // load stack
