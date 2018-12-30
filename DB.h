@@ -401,6 +401,10 @@ class DBUtils {
         updateDBFromCache( BLEDevRAMCache );
         needsReplication = false;
       }
+      if( hourChangeTrigger ) {
+        updateDBFromCache( BLEDevRAMCache, false );
+        hourChangeTrigger = false;
+      }
       if( needsRestart ) {
         ESP.restart();
       }
@@ -522,7 +526,7 @@ class DBUtils {
       results = 0;
       open(BLE_VENDOR_NAMES_DB);
       //Out.println("Cloning Vendors DB to PSRam...");
-      UI.headerStats("Cloning...");
+      UI.headerStats("PSRam Cloning...");
       int rc = sqlite3_exec(BLEVendorsDB, "SELECT id, SUBSTR(vendor, 0, 32) as vendor FROM 'ble-oui' where vendor!=''", VendorDBCallback, (void*)dataVendor, &zErrMsg);
       UI.PrintProgressBar( Out.width );
       if (rc != SQLITE_OK) {
@@ -543,7 +547,7 @@ class DBUtils {
       results = 0;
       open(MAC_OUI_NAMES_DB);
       //Out.println("Cloning Manufacturers DB to PSRam...");
-      UI.headerStats("Cloning...");
+      UI.headerStats("PSRam Cloning...");
       int rc = sqlite3_exec(OUIVendorsDB, "SELECT LOWER(assignment) as mac, SUBSTR(`Organization Name`, 0, 32) as ouiname FROM 'oui-light'", OUIDBCallback, (void*)dataOUI, &zErrMsg);
       UI.PrintProgressBar( Out.width );
       if (rc != SQLITE_OK) {
@@ -774,17 +778,21 @@ class DBUtils {
       UI.headerStats("Updated item");
     }
 
-    bool updateDBFromCache( BlueToothDevice** SourceCache ) {
+    bool updateDBFromCache( BlueToothDevice** SourceCache, bool resetAfter = true ) {
       for(uint16_t i=0; i<BLEDEVCACHE_SIZE ;i++) {
         if( isEmpty( SourceCache[i]->address ) ) continue;
         if( SourceCache[i]->is_anonymous ) {
-          BLEDevHelper.reset( SourceCache[i] );
+          if( resetAfter ) {
+            BLEDevHelper.reset( SourceCache[i] );
+          }
           continue;
         }
         BLEDevTmp = SourceCache[i];
         UI.printBLECard( BLEDevTmp ); // render 
         updateItemFromCache( SourceCache[i] );
-        BLEDevHelper.reset( SourceCache[i] );
+        if( resetAfter ) {
+          BLEDevHelper.reset( SourceCache[i] );
+        }
         cacheState();
         UI.cacheStats();
       }

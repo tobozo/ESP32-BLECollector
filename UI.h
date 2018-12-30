@@ -44,10 +44,13 @@
 // sizing the UI
 #define HEADER_HEIGHT 40 // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
 #define FOOTER_HEIGHT 40 // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
-#define SCROLL_HEIGHT ( tft.height() - ( HEADER_HEIGHT + FOOTER_HEIGHT ))
-
+#define SCROLL_HEIGHT ( Out.height - ( HEADER_HEIGHT + FOOTER_HEIGHT ))
 // heap map settings
 #define HEAPMAP_BUFFLEN 61 // graph width (+ 1 for hscroll)
+#define GRAPH_LINE_WIDTH HEAPMAP_BUFFLEN - 1
+#define GRAPH_LINE_HEIGHT 35
+#define GRAPH_X (Out.width - GRAPH_LINE_WIDTH - 2)
+#define GRAPH_Y 283
 // heap management (used by graph)
 static uint32_t min_free_heap = 90000; // sql out of memory errors eventually occur under 100000
 static uint32_t initial_free_heap = freeheap;
@@ -99,7 +102,51 @@ enum BLECardThemes {
 };
 
 
+char *macAddressToColorStr = (char*)calloc(MAC_LEN+1, sizeof(char*));
+byte macBytesToBMP[8];
+uint16_t macBytesToColors[128];
 
+uint16_t macAddressToColor( const char *address ) {
+  memcpy( macAddressToColorStr, address, MAC_LEN+1);
+  char *token;
+  char *ptr;
+  byte tokenpos = 0, msb, lsb;
+  token = strtok(macAddressToColorStr, ":");
+  while(token != NULL) {
+    byte val = strtol(token, &ptr, 16);
+    switch( tokenpos )  {
+      case 0: msb = val; break;
+      case 1: lsb = val; break;
+      default: 
+        byte macpos = tokenpos-2;
+        macBytesToBMP[macpos] = val; 
+        macBytesToBMP[7-macpos]= val;
+      break;
+    }
+    tokenpos++;
+    token = strtok(NULL, ":");
+  }
+  uint16_t color = (msb*256) + lsb;
+  byte curs = 0;
+  for(byte i=0;i<8;i++) {
+    for(byte j=0;j<8;j++) {
+      if( bitRead( macBytesToBMP[j], i ) == 1 ) {
+        macBytesToColors[curs++] =  color;
+        macBytesToColors[curs++] =  color;
+      } else {
+        macBytesToColors[curs++] =  BLE_WHITE;
+        macBytesToColors[curs++] =  BLE_WHITE;
+      }
+    }
+  }
+  return color;
+}
+
+static uint16_t imgBuffer[320];
+
+//#define SCREEN_CAP_BUFSIZE GRAPH_LINE_WIDTH*GRAPH_LINE_HEIGHT
+
+uint16_t screenCapBuffer[76*40];
 
 class UIUtils {
   public:
@@ -156,7 +203,7 @@ class UIUtils {
       }
       Out.setupScrollArea(HEADER_HEIGHT, FOOTER_HEIGHT);
       tft.setTextColor( BLE_WHITE, BLECARD_BGCOLOR );
-      
+
       SDSetup();
       timeSetup();
       #if RTC_PROFILE > ROGUE // NTP_MENU and CHRONOMANIAC SD-mirror themselves
@@ -170,6 +217,7 @@ class UIUtils {
       } else {
         Out.scrollNextPage();
       }
+      
     }
 
 
@@ -205,6 +253,55 @@ class UIUtils {
       }
       giveMuxSemaphore();
       xTaskCreatePinnedToCore(introUntilScroll, "introUntilScroll", 2048, NULL, 1, NULL, 1);
+    }
+
+
+    static void screenShot() {
+      const char* screenshotFilenameTpl = "/screenshot-%04d-%02d-%02d_%02dh%02dm%02ds.565";
+      char fileName[42];
+      sprintf(fileName, screenshotFilenameTpl, year(), month(), day(), hour(), minute(), second());
+      //Serial.println("Will open file for creation");
+      File screenshotFile = BLE_FS.open( fileName, FILE_WRITE);
+      if(!screenshotFile) {
+        screenshotFile.close();
+        return;
+      }
+      uint16_t screenshotWidth  = Out.width;
+      uint16_t screenshotHeight = Out.height;
+      //Serial.printf("Will scan %d lines of %d pixels / %d bytes\n", screenshotHeight, screenshotWidth, sizeof(uint16_t)*screenshotWidth);
+      // TODO: compensate for the scrollArea jump
+      for(uint16_t y=0; y<screenshotHeight; y++) {
+        memset((uint8_t*)imgBuffer, 0, sizeof(uint16_t)*screenshotWidth);
+        takeMuxSemaphore();
+        tft.readPixels(0, y, screenshotWidth, 1, imgBuffer);
+        screenshotFile.write( (uint8_t*)imgBuffer, sizeof(uint16_t)*screenshotWidth );
+        giveMuxSemaphore();
+        vTaskDelay(1);
+      }
+      screenshotFile.close();
+      Serial.printf("Screenshot saved as %s, now go to http://rawpixels.net/ to decode it (RGB565 240x320 Little Endian)\n", fileName);
+    }
+
+    static void screenShow( void * param = NULL ) {
+      if( param == NULL ) return;
+      Serial.printf("Should open file %s\n", (const char*) param);
+      File screenshotFile = BLE_FS.open( (const char*)param );
+      if(!screenshotFile) {
+        screenshotFile.close();
+        return;
+      }
+      uint16_t screenshotWidth  = Out.width;
+      uint16_t screenshotHeight = Out.height;
+      for(uint16_t y=0; y<screenshotHeight; y++) {
+        memset((uint8_t*)imgBuffer, 0, sizeof(uint16_t)*screenshotWidth);
+        takeMuxSemaphore();
+        screenshotFile.read( (uint8_t*)imgBuffer, sizeof(uint16_t)*screenshotWidth );
+        tft.startWrite();
+        tft.setAddrWindow(0, y, screenshotWidth, 1);
+        tft.writePixels(imgBuffer, screenshotWidth);
+        tft.endWrite();
+        giveMuxSemaphore();
+      }
     }
 
 
@@ -484,10 +581,7 @@ class UIUtils {
       uint32_t lastfreeheap;
       uint32_t toleranceheap = min_free_heap + heap_tolerance;
       uint8_t i = 0;
-      uint32_t GRAPH_LINE_WIDTH = HEAPMAP_BUFFLEN - 1;
-      uint32_t GRAPH_LINE_HEIGHT = 35;
-      uint16_t GRAPH_X = Out.width - GRAPH_LINE_WIDTH - 2;
-      uint16_t GRAPH_Y = 283;
+
       while (1) {
 
         if (isScrolling) {
@@ -604,7 +698,7 @@ class UIUtils {
       log_d("  [printBLECard] %s will be rendered", BleCard->address);
 
       takeMuxSemaphore();
-
+      memcpy( lastPrintedMac[lastPrintedMacIndex++ % BLECARD_MAC_CACHE_SIZE], BleCard->address, MAC_LEN+1 );
       uint16_t randomcolor = tft.color565( random(128, 255), random(128, 255), random(128, 255) );
       uint16_t blockHeight = 0;
       uint16_t hop;
@@ -622,20 +716,26 @@ class UIUtils {
           BLECardTheme.setTheme( NOT_IN_CACHE_ANON );
         }
       }
-      
       tft.setTextColor( BLECardTheme.textColor, BLECardTheme.bgColor );
+      
       BGCOLOR = BLECardTheme.bgColor;
       hop = Out.println( SPACE );
       blockHeight += hop;
 
-      memcpy( lastPrintedMac[lastPrintedMacIndex++ % BLECARD_MAC_CACHE_SIZE], BleCard->address, MAC_LEN+1 );
 
       char addressStr[24] = {'\0'};
       sprintf( addressStr, addressTpl, BleCard->address );
       hop = Out.println( addressStr );
       blockHeight += hop;
-      char dbmStr[16];
 
+      //if ( !isEmpty( BleCard->ouiname ) && strcmp( BleCard->ouiname, "[random]" )!=0 ) {
+        uint16_t macColor = macAddressToColor( (const char*) BleCard->address );
+        tft.drawBitmap( 150, Out.scrollPosY - hop, 16, 8, macBytesToColors );
+        //maclastbytes
+        //tft.setTextColor( macColor, BLE_WHITE /*BLECardTheme.bgColor */);
+      //}
+      
+      char dbmStr[16];
       sprintf( dbmStr, dbmTpl, BleCard->rssi );
       alignTextAt( dbmStr, 0, Out.scrollPosY - hop, BLECardTheme.textColor, BLECardTheme.bgColor, ALIGN_RIGHT );
       tft.setCursor( 0, Out.scrollPosY );

@@ -99,6 +99,22 @@ static xSemaphoreHandle mux = NULL; // this is needed to prevent rendering colli
 int8_t timeZone = 1;
 int8_t minutesTimeZone = 0;
 const char* NTP_SERVER = "europe.pool.ntp.org";
+static bool RTC_is_running = false;
+static bool forceBleTime = false;
+// some date/time formats used in this app
+const char* hhmmStringTpl = "  %02d:%02d  ";
+static char hhmmString[13] = "  --:--  ";
+const char* hhmmssStringTpl = "%02d:%02d:%02d";
+static char hhmmssString[13] = "--:--:--"; 
+const char* UpTimeStringTpl = "  %02d:%02d  ";
+static char UpTimeString[13] = "  --:--  ";
+const char* YYYYMMDD_HHMMSS_Tpl = "%04d-%02d-%02d %02d:%02d:%02d";
+static char YYYYMMDD_HHMMSS_Str[32] = "YYYY-MM-DD HH:MM:SS";
+static bool dayChangeTrigger = false;
+static bool hourChangeTrigger = false;
+
+int current_day = -1;
+int current_hour = -1;
 
 // used to get the resetReason
 #include <rom/rtc.h>
@@ -181,6 +197,7 @@ static bool print_tabular = true;
 #if RTC_PROFILE == CHRONOMANIAC ||  RTC_PROFILE == NTP_MENU
   #include "SDUpdater.h" // multi roms system
 #endif
+#include "NTP.h"
 #include "TimeUtils.h"
 #include "UI.h"
 #include "DB.h"

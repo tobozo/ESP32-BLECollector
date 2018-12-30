@@ -1,4 +1,107 @@
 
+enum TimeUpdateSources {
+  SOURCE_NONE = 0,
+  SOURCE_COMPILER = 1,
+  SOURCE_RTC = 2,
+  SOURCE_NTP = 3,
+  SOURCE_BLE = 4
+};
+
+void logTimeActivity(TimeUpdateSources source, int epoch) {
+  preferences.begin("BLEClock", false);
+  preferences.clear();
+  //DateTime epoch = RTC.now();
+  preferences.putUInt("epoch", epoch);
+  preferences.putUChar("source", source);
+  preferences.end();
+}
+
+void resetTimeActivity(TimeUpdateSources source) {
+  preferences.begin("BLEClock", false);
+  preferences.clear();
+  preferences.putUInt("epoch", 0);
+  preferences.putUChar("source", source);
+  preferences.end();
+}
+
+struct TimeActivity {
+  DateTime epoch;
+  byte source;
+};
+
+
+
+static void checkForTimeUptade( DateTime &internalDateTime ) {
+  bool checkNTP = false;
+  #if RTC_PROFILE > HOBO // have external RTC
+    DateTime externalDateTime = RTC.now();
+  #else // only have internal RTC
+    DateTime externalDateTime = internalDateTime;
+  #endif
+  int64_t seconds_since_last_ntp_update = abs( externalDateTime.unixtime() - lastSyncDateTime.unixtime() );
+  if ( seconds_since_last_ntp_update > 86400 ) {
+    log_e("seconds_since_last_ntp_update = now(%d) - last(%d) = %d seconds", externalDateTime.unixtime(), lastSyncDateTime.unixtime(), seconds_since_last_ntp_update);
+    checkNTP = true;
+  } else {
+    checkNTP = false;
+  }
+  if( checkNTP ) {
+    #if RTC_PROFILE == CHRONOMANIAC // has external RTC, can update time from NTPMenu.bin using WiFi + SNTP
+      rollBackOrUpdateFromFS( BLE_FS, NTP_MENU_FILENAME );
+    #else // will trigger bletime if any BLETimeServer is found
+      forceBleTime = true;
+    #endif
+  } else { // just calculate the drift
+    int64_t drift = abs( externalDateTime.unixtime() - internalDateTime.unixtime() );
+    Serial.printf("[Hourly Synching Clocks] : %d seconds drift", drift);
+    // - adjust internal RTC
+    #if RTC_PROFILE > HOBO // have external RTC, adjust internal RTC accordingly
+      setTime( externalDateTime.unixtime() );
+      if(drift > 1) {
+        log_e("[***** WTF Clocks don't agree after adjustment] %d - %d = %d\n", internalDateTime.unixtime(), externalDateTime.unixtime(), drift);  
+      } else {
+        log_e("[***** OK Clocks agree] %d - %d = %d\n", internalDateTime.unixtime(), externalDateTime.unixtime(), drift);
+      }
+    #endif
+  }
+}
+
+
+
+
+
+
+  void TimeInit() {
+    preferences.begin("BLEClock", true);
+    lastSyncDateTime = preferences.getUInt("epoch", millis());
+    byte clockUpdateSource   = preferences.getUChar("source", 0);
+    preferences.end();
+    sprintf(YYYYMMDD_HHMMSS_Str, YYYYMMDD_HHMMSS_Tpl, 
+      lastSyncDateTime.year(),
+      lastSyncDateTime.month(),
+      lastSyncDateTime.day(),
+      lastSyncDateTime.hour(),
+      lastSyncDateTime.minute(),
+      lastSyncDateTime.second()
+    );
+    log_e("Defrosted lastSyncDateTime from NVS (may be bogus) : %s - source : %d", YYYYMMDD_HHMMSS_Str, clockUpdateSource);
+    #if RTC_PROFILE > HOBO
+      if(clockUpdateSource==SOURCE_NONE) {
+        if(RTC.isrunning()) {
+          log_d("[RTC] Forcing source to RTC and rebooting");
+          logTimeActivity(SOURCE_RTC, 0);
+          ESP.restart();
+        } else {
+          log_d("[RTC] isn't running!");
+          return;
+        }
+      }
+      nowDateTime = RTC.now();
+      Time_is_set = true;
+    #endif
+  }
+
+#ifdef BUILD_NTPMENU_BIN
 
   HTTPClient http;
   SDUpdater sdUpdater;
@@ -14,7 +117,6 @@
   boolean NTPSyncEventTriggered = false; // True if a time even has been triggered
   NTPSyncEvent_t ntpEvent; // Last triggered event
   boolean RTCAdjusted = false;
-  
   
   // used to retrieve DB files from the webs :]
   void wget(String bin_url, String appName, const char* &ca ) {
@@ -202,4 +304,5 @@
     });
     NTPSync();
   }
-  
+
+#endif
