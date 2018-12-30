@@ -57,7 +57,7 @@ static bool scanTaskStopped = true;
 
 static char* serialBuffer = NULL;
 static char* tempBuffer = NULL;
-#define SERIAL_BUFFER_SIZE 32
+#define SERIAL_BUFFER_SIZE 48
 
 unsigned long lastheap = 0;
 uint16_t lastscanduration = SCAN_DURATION;
@@ -116,12 +116,13 @@ static void setBLETime() {
     LocalTime.minute(),
     LocalTime.second()
   );
-  #if RTC_PROFILE > HOBO // all profiles manage time except HOBO
+  #if RTC_PROFILE > HOBO
     RTC.adjust(LocalTime);
   #endif
   logTimeActivity(SOURCE_BLE, LocalTime.unixtime() );
   hasBTTime = true; 
   dayChangeTrigger = true; 
+  timeHousekeeping();
 }
 
 
@@ -146,7 +147,6 @@ class TimeClientCallback : public BLEClientCallbacks {
       foundTimeServer = true;
       log_e("[Heap: %06d] Disconnect with time!!", freeheap);
     }
-    //pBLEScan->erase(pC->getPeerAddress());
   }
 };
 
@@ -154,18 +154,20 @@ class FoundDeviceCallback: public BLEAdvertisedDeviceCallbacks {
 
   void onResult(BLEAdvertisedDevice advertisedDevice) {
 
+    // TODO: add security
     if (advertisedDevice.haveServiceUUID() && advertisedDevice.isAdvertisingService( timeServiceUUID )) {
       stdBLEAddress = advertisedDevice.getAddress().toString();
       pClientType = advertisedDevice.getAddressType();
       foundTimeServer = true;
-      if( foundTimeServer && !Time_is_set ) {
+      if( (foundTimeServer && !Time_is_set) || forceBleTime ) {
         scan_cursor = 0;
         processedDevicesCount = 0;
         onScanDone = true;
+        forceBleTime = false;
         advertisedDevice.getScan()->stop();
+        // log_e("[Heap: %06d] Found TimeServer !!", freeheap);
         return;
       }
-      // log_e("[Heap: %06d] Found TimeServer !!", freeheap);
     }
 
     if( onScanDone  ) return;
@@ -341,6 +343,21 @@ class BLEScanUtils {
       startScanCB();
       vTaskDelete( NULL );
     }
+    static void screenShowCB( void * param = NULL ) {
+      xTaskCreate(screenShowTask, "screenShowTask", 16000, param, 2, NULL);
+    }
+    static void screenShowTask( void * param = NULL ) {
+      UI.screenShow( param );
+      vTaskDelete(NULL);
+    }
+    
+    static void screenShotCB( void * param = NULL ) {
+      xTaskCreate(screenShotTask, "screenShotTask", 16000, NULL, 2, NULL);
+    }
+    static void screenShotTask( void * param = NULL ) {
+      UI.screenShot();
+      vTaskDelete(NULL);
+    }
     static void listDirCB( void * param = NULL ) {
       stopScanCB();
       delay(100);
@@ -375,6 +392,8 @@ class BLEScanUtils {
         { "rm",           rmFileCB,       "Delete a file from the SD" },
         { "restart",      restartCB,      "Restart BLECollector" },
         { "bletime",      startTimeClient,"Get time from another BLE Device" },
+        { "screenshot",   screenShotCB,   "Make a screenshot and save it on the SD" },
+        { "screenshow",   screenShowCB,   "Show a screenshot" },
         #if RTC_PROFILE > ROGUE
         { "update",       updateCB,       "Update time and DB files (requires pre-flashed NTPMenu.bin on the SD)" },
         #endif
@@ -703,7 +722,7 @@ class BLEScanUtils {
 
       UI.stopBlink();
 
-      if( foundTimeServer && !Time_is_set ) {
+      if( (foundTimeServer && !Time_is_set) || forceBleTime) {
         UI.headerStats("BLE Time sync ...");
         xTaskCreatePinnedToCore(TimeClientTask, "TimeClientTask", 12000, NULL, 0, NULL, 0); /* last = Task Core */
         scanTaskRunning = false;
