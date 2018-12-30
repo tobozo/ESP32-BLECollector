@@ -2,7 +2,7 @@
 
 Like a BLE Scanner but with persistence.
 
-  [![ESP32 BLECollector running on Wrover-Kit](https://user-images.githubusercontent.com/1893754/47954059-fe9ac380-df85-11e8-8da9-16710a60555b.png)](https://www.youtube.com/watch?v=434LDAfpGjE)
+  [![ESP32 BLECollector running on Wrover-Kit](https://raw.githubusercontent.com/tobozo/ESP32-BLECollector/master/screenshots/capture3.png)](https://www.youtube.com/watch?v=434LDAfpGjE)
 
 
 
