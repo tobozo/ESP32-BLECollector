@@ -669,6 +669,7 @@ class BLEScanUtils {
         if( BLEDevScanCache[_scan_cursor]->is_anonymous ) {
           // won't land in DB (won't be checked either) but will land in cache
           uint16_t nextCacheIndex = BLEDevHelper.getNextCacheIndex( BLEDevRAMCache, BLEDevCacheIndex );
+          BLEDevHelper.reset( BLEDevRAMCache[nextCacheIndex] );
           BLEDevScanCache[_scan_cursor]->hits++;
           BLEDevHelper.copyItem( BLEDevScanCache[_scan_cursor], BLEDevRAMCache[nextCacheIndex] );
           log_d( "Device %d / %s is anonymous, won't be inserted", _scan_cursor, BLEDevScanCache[_scan_cursor]->address, BLEDevScanCache[_scan_cursor]->hits );
@@ -676,6 +677,7 @@ class BLEScanUtils {
           deviceIndexIfExists = DB.deviceExists( BLEDevScanCache[_scan_cursor]->address ); // will load returning devices from DB if necessary
           if(deviceIndexIfExists>-1) {
             uint16_t nextCacheIndex = BLEDevHelper.getNextCacheIndex( BLEDevRAMCache, BLEDevCacheIndex );
+            BLEDevHelper.reset( BLEDevRAMCache[nextCacheIndex] );
             BLEDevDBCache->hits++;
             if( Time_is_set ) {
               if( BLEDevDBCache->created_at.year() <= 1970 ) {
