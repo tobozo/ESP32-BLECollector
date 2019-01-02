@@ -247,7 +247,6 @@ class UIUtils {
       pos += Out.println("         ");
       tft.drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, 106, Out.scrollPosY - pos + 8, 28,  28);
       drawRoundRect( 56, Out.scrollPosY, 128, pos, 8, BLE_GREENYELLOW );
-      //drawRoundRect( 1,  Out.scrollPosY-blockHeight, Out.width - 2,  blockHeight -2, 4, BLECardTheme.borderColor );
       for (int i = 0; i < 5; i++) {
         Out.println(SPACE);
       }
@@ -260,48 +259,49 @@ class UIUtils {
       const char* screenshotFilenameTpl = "/screenshot-%04d-%02d-%02d_%02dh%02dm%02ds.565";
       char fileName[42];
       sprintf(fileName, screenshotFilenameTpl, year(), month(), day(), hour(), minute(), second());
-      //Serial.println("Will open file for creation");
       File screenshotFile = BLE_FS.open( fileName, FILE_WRITE);
       if(!screenshotFile) {
+        Serial.printf("Failed to open file %s\n", fileName);
         screenshotFile.close();
         return;
       }
-      uint16_t screenshotWidth  = Out.width;
-      uint16_t screenshotHeight = Out.height;
-      //Serial.printf("Will scan %d lines of %d pixels / %d bytes\n", screenshotHeight, screenshotWidth, sizeof(uint16_t)*screenshotWidth);
-      // TODO: compensate for the scrollArea jump
-      for(uint16_t y=0; y<screenshotHeight; y++) {
-        memset((uint8_t*)imgBuffer, 0, sizeof(uint16_t)*screenshotWidth);
-        takeMuxSemaphore();
-        tft.readPixels(0, y, screenshotWidth, 1, imgBuffer);
-        screenshotFile.write( (uint8_t*)imgBuffer, sizeof(uint16_t)*screenshotWidth );
-        giveMuxSemaphore();
-        vTaskDelay(1);
+      takeMuxSemaphore();
+      for(uint16_t y=0; y<HEADER_HEIGHT; y++) { // header portion
+        tft.readPixels(0, y, Out.width, 1, imgBuffer);
+        screenshotFile.write( (uint8_t*)imgBuffer, sizeof(uint16_t)*Out.width );
       }
+      for(uint16_t y=Out.yStart; y<Out.height-FOOTER_HEIGHT; y++) { // lower scroll portion
+        tft.readPixels(0, y, Out.width, 1, imgBuffer);
+        screenshotFile.write( (uint8_t*)imgBuffer, sizeof(uint16_t)*Out.width );
+      }
+      for(uint16_t y=HEADER_HEIGHT; y<Out.yStart; y++) { // upper scroll portion
+        tft.readPixels(0, y, Out.width, 1, imgBuffer);
+        screenshotFile.write( (uint8_t*)imgBuffer, sizeof(uint16_t)*Out.width );
+      }
+      for(uint16_t y=Out.height-FOOTER_HEIGHT; y<Out.height; y++) { // footer portion
+        tft.readPixels(0, y, Out.width, 1, imgBuffer);
+        screenshotFile.write( (uint8_t*)imgBuffer, sizeof(uint16_t)*Out.width );
+      }
+      giveMuxSemaphore();
       screenshotFile.close();
       Serial.printf("Screenshot saved as %s, now go to http://rawpixels.net/ to decode it (RGB565 240x320 Little Endian)\n", fileName);
     }
 
     static void screenShow( void * param = NULL ) {
       if( param == NULL ) return;
-      Serial.printf("Should open file %s\n", (const char*) param);
       File screenshotFile = BLE_FS.open( (const char*)param );
       if(!screenshotFile) {
+        Serial.printf("Failed to open file %s\n", (const char*) param);
         screenshotFile.close();
         return;
       }
-      uint16_t screenshotWidth  = Out.width;
-      uint16_t screenshotHeight = Out.height;
-      for(uint16_t y=0; y<screenshotHeight; y++) {
-        memset((uint8_t*)imgBuffer, 0, sizeof(uint16_t)*screenshotWidth);
-        takeMuxSemaphore();
-        screenshotFile.read( (uint8_t*)imgBuffer, sizeof(uint16_t)*screenshotWidth );
-        tft.startWrite();
-        tft.setAddrWindow(0, y, screenshotWidth, 1);
-        tft.writePixels(imgBuffer, screenshotWidth);
-        tft.endWrite();
-        giveMuxSemaphore();
+      takeMuxSemaphore();
+      Out.scrollNextPage(); // reset scroll position to zero otherwise image will have offset
+      for(uint16_t y=0; y<Out.height; y++) {
+        screenshotFile.read( (uint8_t*)imgBuffer, sizeof(uint16_t)*Out.width );
+        tft.drawBitmap(0, y, Out.width, 1, imgBuffer);
       }
+      giveMuxSemaphore();
     }
 
 
