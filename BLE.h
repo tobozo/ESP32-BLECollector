@@ -176,6 +176,7 @@ class FoundDeviceCallback: public BLEAdvertisedDeviceCallbacks {
       BLEDevHelper.store( BLEDevScanCache[scan_cursor], advertisedDevice );
       bool is_random = strcmp( BLEDevScanCache[scan_cursor]->ouiname, "[random]" ) == 0;
       if( UI.filterVendors && is_random ) {
+        //TODO: scan_cursor++
         log_e( "Filtering %s", BLEDevScanCache[scan_cursor]->address );
       } else {
         if( DB.hasPsram ) {
@@ -235,7 +236,13 @@ struct CommandTpl {
 CommandTpl* SerialCommands;
 uint16_t Csize = 0;
 
+struct ToggleTpl {
+  const char *name;
+  bool &flag;
+};
 
+ToggleTpl* TogglableProps;
+uint16_t Tsize = 0;
 
 class BLEScanUtils {
 
@@ -313,11 +320,12 @@ class BLEScanUtils {
     }
     static void startDumpCB( void * param = NULL ) {
       DB.needsReplication = true;
-      stopScanCB();
+      bool scanWasRunning = scanTaskRunning;
+      if( scanTaskRunning ) stopScanCB();
       while( DB.needsReplication ) { 
         delay(1000);
       }
-      startScanCB();
+      if( scanWasRunning ) startScanCB();
     }
     static void toggleEchoCB( void * param = NULL ) {
       Out.serialEcho = !Out.serialEcho;
@@ -325,8 +333,6 @@ class BLEScanUtils {
       Serial.printf("Out.serialEcho = %s\n", Out.serialEcho ? "true" : "false" );
     }
     static void rmFileCB( void * param = NULL ) {
-      stopScanCB();
-      delay(100);
       xTaskCreatePinnedToCore(rmFileTask, "rmFileTask", 5000, param, 2, NULL, 1); /* last = Task Core */ 
     }
     static void rmFileTask( void * param = NULL ) {
@@ -340,7 +346,6 @@ class BLEScanUtils {
       } else {
         Serial.println("Nothing to delete");
       }
-      startScanCB();
       vTaskDelete( NULL );
     }
     static void screenShowCB( void * param = NULL ) {
@@ -359,15 +364,32 @@ class BLEScanUtils {
       vTaskDelete(NULL);
     }
     static void listDirCB( void * param = NULL ) {
-      stopScanCB();
-      delay(100);
       xTaskCreatePinnedToCore(listDirTask, "listDirTask", 5000, NULL, 2, NULL, 1); /* last = Task Core */      
     }
     static void listDirTask( void * param = NULL ) {
       listDir(BLE_FS, "/", 0, DB.BLEMacsDbFSPath);
-      startScanCB();
       vTaskDelete( NULL );    
     }
+    static void toggleCB( void * param = NULL ) {
+      bool setbool = true;
+      if( param != NULL ) {
+        // 
+      } else {
+        setbool = false;
+        Serial.println("\nCurrent property values:");
+      }
+      for( uint16_t i=0; i<Tsize; i++ ) {
+        if( setbool ) {
+          if( strcmp( TogglableProps[i].name, (const char*)param )==0 ) {
+            TogglableProps[i].flag = !TogglableProps[i].flag;
+            Serial.printf("Toggled flag %s to %s\n", TogglableProps[i].name, TogglableProps[i].flag ? "true" : "false");
+          }
+        } else {
+          Serial.printf("  %24s : [%s]\n", TogglableProps[i].name, TogglableProps[i].flag ? "true" : "false");
+        }
+      }
+    }
+
     static void nullCB( void * param = NULL ) {
       if( param != NULL ) {
         Serial.printf("nullCB param: %s\n", param);
@@ -394,6 +416,7 @@ class BLEScanUtils {
         { "bletime",      startTimeClient,"Get time from another BLE Device" },
         { "screenshot",   screenShotCB,   "Make a screenshot and save it on the SD" },
         { "screenshow",   screenShowCB,   "Show a screenshot" },
+        { "toggle",       toggleCB,       "toggle a bool value" },
         #if RTC_PROFILE > ROGUE
         { "update",       updateCB,       "Update time and DB files (requires pre-flashed NTPMenu.bin on the SD)" },
         #endif
@@ -402,7 +425,26 @@ class BLEScanUtils {
       };
       SerialCommands = Commands;
       Csize = (sizeof(Commands) / sizeof(Commands[0]));
+
+      ToggleTpl ToggleProps[] = {
+        { "Out.serialEcho",      Out.serialEcho },
+        { "DB.needsReset",       DB.needsReset },
+        { "DB.needsReplication", DB.needsReplication },
+        { "DB.needsPruning",     DB.needsPruning },
+        { "Time_is_set",         Time_is_set },
+        { "foundTimeServer",     foundTimeServer },
+        { "RTC_is_running",      RTC_is_running },
+        { "forceBleTime",        forceBleTime },
+        { "dayChangeTrigger",    dayChangeTrigger },
+        { "hourChangeTrigger",   hourChangeTrigger }
+      };
+      TogglableProps = ToggleProps;
+      Tsize = (sizeof(ToggleProps) / sizeof(ToggleProps[0]));
+      
       runCommand( (char*)"help" );
+      runCommand( (char*)"toggle" );
+      runCommand( (char*)"ls" );
+      
       static byte idx = 0;
       char lf = '\n';
       char cr = '\r';
@@ -441,20 +483,27 @@ class BLEScanUtils {
         char *token;
         char delim[2];
         char *args;
+        bool has_args = false;
         strncpy(delim," ",2); // strtok_r needs a null-terminated string
         
         if( strstr(command, delim) ) {
-          // command has arg
+          // turn command into token/arg
           token = strtok_r(command, delim, &args); // Search for command at start of buffer
           if( token != NULL ) {
-            Serial.printf("Ignoring: %s %s\n", token, args);
+            has_args = true;
+            //Serial.printf("[%s] Found arg for token '%s' : %s\n", command, token, args);
           }
         }
         for( uint16_t i=0; i<Csize; i++ ) {
           if( strcmp( SerialCommands[i].command, command )==0 ) {
-            Serial.printf( "Running '%s' command\n", SerialCommands[i].command );
-            SerialCommands[i].cb.function( args );
-            sprintf(command, "%s", "");
+            if( has_args ) {
+              Serial.printf( "Running '%s %s' command\n", token, args );
+              SerialCommands[i].cb.function( args );
+            } else {
+              Serial.printf( "Running '%s' command\n", SerialCommands[i].command );
+              SerialCommands[i].cb.function( NULL );
+            }
+            //sprintf(command, "%s", "");
             return;
           }
         }
@@ -466,7 +515,7 @@ class BLEScanUtils {
     static void startTimeClient( void * param) {
       if( foundTimeServer ) {
         stopScanCB();
-        xTaskCreatePinnedToCore(TimeClientTask, "TimeClientTask", 12000, NULL, 0, NULL, 0); /* last = Task Core */
+        xTaskCreatePinnedToCore(TimeClientTask, "TimeClientTask", 12000, NULL, 1, NULL, 0); /* last = Task Core */
       } else {
         Serial.println("Sorry, no time server available at the moment");
       }
@@ -474,7 +523,11 @@ class BLEScanUtils {
 
     static void TimeClientTask( void * param ) {
       log_e("[Heap: %06d] Will connect to address %s", freeheap, stdBLEAddress.c_str());
-      pClient->connect( stdBLEAddress, pClientType );
+      if( !pClient->connect( stdBLEAddress, pClientType ) ) {
+        log_e("[Heap: %06d] Failed to connect to address %s", freeheap, stdBLEAddress.c_str());  
+        vTaskDelete( NULL );
+        return;
+      }
       log_e("[Heap: %06d] Connected to address %s", freeheap, stdBLEAddress.c_str());
       BLERemoteService* pRemoteService = pClient->getService( timeServiceUUID );
       if (pRemoteService == nullptr) {
