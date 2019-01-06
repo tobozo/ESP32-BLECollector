@@ -30,99 +30,95 @@
 */
 
 
-
 static void timeHousekeeping() {
   unsigned long seconds_since_boot = millis() / 1000;
-  unsigned long  minutes_since_boot = seconds_since_boot / 60;
-  unsigned long  mm = minutes_since_boot % 60;
-  unsigned long  hh = minutes_since_boot / 60;
-  unsigned long  ss = seconds_since_boot % 60;
+  unsigned long minutes_since_boot = seconds_since_boot / 60;
+  unsigned long hours_since_boot   = minutes_since_boot / 60;
+  unsigned long days_since_boot    = hours_since_boot / 24;
+  unsigned long mm = minutes_since_boot % 60;
+  unsigned long hh = minutes_since_boot / 60;
+  unsigned long ss = seconds_since_boot % 60;
   
   DateTime internalDateTime = DateTime(year(), month(), day(), hour(), minute(), second());
 
-  #if RTC_PROFILE == HOBO
+  // before adjustment checks
+  if( current_hour != internalDateTime.hour() ) {
+    log_e("hourchangeTrigger=true (%d vs %d)", current_hour, internalDateTime.hour());
+    HourChangeTrigger = true;
+    current_hour = internalDateTime.hour();
+  }
 
-    if( abs( seconds_since_boot - internalDateTime.unixtime() ) > 2 ) {
-      // safe to assume internal RTC is running
-      sprintf(hhmmString, hhmmStringTpl, internalDateTime.hour(), internalDateTime.minute());
-      Time_is_set = true;
-      nowDateTime = internalDateTime;
-      if( current_hour != internalDateTime.hour() ) {
-        hourChangeTrigger = true;
-      }
-    }
-    sprintf(hhmmssString, hhmmssStringTpl, hh, mm, ss);
+  if( current_day!= internalDateTime.day() ) {
+    // day changed! update bool so DB.maintain() and BLE know what to do
+    log_e("DayChangeTrigger=true (%d vs %d)", current_day, internalDateTime.day());
+    DayChangeTrigger = true;
+    current_day = internalDateTime.day();
+  }
 
-  #else // RTC_PROFILE != HOBO
-
-    #ifdef BUILD_NTPMENU_BIN // NTPMENU mode
-
-      nowDateTime = internalDateTime;
-
-    #else // CHRONOMANIAC mode
-
-      if( current_hour != internalDateTime.hour() ) {
-        hourChangeTrigger = true;
-      }
-      // - get the time from the internal clock (saves I2C calls)
-      // - compare internal RTC time and external RTC time every hour
-      if( hourChangeTrigger ) {
-        checkForTimeUptade( internalDateTime ); // and update internal clock if necessary
+  #if SKETCH_MODE==SKETCH_MODE_BUILD_DEFAULT
+  
+    // - get the time from the internal clock
+    // - compare with external clocks sources if applicable
+    if( HourChangeTrigger ) {
+      if( checkForTimeUpdate( internalDateTime ) ) { // and update internal clock if necessary
         internalDateTime = DateTime(year(), month(), day(), hour(), minute(), second());
         current_hour = internalDateTime.hour();
       }
-  
-      if( current_day!= internalDateTime.day() ) {
-        // day changed! update bool so DB.maintain() and BLE know what to do
-        dayChangeTrigger = true;
-        current_day = internalDateTime.day();
-      }
-      nowDateTime = internalDateTime;
-
-    #endif // ifndef BUILD_NTPMENU_BIN
-
+    }
     sprintf(hhmmString, hhmmStringTpl, internalDateTime.hour(), internalDateTime.minute());
-    sprintf(hhmmssString, hhmmssStringTpl, internalDateTime.hour(), internalDateTime.minute(), internalDateTime.second());
+      
+    #if HAS_EXTERNAL_RTC
+    
+      if( abs( seconds_since_boot - internalDateTime.unixtime() ) > 2 ) { // internal datetime is set
+        // safe to assume internal RTC is running
+        TimeIsSet = true;
+      } 
+      sprintf(hhmmssString, hhmmssStringTpl, hh, mm, ss);
+      
+    #else // HAS_EXTERNAL_RTC=false
 
-  #endif // RTC_PROFILE != HOBO
+      sprintf(hhmmssString, hhmmssStringTpl, internalDateTime.hour(), internalDateTime.minute(), internalDateTime.second());
 
+    #endif // HAS_EXTERNAL_RTC
+
+  #endif // SKETCH_MODE==SKETCH_MODE_BUILD_DEFAULT
+
+  nowDateTime = internalDateTime;
   sprintf(UpTimeString, UpTimeStringTpl, hh, mm);
   log_d("Time:%s, Uptime:", hhmmString, UpTimeString );
 }
 
 
 bool RTCSetup() {
-  #if RTC_PROFILE == HOBO
-    log_d("[RTC] Hobo mode, no time to waste :)");
-    return false;
-  #else
+  #if HAS_EXTERNAL_RTC
     RTC.begin(RTC_SDA/*26*/, RTC_SCL/*27*/);
     delay(100);
     if (!RTC.isrunning()) { // first run use case (or dead RTC battery)
       log_e("[RTC] NOT running, will try to adjust from hardcoded value");
       RTC.adjust(DateTime(__DATE__, __TIME__));
       logTimeActivity(SOURCE_COMPILER, DateTime(__DATE__, __TIME__).unixtime() );
-      RTC_is_running = RTC.isrunning();
+      RTCisRunning = RTC.isrunning();
     } else {
       log_d("[RTC] running :-)");
-      RTC_is_running = true;
+      RTCisRunning = true;
     }
-    return RTC_is_running;
+    return RTCisRunning;
+  #else
+    log_d("[RTC] Hobo mode, no time to waste :)");
+    return false;
   #endif
 }
 
 
 void timeSetup() {
-  #if RTC_PROFILE==HOBO
-    return;
-  #else 
+  #if HAS_EXTERNAL_RTC
     if(!RTCSetup()) { // RTC failure ....
       log_e("RTC Failure, switching to hobo mode");
     }
-    #ifdef BUILD_NTPMENU_BIN
-      NTPSetup();
-    #else
+    #if SKETCH_MODE==SKETCH_MODE_BUILD_DEFAULT
       TimeInit();
+    #else
+      NTPSetup();
     #endif
   #endif
   timeHousekeeping();

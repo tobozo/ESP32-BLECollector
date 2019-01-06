@@ -87,6 +87,7 @@ class ScrollableOutput {
   private:
 
     int scroll(const char* str) {
+      tft.fillRect( 0, scrollTopFixedArea, 8, 8, BLE_RED );
       isScrolling = true;
       if (scrollPosY == -1) {
         scrollPosY = tft.getCursorY();

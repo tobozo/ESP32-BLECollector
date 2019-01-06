@@ -29,7 +29,7 @@
 
 */
 
-#ifdef BUILD_NTPMENU_BIN
+#if SKETCH_MODE==SKETCH_MODE_BUILD_NTP_UPDATER
 
   class DBUtils {
     public:
@@ -214,7 +214,7 @@ class DBUtils {
     bool hasPsram = false;
     bool needsPruning = false;
     bool needsReset = false;
-    bool needsReplication = false;
+    //bool needsReplication = false;
     bool needsRestart = false;
     bool initDone = false;
 
@@ -245,7 +245,7 @@ class DBUtils {
 
 
     void setBLEDBPath() {
-      if( Time_is_set ) {
+      if( TimeIsSet ) {
         //DateTime epoch = RTC.now();
         DateTime epoch = DateTime(year(), month(), day(), hour(), minute(), second());
         sprintf(BLEMacsDbSQLitePath, "/%s/ble-%04d-%02d-%02d.db",
@@ -390,20 +390,21 @@ class DBUtils {
         resetDB();
         needsReset = true;
       }
-      if( dayChangeTrigger ) {
-        dayChangeTrigger = false;
-        updateDBFromCache( BLEDevRAMCache );
+      if( DayChangeTrigger ) {
+        DayChangeTrigger = false;
         setBLEDBPath();
         createDB();
+        updateDBFromCache( BLEDevRAMCache, false );
         getEntries();
       }
-      if( needsReplication ) {
-        updateDBFromCache( BLEDevRAMCache );
-        needsReplication = false;
+      if( HourChangeTrigger ) {
+        DBneedsReplication = true;
+        HourChangeTrigger = false;
       }
-      if( hourChangeTrigger ) {
+      if( DBneedsReplication ) {
+        log_e("Replicating DB");
+        DBneedsReplication = false;
         updateDBFromCache( BLEDevRAMCache, false );
-        hourChangeTrigger = false;
       }
       if( needsRestart ) {
         ESP.restart();
@@ -597,61 +598,69 @@ class DBUtils {
     }
 
 
-    DBMessage insertBTDevice( BlueToothDevice **CacheItem, uint16_t _index) {
+    DBMessage insertBTDevice( BlueToothDevice *CacheItem) {
       if(isOOM) {
         // cowardly refusing to use DB when OOM
         return DB_IS_OOM;
       }
-      if( CacheItem[_index]->appearance==0 
-       && isEmpty( CacheItem[_index]->name )
-       && isEmpty( CacheItem[_index]->uuid )
-       && isEmpty( CacheItem[_index]->ouiname )
-       && isEmpty( CacheItem[_index]->manufname )
+      if( CacheItem->appearance==0 
+       && isEmpty( CacheItem->name )
+       && isEmpty( CacheItem->uuid )
+       && isEmpty( CacheItem->ouiname )
+       && isEmpty( CacheItem->manufname )
        ) {
         // cowardly refusing to insert empty result
         return INSERTION_IGNORED;
       }
       open(BLE_COLLECTOR_DB, false);
 
-      clean( CacheItem[_index]->name );
-      clean( CacheItem[_index]->ouiname );
-      clean( CacheItem[_index]->manufname );
-      clean( CacheItem[_index]->uuid );
+      clean( CacheItem->name );
+      clean( CacheItem->ouiname );
+      clean( CacheItem->manufname );
+      clean( CacheItem->uuid );
 
       sprintf(YYYYMMDD_HHMMSS_Str, YYYYMMDD_HHMMSS_Tpl, 
-        CacheItem[_index]->created_at.year(),
-        CacheItem[_index]->created_at.month(),
-        CacheItem[_index]->created_at.day(),
-        CacheItem[_index]->created_at.hour(),
-        CacheItem[_index]->created_at.minute(),
-        CacheItem[_index]->created_at.second()
+        CacheItem->created_at.year(),
+        CacheItem->created_at.month(),
+        CacheItem->created_at.day(),
+        CacheItem->created_at.hour(),
+        CacheItem->created_at.minute(),
+        CacheItem->created_at.second()
       );
 
       sprintf(insertQuery, insertQueryTemplate,
-        CacheItem[_index]->appearance,
-        CacheItem[_index]->name,
-        CacheItem[_index]->address,
-        CacheItem[_index]->ouiname,
-        CacheItem[_index]->rssi,
-        CacheItem[_index]->manufid,
-        CacheItem[_index]->manufname,
-        CacheItem[_index]->uuid,
+        CacheItem->appearance,
+        CacheItem->name,
+        CacheItem->address,
+        CacheItem->ouiname,
+        CacheItem->rssi,
+        CacheItem->manufid,
+        CacheItem->manufname,
+        CacheItem->uuid,
         YYYYMMDD_HHMMSS_Str,
         YYYYMMDD_HHMMSS_Str,
-        CacheItem[_index]->hits
+        CacheItem->hits
       );
       int rc = DBExec( BLECollectorDB, insertQuery );
       if (rc != SQLITE_OK) {
         log_e("SQlite Error occured when heap level was at %d : %s", freeheap, insertQuery);
         close(BLE_COLLECTOR_DB);
-        CacheItem[_index]->in_db = false;
+        CacheItem->in_db = false;
         return INSERTION_FAILED;
       }
       close(BLE_COLLECTOR_DB);
-      CacheItem[_index]->in_db = true;
+      CacheItem->in_db = true;
       return INSERTION_SUCCESS;
     }
 
+    void deleteBTDevice( const char* address ) {
+      char deleteItemStr[64];
+      const char* deleteTpl = "DELETE FROM blemacs WHERE address='%s'";
+      sprintf(deleteItemStr, deleteTpl, address );
+      open(BLE_COLLECTOR_DB);
+      DBExec( BLECollectorDB, deleteItemStr );
+      close(BLE_COLLECTOR_DB);
+    }
 
     void getVendor(uint16_t devid, char *dest) {
       if( hasPsram ) {
@@ -748,34 +757,17 @@ class DBUtils {
     }
 
 
+
     void updateItemFromCache( BlueToothDevice* CacheItem ) {
-      open(BLE_COLLECTOR_DB);
-      char updateItemStr[256] = {'\0'};
-      if( Time_is_set && CacheItem->created_at.year() <= 1970 ) {
-        CacheItem->created_at = DateTime(year(), month(), day(), hour(), minute(), second());
-      }
-      if( CacheItem->created_at.year() <= 1970 ) {
-        // only update hitcount
-        const char* updateItemTpl = "UPDATE blemacs SET hits='%d' WHERE address='%s'";
-        sprintf(updateItemStr, updateItemTpl, CacheItem->hits, CacheItem->address);        
+      // not really an update though
+      deleteBTDevice( CacheItem->address );
+      if( insertBTDevice( CacheItem ) != INSERTION_SUCCESS ) {
+        // whoops
+        Serial.printf("[BUMMER] Failed to re-insert device %s\n", CacheItem->address);
+        UI.headerStats("Updated failed");
       } else {
-        // update hits and time
-        sprintf(YYYYMMDD_HHMMSS_Str, YYYYMMDD_HHMMSS_Tpl, 
-          CacheItem->created_at.year(),
-          CacheItem->created_at.month(),
-          CacheItem->created_at.day(),
-          CacheItem->created_at.hour(),
-          CacheItem->created_at.minute(),
-          CacheItem->created_at.second()
-        );
-        //Serial.println( YYYYMMDD_HHMMSS_Str );
-        const char* updateItemTpl = "UPDATE blemacs SET created_at='%s.000000', hits='%d' WHERE address='%s'";
-        sprintf(updateItemStr, updateItemTpl, YYYYMMDD_HHMMSS_Str, CacheItem->hits, CacheItem->address);
+        UI.headerStats("Updated item");
       }
-      //Serial.println( updateItemStr );
-      DBExec( BLECollectorDB, updateItemStr );
-      close(BLE_COLLECTOR_DB);
-      UI.headerStats("Updated item");
     }
 
     bool updateDBFromCache( BlueToothDevice** SourceCache, bool resetAfter = true ) {
@@ -1008,7 +1000,7 @@ class DBUtils {
       } else {
         log_e("Device Pool Size Exceeded, ignoring: ");
         for (int i = 0; i < argc; i++) {
-          log_e("    %s = %s", (azColName[i], argv[i] ? argv[i] : "NULL"));
+          log_e("    %s = %s", azColName[i], argv[i] ? argv[i] : "NULL");
         }
       }
       return 0;
