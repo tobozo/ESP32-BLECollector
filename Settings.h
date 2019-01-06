@@ -33,21 +33,28 @@
     3 - "Chronomaniac": TinyRTC module adjusts itself via NTP (separate binary)
    
     Only profile 3 - "Chronomaniac" requires to compile this module in two 
-    different modes, see "#define BUILD_NTPMENU_BIN"
+    different modes, see "#define SKETCH_MODE"
  
 */
 // don't edit those
-#define HOBO 1 // No TinyRTC module in your build, without external BLETimeServer only uptime will be displayed
-#define ROGUE 2 // TinyRTC module adjusted after flashing, no WiFi, no NTP Sync
-#define CHRONOMANIAC 3 // TinyRTC module adjusts itself via NTP (by sd-loading a separate binary, see NTP_MENU)
-#define NTP_MENU 4 // use this to produce the NTPMenu.bin, only if you have a RTC module !!
+//#define HOBO 1 // No TinyRTC module in your build, can use BLETimeServer otherwise only uptime will be displayed
+#define HOBO         1 // wtf
+#define ROGUE        2 // TinyRTC module adjusted after flashing, no WiFi NTP Sync, can use BLETimeServer
+#define CHRONOMANIAC 3 // TinyRTC module adjusts itself via BLE or NTP by sd-loading a separate binary
+#define NTP_MENU     4 // use this to produce the NTPMenu.bin, only if you have a RTC module !!
+#define TIME_UPDATE_NONE 0 // update from nowhere, only using uptime as timestamps
+#define TIME_UPDATE_BLE  1 // update from BLE Time Server (see the /tools directory of this project)
+#define TIME_UPDATE_NTP  2 // update from NTP Time Server (requires WiFi and a separate build)
+#define TIME_UPDATE_GPS  3 // update from GPS external module (to be implemented)
+#define SKETCH_MODE_BUILD_DEFAULT     1 // build the BLE Collector
+#define SKETCH_MODE_BUILD_NTP_UPDATER 2 // build the NTP Updater for external RTC
 
-// edit this value to fit your mode
-#define RTC_PROFILE HOBO
-//#define RTC_PROFILE NTP_MENU // to build the NTPMenu.bin (will perform the NTP Sync)
-//#define RTC_PROFILE CHRONOMANIAC // to build the BLEMenu.bin with RTC support and NTP Sync
-//#define RTC_PROFILE ROGUE // to build the BLEMenu.bin with RTC support, but *without* NTP sync
-//#define RTC_PROFILE HOBO // to build the NTPMenu.bin *without* RTC/NTP support
+// edit these values to fit your mode
+#define HAS_EXTERNAL_RTC false
+#define TIME_UPDATE_SOURCE     TIME_UPDATE_BLE
+#define SKETCH_MODE     SKETCH_MODE_BUILD_DEFAULT
+//#define SKETCH_MODE     SKETCH_MODE_BUILD_NTP_UPDATER
+
 byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define MIN_SCAN_DURATION 10 // seconds min
 #define MAX_SCAN_DURATION 120 // seconds max
@@ -57,30 +64,36 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define MAC_LEN 17 // chars used by a mac address
 #define SHORT_MAC_LEN 7 // chars used by the oui part of a mac address
 
+// don't edit anything below this
+
 #define NTP_MENU_NAME "NTPMenu"
 #define BLE_MENU_NAME "BLEMenu"
 
-// don't edit anything below this
+#if SKETCH_MODE==SKETCH_MODE_BUILD_DEFAULT
+  #define BUILD_TYPE BLE_MENU_NAME
+  #if HAS_EXTERNAL_RTC
+   #if TIME_UPDATE_SOURCE==TIME_UPDATE_NTP
+     #define RTC_PROFILE "CHRONOMANIAC"
+     #define NEEDS_SDUPDATER
+   #else
+     #define RTC_PROFILE "ROGUE"
+   #endif
+  #else
+    #define RTC_PROFILE "HOBO"
+  #endif
+#else
+  #define BUILD_TYPE NTP_MENU_NAME
+  #define RTC_PROFILE "NTP_MENU"
+  #define NEEDS_SDUPDATER true
+  //#define WIFI_SSID "my-router-ssid"
+  //#define WIFI_PASSWD "my-router-passwd
+#endif
+
 #define MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN 4
 #define MAX_BLECARDS_WITHOUT_TIMESTAMPS_ON_SCREEN 5
 #define BLEDEVCACHE_PSRAM_SIZE 1024 // use PSram to cache BLECards
 #define BLEDEVCACHE_HEAP_SIZE 32 // use some heap to cache BLECards. min = 5, max = 64, higher value = smaller uptime
 #define MAX_DEVICES_PER_SCAN MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN // also max displayed devices on the screen, affects initial scan duration
-#if RTC_PROFILE==HOBO // no NTP for Hobo mode
-  #define BUILD_TYPE BLE_MENU_NAME
-#elif RTC_PROFILE==ROGUE // no NTP for Rogue mode
-  #define BUILD_TYPE BLE_MENU_NAME
-#elif RTC_PROFILE==CHRONOMANIAC // no NTP for Chronomaniac
-  #define BUILD_TYPE BLE_MENU_NAME
-#elif RTC_PROFILE==NTP_MENU // enable NTP support, disable everything else
-  // building 'NTPMenu.bin'
-  #define BUILD_NTPMENU_BIN
-  #define BUILD_TYPE NTP_MENU_NAME
-  //#define WIFI_SSID "my-router-ssid"
-  //#define WIFI_PASSWD "my-router-passwd"
-#else
-  #error "No valid RTC_PROFILE has been selected, please refer to the comments in Settings.h"
-#endif
 
 #define MENU_FILENAME "/" BUILD_TYPE ".bin"
 #define NTP_MENU_FILENAME "/" NTP_MENU_NAME ".bin"
@@ -94,13 +107,15 @@ const char* welcomeMessage = WELCOME_MESSAGE;
 const char* BUILDSIGNATURE = BUILD_SIGNATURE;
 uint32_t sizeofneedle = strlen(needle);
 uint32_t sizeoftrail = strlen(welcomeMessage) - sizeofneedle;
+
 static xSemaphoreHandle mux = NULL; // this is needed to prevent rendering collisions 
                                     // between scrollpanel and heap graph
 int8_t timeZone = 1;
 int8_t minutesTimeZone = 0;
 const char* NTP_SERVER = "europe.pool.ntp.org";
-static bool RTC_is_running = false;
-static bool forceBleTime = false;
+static bool RTCisRunning = false;
+static bool ForceBleTime = false;
+static bool HasBTTime = false;
 // some date/time formats used in this app
 const char* hhmmStringTpl = "  %02d:%02d  ";
 static char hhmmString[13] = "  --:--  ";
@@ -110,8 +125,9 @@ const char* UpTimeStringTpl = "  %02d:%02d  ";
 static char UpTimeString[13] = "  --:--  ";
 const char* YYYYMMDD_HHMMSS_Tpl = "%04d-%02d-%02d %02d:%02d:%02d";
 static char YYYYMMDD_HHMMSS_Str[32] = "YYYY-MM-DD HH:MM:SS";
-static bool dayChangeTrigger = false;
-static bool hourChangeTrigger = false;
+static bool DayChangeTrigger = false;
+static bool HourChangeTrigger = false;
+static bool DBneedsReplication = false;
 
 int current_day = -1;
 int current_hour = -1;
@@ -124,7 +140,7 @@ Preferences preferences;
 #include <TimeLib.h> // https://github.com/PaulStoffregen/Time
 #include "DateTime.h"
 
-#if RTC_PROFILE > HOBO
+#if HAS_EXTERNAL_RTC
   #include <Wire.h>
   // RTC Module: On Wrover Kit you can use the following pins (from the camera connector)
   // SCL = GPIO27 (SIO_C / SCCB Clock 4)
@@ -135,7 +151,7 @@ Preferences preferences;
   #define RTC_SCL 27 // pin number
 #endif
 
-#ifdef BUILD_NTPMENU_BIN
+#if SKETCH_MODE==SKETCH_MODE_BUILD_NTP_UPDATER
   #include <WiFi.h>
   #include <HTTPClient.h>
   #include <NtpClientLib.h> // https://github.com/gmag11/NtpClient
@@ -194,7 +210,7 @@ static bool print_tabular = true;
 #include "SDUtils.h"
 #include "BLECache.h" // data struct
 #include "ScrollPanel.h" // scrolly methods
-#if RTC_PROFILE == CHRONOMANIAC ||  RTC_PROFILE == NTP_MENU
+#ifdef NEEDS_SDUPDATER
   #include "SDUpdater.h" // multi roms system
 #endif
 #include "NTP.h"
