@@ -38,7 +38,7 @@ static uint8_t DateTimeConv2d(const char* p) {
   return 10 * v + *++p - '0';
 }
 
-static bool Time_is_set = false;
+static bool TimeIsSet = false;
 
 // Simple general-purpose date/time class (no TZ / DST / leap second handling!)
 class DateTime {
