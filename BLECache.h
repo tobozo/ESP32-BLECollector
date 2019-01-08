@@ -85,7 +85,8 @@ static bool isEmpty(const char* str ) {
 struct macScrollView {
   char address[MAC_LEN+1];
   uint16_t blockHeight = 0;
-  uint16_t scrollPosY = 0;
+  int scrollPosY = 0;
+  //int initialPosY = 0;
   uint16_t borderColor = 0;
 };
 static macScrollView MacScrollView[BLECARD_MAC_CACHE_SIZE]; // BLECard circular screen cache

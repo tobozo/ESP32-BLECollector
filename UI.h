@@ -242,7 +242,7 @@ class UIUtils {
       pos += Out.println("           (c+)  tobozo  2018   ");
       pos += Out.println("         ");
       tft.drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, 106, Out.scrollPosY - pos + 8, 28,  28);
-      drawRoundRect( 58, Out.scrollPosY, 128, pos, 8, BLE_GREENYELLOW );
+      drawScrollableRoundRect( 58, Out.scrollPosY-pos, 128, pos, 8, BLE_GREENYELLOW );
       for (int i = 0; i < 5; i++) {
         Out.println(SPACE);
       }
@@ -703,7 +703,7 @@ class UIUtils {
       uint16_t randomcolor = tft.color565( random(128, 255), random(128, 255), random(128, 255) );
       uint16_t blockHeight = 0;
       uint16_t hop;
-      uint16_t blah = (Out.yArea-(Out.scrollPosY-Out.scrollTopFixedArea));
+      uint16_t initialPosY = Out.scrollPosY;
       
       if( BleCard->in_db ) {
         if( BleCard->is_anonymous ) {
@@ -863,12 +863,15 @@ class UIUtils {
       }
       hop = Out.println( SPACE) ;
       blockHeight += hop;
-      drawRoundRect( 1, Out.scrollPosY-1, Out.width - 2, blockHeight-2, 4, BLECardTheme.borderColor );
+      uint16_t boxHeight = blockHeight-2;
+      uint16_t boxWidth  = Out.width - 2;
+      int boxPosY        = initialPosY - 1; // Out.scrollPosY- 1;
+      drawScrollableRoundRect( 1, boxPosY, boxWidth, boxHeight, 4, BLECardTheme.borderColor );
       lastPrintedMacIndex++;
       lastPrintedMacIndex = lastPrintedMacIndex % BLECARD_MAC_CACHE_SIZE;
       memcpy( MacScrollView[lastPrintedMacIndex].address, BleCard->address, MAC_LEN+1 );
       MacScrollView[lastPrintedMacIndex].blockHeight = blockHeight;
-      MacScrollView[lastPrintedMacIndex].scrollPosY = Out.scrollPosY;
+      MacScrollView[lastPrintedMacIndex].scrollPosY  = Out.scrollPosY;
       MacScrollView[lastPrintedMacIndex].borderColor = BLECardTheme.borderColor;
       giveMuxSemaphore();
     }
@@ -901,16 +904,19 @@ class UIUtils {
     static void highlighbBLECard( uint16_t card_index, uint16_t offset ) {
       if( card_index >= BLECARD_MAC_CACHE_SIZE) return;
       if( isEmpty( MacScrollView[card_index].address ) ) return;
-      uint16_t oldVirtualYPos = Out.scrollPosY - Out.scrollTopFixedArea;
-      uint16_t newVirtualYPos = (Out.yArea + (oldVirtualYPos - offset + MacScrollView[card_index].blockHeight )) % Out.yArea;
-      uint16_t newXPos = (newVirtualYPos + Out.scrollTopFixedArea);
+      int oldVirtualYPos = Out.scrollPosY - Out.scrollTopFixedArea;
+      int newVirtualYPos = (Out.yArea + (oldVirtualYPos - offset)) % Out.yArea;
+      int newYPos = (newVirtualYPos + Out.scrollTopFixedArea);
       headerStats( MacScrollView[card_index].address );
       takeMuxSemaphore();
       for( int16_t color=255; color>64; color-- ) {
-        drawRoundRect( 1, newXPos-1, Out.width-2, MacScrollView[card_index].blockHeight-2, 4, tft.color565(color, color, color) );
+        uint16_t boxHeight = MacScrollView[card_index].blockHeight-2;
+        uint16_t boxWidth  = Out.width - 2;
+        int boxPosY        = newYPos-1;
+        drawScrollableRoundRect( 1, boxPosY, boxWidth, boxHeight, 4, tft.color565(color, color, color) );
         delay(8);
       }
-      drawRoundRect( 1, newXPos-1, Out.width-2, MacScrollView[card_index].blockHeight-2, 4, MacScrollView[card_index].borderColor );
+      //drawScrollableRoundRect( 1, newYPos-1, Out.width-2, MacScrollView[card_index].blockHeight-2, 4, MacScrollView[card_index].borderColor );
       giveMuxSemaphore();
     }
 
@@ -938,45 +944,58 @@ class UIUtils {
     }
 
     // draw rounded corners boxes over the scroll limit
-    static void drawRoundRect(uint16_t x, int y, uint16_t width, uint16_t height, uint16_t radius, uint16_t color) {
-      int scrollPosY = y/*Out.scrollPosY*/ - height;
-      if (scrollPosY >= Out.scrollTopFixedArea) {
+    static void drawScrollableRoundRect(uint16_t x, int y, uint16_t width, uint16_t height, uint16_t radius, uint16_t color) {
+      //int scrollPosY = (y - height);
+      if ( y >= Out.scrollTopFixedArea && (y+height)<(Out.height-Out.scrollBottomFixedArea) ) {
         // no scroll loop point overlap, just render the box
         //tft.drawRoundRect(x+1, scrollPosY + 1, width, height - 2, radius, color);
-        tft.drawRoundRect(x, scrollPosY, width, height, radius, color);
+        tft.drawRoundRect(x, y, width, height, radius, color);
       } else {
-        // last block overlaps scroll loop point and has been split
-        int upperHeight      = Out.scrollTopFixedArea - scrollPosY;
-        int lowerHeight      = height - upperHeight;
 
+        //int oldVirtualYPos = y - Out.scrollTopFixedArea;
+        int yStart = y;
+        int yEnd = Out.translate(y, height); // ( ( Out.yArea + ( ( y - Out.scrollTopFixedArea) + height) ) % Out.yArea ) + Out.scrollTopFixedArea;
+        
+        //tft.fillRect( 0, yStart, 5, 5, BLE_ORANGE);
+        //tft.fillRect( 0, yEnd, 5, 5, BLE_GREEN);
+        
         int leftVlinePosX    = x;
         int rightVlinePosX   = x+width-1;
         int leftHLinePosX    = leftVlinePosX + radius;
         int rightHlinePosX   = rightVlinePosX - radius;
 
+        int lowerBlockHeight = yEnd - Out.scrollTopFixedArea;
+        int upperBlockHeight = (Out.scrollTopFixedArea + Out.yArea) - yStart;
+        
+        // last block overlaps scroll loop point and has been split
+        //int upperBlockHeight = Out.scrollTopFixedArea - (y/* - height*/);
+        //int lowerBlockHeight = height - upperBlockHeight;
+        int vLineUpperHeight = upperBlockHeight - radius;
+        int vLineLowerHeight = lowerBlockHeight - radius;
+
+
         int hLineWidth       = width - 2 * radius;
 
-        int vLineUpperHeight = upperHeight - radius;
-        int vLineLowerHeight = lowerHeight - radius;
+        //int upperPosY        = (y/* - height*/) + Out.yArea;
+        //int lowerPosY        = y+height-1;
 
-        int upperPosY      = scrollPosY + Out.yArea;
-        int lowerPosY      = y/*Out.scrollPosY*/ - 1;
+        Serial.printf(" %3d %3d %3d %3d \n", yStart, yEnd, upperBlockHeight, lowerBlockHeight);
 
-        tft.drawFastHLine(leftHLinePosX, upperPosY, hLineWidth, color); // upper hline
-        tft.drawFastHLine(leftHLinePosX, lowerPosY, hLineWidth, color); // lower hline
-        if (upperHeight > radius) {
-          tft.drawFastVLine(leftVlinePosX,  upperPosY + radius, vLineUpperHeight, color); // upper left vline
-          tft.drawFastVLine(rightVlinePosX, upperPosY + radius, vLineUpperHeight, color); // upper right vline
+        tft.drawFastHLine(leftHLinePosX, yStart, hLineWidth, color); // upper hline
+        tft.drawFastHLine(leftHLinePosX, yEnd, hLineWidth, color); // lower hline
+        if (upperBlockHeight > radius) {
+          tft.drawFastVLine(leftVlinePosX,  yStart + radius, upperBlockHeight - radius, color); // upper left vline
+          tft.drawFastVLine(rightVlinePosX, yStart + radius, upperBlockHeight - radius, color); // upper right vline
         }
-        if (lowerHeight > radius) {
-          tft.drawFastVLine(leftVlinePosX,  lowerPosY - lowerHeight, vLineLowerHeight, color); // lower left vline
-          tft.drawFastVLine(rightVlinePosX, lowerPosY - lowerHeight, vLineLowerHeight, color); // lower right vline
+        if (lowerBlockHeight > radius) {
+          tft.drawFastVLine(leftVlinePosX,  yEnd - lowerBlockHeight, lowerBlockHeight - radius, color); // lower left vline
+          tft.drawFastVLine(rightVlinePosX, yEnd - lowerBlockHeight, lowerBlockHeight - radius, color); // lower right vline
         }
         tft.startWrite();//BLEDev.borderColor
-        tft.drawCircleHelper(leftHLinePosX,  upperPosY + radius,   radius, 1, color); // upper left
-        tft.drawCircleHelper(rightHlinePosX, upperPosY + radius,   radius, 2, color); // upper right
-        tft.drawCircleHelper(rightHlinePosX, lowerPosY - radius-1, radius, 4, color); // lower right
-        tft.drawCircleHelper(leftHLinePosX,  lowerPosY - radius-1, radius, 8, color); // lower left
+        tft.drawCircleHelper(leftHLinePosX,  yStart + radius, radius, 1, color); // upper left
+        tft.drawCircleHelper(rightHlinePosX, yStart + radius, radius, 2, color); // upper right
+        tft.drawCircleHelper(rightHlinePosX, yEnd - radius-1, radius, 4, color); // lower right
+        tft.drawCircleHelper(leftHLinePosX,  yEnd - radius-1, radius, 8, color); // lower left
         tft.endWrite();
       }
     }
