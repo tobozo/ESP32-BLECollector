@@ -88,10 +88,52 @@ class ScrollableOutput {
     int translate(int y, int distance=0) {
       return ( ( yArea + ( ( y - scrollTopFixedArea) + distance) ) % yArea ) + scrollTopFixedArea;
     }
+
+    // draw rounded corners boxes inside the scroll view, with scroll limit overlap support
+    void drawScrollableRoundRect(uint16_t x, uint16_t y, uint16_t _width, uint16_t _height, uint16_t radius, uint16_t color) {
+      int yStart = translate(y, 0); // get the scrollview-translated y position
+      if ( yStart >= scrollTopFixedArea && (yStart+_height)<(height-scrollBottomFixedArea) ) { 
+        // no scroll loop point overlap, just render the translated box using the native method
+        log_d("Rendering native x:%d, y:%d, width:%d, height:%d, radius:%d", x, y, _width, _height, radius);
+        tft.drawRoundRect(x, yStart, _width, _height, radius, color);
+      } else {
+        // box overlaps the scroll limit, split it in two chunks!
+        int yEnd = translate(y, _height);
+        int lowerBlockHeight = yEnd - scrollTopFixedArea;
+        int upperBlockHeight = (scrollTopFixedArea + yArea) - yStart;
+        int leftVlinePosX    = x;
+        int rightVlinePosX   = x+_width-1;
+        int leftHLinePosX    = leftVlinePosX + radius;
+        int rightHlinePosX   = rightVlinePosX - radius;
+        int hLineWidth       = _width - 2 * radius;
+        log_d("Rendering split x:%d, y:%d, width:%d, height:%d, radius:%d", x, y, _width, _height, radius);
+        log_v("                yStart:%d, yEnd:%d, upperBlockHeight:%d, lowerBlockHeight:%d", yStart, yEnd, upperBlockHeight, lowerBlockHeight);
+
+        tft.drawFastHLine(leftHLinePosX, yStart, hLineWidth, color); // upper hline
+        tft.drawFastHLine(leftHLinePosX, yEnd-1, hLineWidth, color); // lower hline
+        if (upperBlockHeight > radius) {
+          // don't bother rendering the corners if there isn't enough height left
+          tft.drawFastVLine(leftVlinePosX,  yStart + radius, upperBlockHeight - radius, color); // upper left vline
+          tft.drawFastVLine(rightVlinePosX, yStart + radius, upperBlockHeight - radius, color); // upper right vline
+        }
+        if (lowerBlockHeight > radius) {
+          // don't bother rendering the corners if there isn't enough height left
+          tft.drawFastVLine(leftVlinePosX,  yEnd - lowerBlockHeight, lowerBlockHeight - radius, color); // lower left vline
+          tft.drawFastVLine(rightVlinePosX, yEnd - lowerBlockHeight, lowerBlockHeight - radius, color); // lower right vline
+        }
+        tft.startWrite();
+        tft.drawCircleHelper(leftHLinePosX,  yStart + radius, radius, 1, color); // upper left
+        tft.drawCircleHelper(rightHlinePosX, yStart + radius, radius, 2, color); // upper right
+        tft.drawCircleHelper(rightHlinePosX, yEnd - radius-1, radius, 4, color); // lower right
+        tft.drawCircleHelper(leftHLinePosX,  yEnd - radius-1, radius, 8, color); // lower left
+        tft.endWrite();
+      }
+    }
+    
   private:
 
     int scroll(const char* str) {
-      //tft.fillRect( 0, scrollTopFixedArea, 8, 8, BLE_RED );
+      //tft.drawFastHLine( 0, scrollTopFixedArea, 8, BLE_RED );
       isScrolling = true;
       if (scrollPosY == -1) {
         scrollPosY = tft.getCursorY();
