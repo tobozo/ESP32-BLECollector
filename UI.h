@@ -242,7 +242,7 @@ class UIUtils {
       pos += Out.println("           (c+)  tobozo  2018   ");
       pos += Out.println("         ");
       tft.drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, 106, Out.scrollPosY - pos + 8, 28,  28);
-      drawRoundRect( 58, Out.scrollPosY, 128, pos, 8, BLE_GREENYELLOW );
+      Out.drawScrollableRoundRect( 58, Out.scrollPosY-pos, 128, pos, 8, BLE_GREENYELLOW );
       for (int i = 0; i < 5; i++) {
         Out.println(SPACE);
       }
@@ -703,7 +703,7 @@ class UIUtils {
       uint16_t randomcolor = tft.color565( random(128, 255), random(128, 255), random(128, 255) );
       uint16_t blockHeight = 0;
       uint16_t hop;
-      uint16_t blah = (Out.yArea-(Out.scrollPosY-Out.scrollTopFixedArea));
+      uint16_t initialPosY = Out.scrollPosY;
       
       if( BleCard->in_db ) {
         if( BleCard->is_anonymous ) {
@@ -863,19 +863,22 @@ class UIUtils {
       }
       hop = Out.println( SPACE) ;
       blockHeight += hop;
-      drawRoundRect( 1, Out.scrollPosY-1, Out.width - 2, blockHeight-2, 4, BLECardTheme.borderColor );
+      uint16_t boxHeight = blockHeight-2;
+      uint16_t boxWidth  = Out.width - 2;
+      uint16_t boxPosY   = initialPosY + 1;
+      Out.drawScrollableRoundRect( 1, boxPosY, boxWidth, boxHeight, 4, BLECardTheme.borderColor );
       lastPrintedMacIndex++;
       lastPrintedMacIndex = lastPrintedMacIndex % BLECARD_MAC_CACHE_SIZE;
       memcpy( MacScrollView[lastPrintedMacIndex].address, BleCard->address, MAC_LEN+1 );
       MacScrollView[lastPrintedMacIndex].blockHeight = blockHeight;
-      MacScrollView[lastPrintedMacIndex].scrollPosY = Out.scrollPosY;
+      MacScrollView[lastPrintedMacIndex].scrollPosY  = boxPosY;//Out.scrollPosY;
       MacScrollView[lastPrintedMacIndex].borderColor = BLECardTheme.borderColor;
       giveMuxSemaphore();
     }
 
 
     static bool BLECardIsOnScreen( const char* address ) {
-      log_i("Checking if %s is visible onScreen", address);
+      log_v("Checking if %s is visible onScreen", address);
       uint16_t card_index;
       int16_t offset = 0;
       for(uint16_t i = lastPrintedMacIndex+BLECARD_MAC_CACHE_SIZE; i>lastPrintedMacIndex; i--) {
@@ -883,34 +886,33 @@ class UIUtils {
         offset+=MacScrollView[card_index].blockHeight;
         if ( strcmp( address, MacScrollView[card_index].address ) == 0 ) {
           if( offset <= Out.yArea ) {
-            //Serial.printf("Match #%d (%s) height is %d px (cumulated: %d)\n", card_index, MacScrollView[card_index].address, MacScrollView[card_index].blockHeight, offset );
-            highlighbBLECard( card_index, offset );
-            log_i("%s is onScreen", address);
+            highlighbBLECard( card_index, -offset );
+            log_v("%s is onScreen", address);
             return true;
           } else {
-            //Serial.printf("Miss #%d (%s) height is %d px (cumulated: %d)\n", card_index, MacScrollView[card_index].address, MacScrollView[card_index].blockHeight, offset );
-            log_i("%s is in cache but NOT visible onScreen", address);
+            log_v("%s is in cache but NOT visible onScreen", address);
             return false;
           }
         }
       }
-      log_i("%s is NOT in cache and NOT visible onScreen", address);
+      log_v("%s is NOT in cache and NOT visible onScreen", address);
       return false;      
     }
 
-    static void highlighbBLECard( uint16_t card_index, uint16_t offset ) {
-      if( card_index >= BLECARD_MAC_CACHE_SIZE) return;
-      if( isEmpty( MacScrollView[card_index].address ) ) return;
-      uint16_t oldVirtualYPos = Out.scrollPosY - Out.scrollTopFixedArea;
-      uint16_t newVirtualYPos = (Out.yArea + (oldVirtualYPos - offset + MacScrollView[card_index].blockHeight )) % Out.yArea;
-      uint16_t newXPos = (newVirtualYPos + Out.scrollTopFixedArea);
+    static void highlighbBLECard( uint16_t card_index, int16_t offset ) {
+      if( card_index >= BLECARD_MAC_CACHE_SIZE) return; // bad value
+      if( isEmpty( MacScrollView[card_index].address ) ) return; // empty slot
+      int newYPos = Out.translate( Out.scrollPosY, offset );
       headerStats( MacScrollView[card_index].address );
       takeMuxSemaphore();
+      uint16_t boxHeight = MacScrollView[card_index].blockHeight-2;
+      uint16_t boxWidth  = Out.width - 2;
+      uint16_t boxPosY   = newYPos + 1;
       for( int16_t color=255; color>64; color-- ) {
-        drawRoundRect( 1, newXPos-1, Out.width-2, MacScrollView[card_index].blockHeight-2, 4, tft.color565(color, color, color) );
-        delay(8);
+        Out.drawScrollableRoundRect( 1, boxPosY, boxWidth, boxHeight, 4, tft.color565(color, color, color) );
+        delay(8); // TODO: use a timer
       }
-      drawRoundRect( 1, newXPos-1, Out.width-2, MacScrollView[card_index].blockHeight-2, 4, MacScrollView[card_index].borderColor );
+      Out.drawScrollableRoundRect( 1, boxPosY, boxWidth, MacScrollView[card_index].blockHeight-2, 4, MacScrollView[card_index].borderColor );
       giveMuxSemaphore();
     }
 
@@ -935,50 +937,6 @@ class UIUtils {
           break;
       }
       tft.print(text);
-    }
-
-    // draw rounded corners boxes over the scroll limit
-    static void drawRoundRect(uint16_t x, int y, uint16_t width, uint16_t height, uint16_t radius, uint16_t color) {
-      int scrollPosY = y/*Out.scrollPosY*/ - height;
-      if (scrollPosY >= Out.scrollTopFixedArea) {
-        // no scroll loop point overlap, just render the box
-        //tft.drawRoundRect(x+1, scrollPosY + 1, width, height - 2, radius, color);
-        tft.drawRoundRect(x, scrollPosY, width, height, radius, color);
-      } else {
-        // last block overlaps scroll loop point and has been split
-        int upperHeight      = Out.scrollTopFixedArea - scrollPosY;
-        int lowerHeight      = height - upperHeight;
-
-        int leftVlinePosX    = x;
-        int rightVlinePosX   = x+width-1;
-        int leftHLinePosX    = leftVlinePosX + radius;
-        int rightHlinePosX   = rightVlinePosX - radius;
-
-        int hLineWidth       = width - 2 * radius;
-
-        int vLineUpperHeight = upperHeight - radius;
-        int vLineLowerHeight = lowerHeight - radius;
-
-        int upperPosY      = scrollPosY + Out.yArea;
-        int lowerPosY      = y/*Out.scrollPosY*/ - 1;
-
-        tft.drawFastHLine(leftHLinePosX, upperPosY, hLineWidth, color); // upper hline
-        tft.drawFastHLine(leftHLinePosX, lowerPosY, hLineWidth, color); // lower hline
-        if (upperHeight > radius) {
-          tft.drawFastVLine(leftVlinePosX,  upperPosY + radius, vLineUpperHeight, color); // upper left vline
-          tft.drawFastVLine(rightVlinePosX, upperPosY + radius, vLineUpperHeight, color); // upper right vline
-        }
-        if (lowerHeight > radius) {
-          tft.drawFastVLine(leftVlinePosX,  lowerPosY - lowerHeight, vLineLowerHeight, color); // lower left vline
-          tft.drawFastVLine(rightVlinePosX, lowerPosY - lowerHeight, vLineLowerHeight, color); // lower right vline
-        }
-        tft.startWrite();//BLEDev.borderColor
-        tft.drawCircleHelper(leftHLinePosX,  upperPosY + radius,   radius, 1, color); // upper left
-        tft.drawCircleHelper(rightHlinePosX, upperPosY + radius,   radius, 2, color); // upper right
-        tft.drawCircleHelper(rightHlinePosX, lowerPosY - radius-1, radius, 4, color); // lower right
-        tft.drawCircleHelper(leftHLinePosX,  lowerPosY - radius-1, radius, 8, color); // lower left
-        tft.endWrite();
-      }
     }
 
     // draws a RSSI Bar for the BLECard
