@@ -194,29 +194,29 @@ class BlueToothDeviceHelper {
       CacheItem->updated_at = 0;
     }
 
-    static void set(BlueToothDevice *CacheItem, const char* prop, bool val) {
+    static void set( BlueToothDevice *CacheItem, const char* prop, bool val ) {
       if(!prop) return;
       else if(strcmp(prop, "in_db")==0) { CacheItem->in_db = val;}
       else if(strcmp(prop, "is_anonymous")==0) { CacheItem->is_anonymous = val;}
     }
-    static void set(BlueToothDevice *CacheItem, const char* prop, esp_ble_addr_type_t val) {
+    static void set( BlueToothDevice *CacheItem, const char* prop, esp_ble_addr_type_t val ) {
       //log_d( "setting address type for %s", BLEAddrTypeToString( val ) ); // https://github.com/nkolban/ESP32_BLE_Arduino/blob/934702b6169b92c71cbc850876fd17fb9ee3236d/src/BLEAdvertisedDevice.h#L44
       if(!prop) return;
       else if(strcmp(prop, "addr_type")==0)   { CacheItem->addr_type = (esp_ble_addr_type_t)(val); }
     }
-    static void set(BlueToothDevice *CacheItem, const char* prop, DateTime val) {
+    static void set( BlueToothDevice *CacheItem, const char* prop, DateTime val ) {
        if(!prop) return;
        else if(strcmp(prop, "created_at")==0) { CacheItem->created_at = val;}
        else if(strcmp(prop, "updated_at")==0) { CacheItem->updated_at = val;}
     }
-    static void set(BlueToothDevice *CacheItem, const char* prop, const int val) {
+    static void set( BlueToothDevice *CacheItem, const char* prop, const int val ) {
       if(!prop) return;
       else if(strcmp(prop, "appearance")==0) { CacheItem->appearance = val;}
       else if(strcmp(prop, "rssi")==0)       { CacheItem->rssi = val;} // coming from thaw()
       else if(strcmp(prop, "manufid")==0)    { CacheItem->manufid = val;}
       else if(strcmp(prop, "hits")==0)       { CacheItem->hits = val;}
     }
-    static void set(BlueToothDevice *CacheItem, const char* prop, const char* val) {
+    static void set( BlueToothDevice *CacheItem, const char* prop, const char* val ) {
       if(!prop) return;
       else if(strcmp(prop, "name")==0)       { copy( CacheItem->name, val, MAX_FIELD_LEN ); }
       else if(strcmp(prop, "address")==0)    { copy( CacheItem->address, val, MAC_LEN ); }
@@ -272,13 +272,9 @@ class BlueToothDeviceHelper {
       }
       if ( advertisedDevice.haveName() ) {
         set(CacheItem, "name", advertisedDevice.getName().c_str());
-      } else {
-        set(CacheItem, "name", '\0');
       }
       if ( advertisedDevice.haveAppearance() ) {
         set(CacheItem, "appearance", advertisedDevice.getAppearance());
-      } else {
-        set(CacheItem, "appearance", 0);
       }
       if ( advertisedDevice.haveManufacturerData() ) {
         uint8_t* mdp = (uint8_t*)advertisedDevice.getManufacturerData().data();
@@ -289,21 +285,14 @@ class BlueToothDeviceHelper {
         uint16_t vint = vmsb * 256 + vlsb;
         set(CacheItem, "manufname", "[unpopulated]");
         set(CacheItem, "manufid", vint);
-      } else {
-        set(CacheItem, "manufname", '\0');
-        set(CacheItem, "manufid", -1);
       }
-
       if( advertisedDevice.haveServiceData() ) {
         //Serial.printf("[%s] GATT ServiceDataUUID: '%s'\n", CacheItem->address, advertisedDevice.getServiceDataUUID().toString().c_str());
       }
-      
       if ( advertisedDevice.haveServiceUUID() ) {
         set(CacheItem, "uuid", advertisedDevice.getServiceUUID().toString().c_str());
         //uint16_t sUUID = (uint16_t)advertisedDevice.getServiceUUID().getNative();
         //Serial.printf("[%s] GATT ServiceUUID:     '%s'\n", CacheItem->address, advertisedDevice.getServiceUUID().toString().c_str() );
-      } else {
-        set(CacheItem, "uuid", '\0');
       }
       if( TimeIsSet ) {
         CacheItem->created_at = nowDateTime;
@@ -314,7 +303,7 @@ class BlueToothDeviceHelper {
 
     // determines whether a device is worth saving or not
     static bool isAnonymous( BlueToothDevice *CacheItem ) {
-      if( !isEmpty( CacheItem->uuid )) return false; // uuid's are interesting, let's collect
+      // if( !isEmpty( CacheItem->uuid )) return false; // uuid's are interesting, let's collect
       if( !isEmpty( CacheItem->name )) return false; // has name, let's collect
       if( CacheItem->appearance !=0 ) return false; // has icon, let's collect
       if( strcmp( CacheItem->ouiname, "[unpopulated]" ) == 0 || strcmp( CacheItem->manufname, "[unpopulated]" ) == 0 ) return false; // don't know yet, let's keep
@@ -341,7 +330,7 @@ class BlueToothDeviceHelper {
     }
 
 
-    static const char *gattServiceToString(uint32_t serviceId) {
+    static const char *gattServiceToString( uint32_t serviceId ) {
       BLEGATTService* p = (BLEGATTService*) BLE_gattServices;
       while (strlen(p->name) > 0) {
         if (p->assignedNumber == serviceId) {
@@ -352,7 +341,7 @@ class BlueToothDeviceHelper {
       return "Unknown";
     } // gattServiceToString 
 
-    static uint16_t getNextCacheIndex(BlueToothDevice **CacheItem, uint16_t CacheItemIndex) {
+    static uint16_t getNextCacheIndex( BlueToothDevice **CacheItem, uint16_t CacheItemIndex ) {
       uint16_t minCacheValue = 65535;
       uint16_t maxCacheValue = 0;
       uint16_t defaultIndex = CacheItemIndex;

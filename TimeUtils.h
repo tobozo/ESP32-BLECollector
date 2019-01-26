@@ -30,6 +30,70 @@
 */
 
 
+
+enum TimeUpdateSources {
+  SOURCE_NONE = 0,
+  SOURCE_COMPILER = 1,
+  SOURCE_RTC = 2,
+  SOURCE_NTP = 3,
+  SOURCE_BLE = 4,
+  SOURCE_GPS = 5
+};
+
+void logTimeActivity(TimeUpdateSources source, int epoch) {
+  preferences.begin("BLEClock", false);
+  preferences.clear();
+  //DateTime epoch = RTC.now();
+  preferences.putUInt("epoch", epoch);
+  preferences.putUChar("source", source);
+  preferences.end();
+}
+
+void resetTimeActivity(TimeUpdateSources source) {
+  preferences.begin("BLEClock", false);
+  preferences.clear();
+  preferences.putUInt("epoch", 0);
+  preferences.putUChar("source", source);
+  preferences.end();
+}
+
+struct TimeActivity {
+  DateTime epoch;
+  byte source;
+};
+
+/*
+ * Time Update Situations
+ *
+ * External RTC update sources: BLE NTP, WiFi NTP
+ * Internal RTC update sources: BLE NTP or External RTC
+ *
+ * External RTC needs update:
+ *  - when time is not set
+ *  - every 24h
+ *
+ * Internal RTC needs update:
+ *  - when time is not set
+ *  - every hour if external RTC, otherwise every 24h
+ *
+ * 
+ *                 External RTC | No External RTC
+ *                 -------------|----------------
+ *        WiFi NTP      X       | Not applicable/useless
+ *         BLE NTP      X       |      X
+ *    Internal RTC      X       |
+ *      GPS Module      X       |      X
+ * 
+ * */
+
+#if HAS_GPS
+  #include "GPS.h"
+#endif
+#include "NTP.h"
+
+
+
+
 static void timeHousekeeping() {
   unsigned long seconds_since_boot = millis() / 1000;
   unsigned long minutes_since_boot = seconds_since_boot / 60;

@@ -1,57 +1,4 @@
 
-enum TimeUpdateSources {
-  SOURCE_NONE = 0,
-  SOURCE_COMPILER = 1,
-  SOURCE_RTC = 2,
-  SOURCE_NTP = 3,
-  SOURCE_BLE = 4
-};
-
-void logTimeActivity(TimeUpdateSources source, int epoch) {
-  preferences.begin("BLEClock", false);
-  preferences.clear();
-  //DateTime epoch = RTC.now();
-  preferences.putUInt("epoch", epoch);
-  preferences.putUChar("source", source);
-  preferences.end();
-}
-
-void resetTimeActivity(TimeUpdateSources source) {
-  preferences.begin("BLEClock", false);
-  preferences.clear();
-  preferences.putUInt("epoch", 0);
-  preferences.putUChar("source", source);
-  preferences.end();
-}
-
-struct TimeActivity {
-  DateTime epoch;
-  byte source;
-};
-
-/*
- * Time Update Situations
- *
- * External RTC update sources: BLE NTP, WiFi NTP
- * Internal RTC update sources: BLE NTP or External RTC
- *
- * External RTC needs update:
- *  - when time is not set
- *  - every 24h
- *
- * Internal RTC needs update:
- *  - when time is not set
- *  - every hour if external RTC, otherwise every 24h
- *
- * 
- *                 External RTC | No External RTC
- *                 -------------|----------------
- *        WiFi NTP      X       | Not applicable/useless
- *         BLE NTP      X       |      X
- *    Internal RTC      X       |
- * 
- * 
- * */
 
 // returns true if time has been updated
 static bool checkForTimeUpdate( DateTime &internalDateTime ) {
@@ -76,9 +23,9 @@ static bool checkForTimeUpdate( DateTime &internalDateTime ) {
     #elif defined(NEEDS_SDUPDATER) && TIME_UPDATE_SOURCE==TIME_UPDATE_NTP // has external RTC and can update time from NTPMenu.bin using WiFi + SNTP
       rollBackOrUpdateFromFS( BLE_FS, NTP_MENU_FILENAME );
       return true;
-    #elif TIME_UPDATE_SOURCE==TIME_UPDATE_GPS
-      // not yet implemented
-      return false;
+    #elif HAS_GPS==true && TIME_UPDATE_SOURCE==TIME_UPDATE_GPS
+      setGPSTime( NULL );
+      return true;
     #else
       return false;
     #endif

@@ -133,7 +133,12 @@ static void TimeClientNotifyCallback( BLERemoteCharacteristic* pBLERemoteCharact
   setBLETime();
 };
 
-
+static void BaseNotifyCallback(BLERemoteCharacteristic* pRemoteCharacteristic, uint8_t* pData, size_t length, bool isNotify)  {
+  Serial.printf("notifyCallback: %s %s handle: %02x value:", pRemoteCharacteristic->getRemoteService()->getClient()->getPeerAddress().toString().c_str(), pRemoteCharacteristic->getUUID().toString().c_str(), pRemoteCharacteristic->getHandle());
+  for(int i=0; i<length; i++)
+    Serial.printf(" %02x", pData[i]);
+  Serial.println();
+}
 
 class TimeClientCallback : public BLEClientCallbacks {
   void onConnect(BLEClient* pC){
@@ -420,6 +425,9 @@ class BLEScanUtils {
         { "screenshot",   screenShotCB,   "Make a screenshot and save it on the SD" },
         { "screenshow",   screenShowCB,   "Show a screenshot" },
         { "toggle",       toggleCB,       "toggle a bool value" },
+        #if HAS_GPS
+        { "gpstime",      setGPSTime,     "sync time from GPS" },
+        #endif
         #ifdef NEEDS_SDUPDATER
         { "update",       updateCB,       "Update time and DB files (requires pre-flashed NTPMenu.bin on the SD)" },
         #endif
@@ -449,6 +457,9 @@ class BLEScanUtils {
         runCommand( (char*)"toggle" );
         runCommand( (char*)"ls" );
       }
+      #if HAS_GPS
+        GPSInit();
+      #endif
       
       static byte idx = 0;
       char lf = '\n';
@@ -471,6 +482,9 @@ class BLEScanUtils {
           }
           delay(1);
         }
+        #if HAS_GPS
+          GPSRead();
+        #endif
         delay(1);
       }
     }
@@ -574,6 +588,46 @@ class BLEScanUtils {
       vTaskDelete( NULL );
     }
 
+
+
+    static void BaseClientTask( void * param )  {
+      BLEAdvertisedDevice advertisedDevice;
+      // https://twitter.com/wakwak_koba/
+      // https://github.com/wakwak-koba/ESP32_BLE_Arduino/commit/master
+      auto* pClient = BLEDevice::createClient();
+      if(pClient) {
+        if(pClient->connect(advertisedDevice.getAddress())) {
+          Serial.print(pClient->getPeerAddress().toString().c_str());
+          Serial.print(" ");
+          Serial.println(advertisedDevice.getName().c_str());
+          auto* pRemoteServiceMap = pClient->getServices();
+          for (auto itr : *pRemoteServiceMap)  {
+            Serial.print(" ");
+            Serial.println(itr.second->toString().c_str());
+
+            std::map<uint16_t, BLERemoteCharacteristic*>* pCharacteristicMap = itr.second->getCharacteristicsByHandle();
+            for (auto itr : *pCharacteristicMap)  {
+              Serial.print("  ");
+              Serial.print(itr.second->toString().c_str());
+
+              if(itr.second->canNotify()) {
+                //itr.second->registerForNotify( BaseNotifyCallback );
+                Serial.print(" can notify !!");
+              }
+              Serial.println();
+              auto* pDescriptorMap = itr.second->getDescriptors();
+              if(pDescriptorMap)
+                for (auto itr : *pDescriptorMap)  {
+                  Serial.print("   ");
+                  Serial.println(itr.second->toString().c_str());
+                }
+            }
+          }
+        } else {
+          Serial.printf("connect to %s failed\n", advertisedDevice.getAddress().toString().c_str());
+        }
+      }
+    }
 
     static void scanTask( void * parameter ) {
       UI.update(); // run after-scan display stuff

@@ -46,6 +46,7 @@ static uint8_t sd_rbuf[SPI_SD_SEC_STEP];
 const char* outTpl = " [%s] %s";
 char outStr[32] = {'\0'};
 
+
 enum OTAPartitionNames {
   NO_PARTITION = -1,
   CURRENT_PARTITION = 0,
@@ -133,15 +134,15 @@ static bool doUpdateToFS(fs::FS &fs, const char* fileName, const esp_partition_t
   uint8_t headerbuf[4];
   
   if(!currentpartition) {
-    Out.println(" [ERROR] Bad partition");
+    Serial.println(" [ERROR] Bad partition");
     return false;
   }
   if(!ESP.flashRead(currentpartition->address, (uint32_t*)headerbuf, 4)) {
-    Out.println(" [ERROR] Partition is not bootable");
+    Serial.println(" [ERROR] Partition is not bootable");
     return false;
   }
   if(headerbuf[0] != 0xE9/*ESP_IMAGE_HEADER_MAGIC*/) {
-    Out.println(" [ERROR] Partition has no magic header");
+    Serial.println(" [ERROR] Partition has no magic header");
     return false;
   }
 
@@ -153,24 +154,24 @@ static bool doUpdateToFS(fs::FS &fs, const char* fileName, const esp_partition_t
     log_d("No update is needed");
     return false;
   } else {
-    Out.println(" [INFO] Partition signatures differ"); 
+    Serial.println(" [INFO] Partition signatures differ"); 
     sprintf( outStr, outTpl, "FL", flashSignature);
-    Out.println( outStr ); 
+    Serial.println( outStr ); 
     sprintf( outStr, outTpl, "SD", SDSignature);
-    Out.println( outStr ); 
+    Serial.println( outStr ); 
   }
 
   if(fs.remove(fileName)){
-    Out.println(String(" [INFO] Outdated "+String(fileName)+" deleted").c_str());
+    Serial.println(String(" [INFO] Outdated "+String(fileName)+" deleted").c_str());
   }
 
   File updateBin = fs.open(fileName, FILE_WRITE);
   if(!updateBin) {
-    Out.println(String(" [ERROR] Can't write to " + String(fileName) + " :-(").c_str());
+    Serial.println(String(" [ERROR] Can't write to " + String(fileName) + " :-(").c_str());
     updateBin.close();
     return false;
   }
-  Out.println(String(" [INFO] Writing "+ String(fileName) +" ...").c_str());
+  Serial.println(String(" [INFO] Writing "+ String(fileName) +" ...").c_str());
   uint32_t bytescounter = 0;
   for (uint32_t base_addr = currentpartition->address; base_addr < currentpartition->address + currentpartition->size; base_addr += SPI_FLASH_SEC_STEP8) {
     memset(spi_rbuf, 0, SPI_FLASH_SEC_STEP8);
@@ -183,10 +184,23 @@ static bool doUpdateToFS(fs::FS &fs, const char* fileName, const esp_partition_t
       Serial.print(".");
     }
   }
-  Out.println(" [INFO] Done");
+  Serial.println(" [INFO] Done");
   updateBin.close();
   return true;
 }
+
+
+static void getFactoryPartition() {
+  esp_partition_iterator_t pi = esp_partition_find( ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_FACTORY, NULL );
+  if(pi != NULL) {
+    const esp_partition_t* factory = esp_partition_get(pi);
+    esp_partition_iterator_release(pi);
+    if(esp_ota_set_boot_partition(factory) == ESP_OK) {
+      //esp_restart();
+    }
+  }
+}
+
 
 static void getSignature(char* signature, byte sourcepartition) {
   if(sourcepartition==0) {
@@ -254,9 +268,9 @@ void selfReplicateToSD() {
       return;
     } else {
       log_d("[SD!=FLASH] '%s' does not match '%s'", binarySignature, currentMenuSignature);
-      Out.println(" [SD!=FLASH]"); // mirror current flash partition to SD
+      Serial.println(" [SD!=FLASH]"); // mirror current flash partition to SD
       updateToFS(BLE_FS, MENU_FILENAME, CURRENT_PARTITION);
-      Out.scrollNextPage();
+      //Out.scrollNextPage();
     }
   } else {
     log_e("[WUT] Build signature matches neither current nor next partition");
@@ -310,18 +324,18 @@ bool SDUpdater::performUpdate(Stream &updateSource, size_t updateSize, const cha
       if (Update.end()) {
          log_d("OTA done!");
          if (Update.isFinished()) {
-            Out.println(" [INFO] Update successful"); Out.println(" [INFO] Rebooting.");
+            Serial.println(" [INFO] Update successful"); Serial.println(" [INFO] Rebooting.");
             return true;
          } else {
-            Out.println(" [ERROR] Update failed!"); Out.println(" [ERROR] Something went wrong!");
+            Serial.println(" [ERROR] Update failed!"); Serial.println(" [ERROR] Something went wrong!");
             return false;
          }
       } else {
-         Out.println(String(" [ERROR] " + String(Update.getError())).c_str());
+         Serial.println(String(" [ERROR] " + String(Update.getError())).c_str());
          return false;
       }
    } else {
-      Out.println(" [ERROR] Not enough space to begin OTA");
+      Serial.println(" [ERROR] Not enough space to begin OTA");
       return false;
    }
 }
@@ -332,20 +346,20 @@ bool SDUpdater::updateFromFS(fs::FS &fs, const char* fileName) {
   bool ret = false;
   if (updateBin) {
     if(updateBin.isDirectory()){
-      Out.println(String(" [ERROR] "+ String(fileName) +" is a directory").c_str());
+      Serial.println(String(" [ERROR] "+ String(fileName) +" is a directory").c_str());
       updateBin.close();
       return ret;
     }
     size_t updateSize = updateBin.size();
     if (updateSize > 0) {
-      Out.println(String(" [INFO] Updating from "+ String(fileName)).c_str());
+      Serial.println(String(" [INFO] Updating from "+ String(fileName)).c_str());
       ret = performUpdate(updateBin, updateSize, fileName);
     } else {
-      Out.println(String(" [ERROR]  file "+ String(fileName) +" is empty!").c_str());
+      Serial.println(String(" [ERROR]  file "+ String(fileName) +" is empty!").c_str());
     }
     updateBin.close();
   } else {
-    Out.println(String(" [ERROR] Could not load "+ String(fileName)).c_str());
+    Serial.println(String(" [ERROR] Could not load "+ String(fileName)).c_str());
   }
   return ret;
 }
