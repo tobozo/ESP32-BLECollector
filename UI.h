@@ -57,6 +57,7 @@ static bool blinkit = false; // task blinker state
 static bool blinktoggler = true;
 static bool appIconVisible = false;
 static bool foundTimeServer = false;
+static bool gpsIconVisible = false;
 static uint16_t blestateicon;
 static uint16_t lastblestateicon;
 static uint16_t dbIconColor;
@@ -67,19 +68,90 @@ static unsigned long blinkthen = blinknow + scanTime; // task blinker end time
 static unsigned long lastblink = millis(); // task blinker last blink
 static unsigned long lastprogress = millis(); // task blinker progress
 
-const char* sessDevicesCountTpl = " Seen: %4d ";
-const char* devicesCountTpl = " Last: %4d ";
-const char* newDevicesCountTpl = " Scans:%4d ";
+const char* sessDevicesCountTpl = " Seen: %4s ";
+const char* devicesCountTpl = " Last: %4s ";
+const char* newDevicesCountTpl = " Scans:%4s ";
 const char* heapTpl = " Heap: %6d";
-const char* entriesTpl = " Entries:%4d";
-const char *addressTpl = "  %s";
+const char* entriesTpl = " Entries:%4s";
+const char* addressTpl = "  %s";
 const char* dbmTpl = "%d dBm    ";
 const char* ouiTpl = "      %s";
 const char* appearanceTpl = "  Appearance: %d";
 const char* manufTpl = "      %s";
 const char* nameTpl = "      %s";
+const char* screenshotFilenameTpl = "/screenshot-%04d-%02d-%02d_%02dh%02dm%02ds.565";
+const char* hitsTimeStampTpl = "      %04d/%02d/%02d %02d:%02d:%02d %s";
 
-//#define SPACETABS "      "
+static char entriesStr[14] = {'\0'};
+static char heapStr[16] = {'\0'};
+static char sessDevicesCountStr[16] = {'\0'};
+static char devicesCountStr[16] = {'\0'};
+static char newDevicesCountStr[16] = {'\0'};
+static char unitOutput[16] = {'\0'};
+static char screenshotFilenameStr[42] = {'\0'};
+static char addressStr[24] = {'\0'};
+static char dbmStr[16] = {'\0'};
+static char hitsTimeStampStr[48] = {'\0'};
+static char hitsStr[16] = {'\0'};
+static char nameStr[38] = {'\0'};
+static char ouiStr[38] = {'\0'};
+static char appearanceStr[48] = {'\0'};
+static char manufStr[38] = {'\0'};
+
+char *macAddressToColorStr = (char*)calloc(MAC_LEN+1, sizeof(char*));
+byte macBytesToBMP[8];
+uint16_t macBytesToColors[128];
+static uint16_t imgBuffer[320]; // one scan line used for screen capture
+
+uint16_t macAddressToColor( const char *address ) {
+  memcpy( macAddressToColorStr, address, MAC_LEN+1);
+  byte curs = 0, tokenpos = 0, val, i, j, macpos, msb, lsb;
+  char *token;
+  char *ptr;
+  uint16_t color = 0;
+  token = strtok(macAddressToColorStr, ":");
+  while(token != NULL) {
+    val = strtol(token, &ptr, 16);
+    switch( tokenpos )  {
+      case 0: msb = val; break;
+      case 1: lsb = val; break;
+      default: 
+        macpos = tokenpos-2;
+        macBytesToBMP[macpos] = val; 
+        macBytesToBMP[7-macpos]= val;
+      break;
+    }
+    tokenpos++;
+    token = strtok(NULL, ":");
+  }
+  color = (msb*256) + lsb;
+  curs = 0;
+  for(i=0;i<8;i++) {
+    for(j=0;j<8;j++) {
+      if( bitRead( macBytesToBMP[j], i ) == 1 ) {
+        macBytesToColors[curs++] =  color;
+        macBytesToColors[curs++] =  color;
+      } else {
+        macBytesToColors[curs++] =  BLE_WHITE;
+        macBytesToColors[curs++] =  BLE_WHITE;
+      }
+    }
+  }
+  return color;
+}
+
+
+static char *formatUnit( int64_t number ) {
+  *unitOutput = {'\0'};
+  if( number > 999999 ) {
+    sprintf(unitOutput, "%dM", number/1000000);
+  } else if( number > 999 ) {
+    sprintf(unitOutput, "%dK", number/1000);
+  } else {
+    sprintf(unitOutput, "%d", number);
+  }
+  return unitOutput;
+}
 
 
 enum TextDirections {
@@ -98,51 +170,6 @@ enum BLECardThemes {
 };
 
 
-char *macAddressToColorStr = (char*)calloc(MAC_LEN+1, sizeof(char*));
-byte macBytesToBMP[8];
-uint16_t macBytesToColors[128];
-
-uint16_t macAddressToColor( const char *address ) {
-  memcpy( macAddressToColorStr, address, MAC_LEN+1);
-  char *token;
-  char *ptr;
-  byte tokenpos = 0, msb, lsb;
-  token = strtok(macAddressToColorStr, ":");
-  while(token != NULL) {
-    byte val = strtol(token, &ptr, 16);
-    switch( tokenpos )  {
-      case 0: msb = val; break;
-      case 1: lsb = val; break;
-      default: 
-        byte macpos = tokenpos-2;
-        macBytesToBMP[macpos] = val; 
-        macBytesToBMP[7-macpos]= val;
-      break;
-    }
-    tokenpos++;
-    token = strtok(NULL, ":");
-  }
-  uint16_t color = (msb*256) + lsb;
-  byte curs = 0;
-  for(byte i=0;i<8;i++) {
-    for(byte j=0;j<8;j++) {
-      if( bitRead( macBytesToBMP[j], i ) == 1 ) {
-        macBytesToColors[curs++] =  color;
-        macBytesToColors[curs++] =  color;
-      } else {
-        macBytesToColors[curs++] =  BLE_WHITE;
-        macBytesToColors[curs++] =  BLE_WHITE;
-      }
-    }
-  }
-  return color;
-}
-
-static uint16_t imgBuffer[320];
-
-//#define SCREEN_CAP_BUFSIZE GRAPH_LINE_WIDTH*GRAPH_LINE_HEIGHT
-
-uint16_t screenCapBuffer[76*40];
 
 class UIUtils {
   public:
@@ -188,12 +215,11 @@ class UIUtils {
       tft.fillRect(0, Out.height - FOOTER_HEIGHT, Out.width, FOOTER_HEIGHT, FOOTER_BGCOLOR);
       tft.fillRect(0, PROGRESSBAR_Y, Out.width, 2, BLE_GREENYELLOW);
 
-
       AmigaBall.init();
 
       alignTextAt( "BLE Collector", 6, 4, BLE_YELLOW, HEADER_BGCOLOR, ALIGN_FREE );
       if (resetReason == 12) { // SW Reset
-        headerStats("Heap heap heap...");
+        headerStats("Rebooted");
       } else {
         headerStats("Init UI");
       }
@@ -252,8 +278,7 @@ class UIUtils {
 
 
     static void screenShot() {
-      const char* screenshotFilenameTpl = "/screenshot-%04d-%02d-%02d_%02dh%02dm%02ds.565";
-      char screenshotFilenameStr[42];
+      *screenshotFilenameStr = {'\0'};
       sprintf(screenshotFilenameStr, screenshotFilenameTpl, year(), month(), day(), hour(), minute(), second());
       File screenshotFile = BLE_FS.open( screenshotFilenameStr, FILE_WRITE);
       if(!screenshotFile) {
@@ -318,12 +343,10 @@ class UIUtils {
       int16_t posX = tft.getCursorX();
       int16_t posY = tft.getCursorY();
       int16_t statuspos = 0;
-
-      char heapStr[16] = {'\0'};
+      *heapStr = {'\0'};
+      *entriesStr = {'\0'};
       sprintf(heapStr, heapTpl, freeheap);
-
-      char entriesStr[14] = {'\0'};
-      sprintf(entriesStr, entriesTpl, entries);
+      sprintf(entriesStr, entriesTpl, formatUnit(entries));
       alignTextAt( heapStr, 128, 4, BLE_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
       if ( !isEmpty( status ) ) {
         byte alignoffset = 5;
@@ -366,13 +389,18 @@ class UIUtils {
       alignTextAt( UpTimeString, 85, 298, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
       alignTextAt("(c+) tobozo", 77, 308, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
 
-      char sessDevicesCountStr[16] = {'\0'};
-      char devicesCountStr[16] = {'\0'};
-      char newDevicesCountStr[16] = {'\0'};
+      if( gpsIconVisible ) {
+        tft.drawJpg( gps_jpg, gps_jpg_len, 128, 286, 10,  10);
+      } else {
+        tft.fillRect( 128, 286, 10,  10, FOOTER_BGCOLOR );
+      }
+      *sessDevicesCountStr = {'\0'};
+      *devicesCountStr = {'\0'};
+      *newDevicesCountStr = {'\0'};
 
-      sprintf( sessDevicesCountStr, sessDevicesCountTpl, sessDevicesCount );
-      sprintf( devicesCountStr, devicesCountTpl, devicesCount );
-      sprintf( newDevicesCountStr, newDevicesCountTpl, scan_rounds );
+      sprintf( sessDevicesCountStr, sessDevicesCountTpl, formatUnit(sessDevicesCount) );
+      sprintf( devicesCountStr, devicesCountTpl, formatUnit(devicesCount) );
+      sprintf( newDevicesCountStr, newDevicesCountTpl, formatUnit(scan_rounds) );
 
       alignTextAt( devicesCountStr, 0, 288, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
       alignTextAt( sessDevicesCountStr, 0, 298, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
@@ -568,6 +596,14 @@ class UIUtils {
         timeHousekeeping();
         giveMuxSemaphore();
         lastClockTick = millis();
+        #if HAS_GPS
+          if( GPSHasDateTime ) {
+            gpsIconVisible = true;          
+          } else {
+            gpsIconVisible = false;
+          }
+        #endif
+        
         vTaskDelay( 100 );
       }
     }
@@ -723,8 +759,8 @@ class UIUtils {
       BGCOLOR = BLECardTheme.bgColor;
       hop = Out.println( SPACE );
       blockHeight += hop;
-
-      char addressStr[24] = {'\0'};
+      
+      *addressStr = {'\0'};
       sprintf( addressStr, addressTpl, BleCard->address );
       hop = Out.println( addressStr );
       blockHeight += hop;
@@ -735,8 +771,8 @@ class UIUtils {
         //maclastbytes
         //tft.setTextColor( macColor, BLE_WHITE /*BLECardTheme.bgColor */);
       //}
-      
-      char dbmStr[16];
+
+      *dbmStr = {'\0'};
       sprintf( dbmStr, dbmTpl, BleCard->rssi );
       alignTextAt( dbmStr, 0, Out.scrollPosY - hop, BLECardTheme.textColor, BLECardTheme.bgColor, ALIGN_RIGHT );
       tft.setCursor( 0, Out.scrollPosY );
@@ -764,16 +800,8 @@ class UIUtils {
 
       if( TimeIsSet ) {
         if ( BleCard->hits > 1 ) {
-  
-          char hitsTimeStampStr[48];
-          const char* hitsTimeStampTpl = "      %04d/%02d/%02d %02d:%02d:%02d %s";
-          char hitsStr[16];
-  
-          if( BleCard->hits > 999 ) {
-            sprintf(hitsStr, "(%dK hits)", BleCard->hits/1000);
-          } else {
-            sprintf(hitsStr, "(%d hits)", BleCard->hits);
-          }
+          *hitsStr = {'\0'};
+          sprintf(hitsStr, "(%s hits)", formatUnit( BleCard->hits ) );
   
           if( BleCard->updated_at.unixtime() > 0 /* BleCard->created_at.year() > 1970 */) {
             unsigned long age_in_seconds = abs( BleCard->created_at.unixtime() - BleCard->updated_at.unixtime() );
@@ -795,6 +823,7 @@ class UIUtils {
 
           if( BleCard->created_at.year() > 1970 ) {
             blockHeight += Out.println(SPACE);
+            *hitsTimeStampStr = {'\0'};
             sprintf(hitsTimeStampStr, hitsTimeStampTpl, 
               BleCard->created_at.year(),
               BleCard->created_at.month(),
@@ -815,7 +844,7 @@ class UIUtils {
 
       if ( !isEmpty( BleCard->ouiname ) ) {
         blockHeight += Out.println( SPACE );
-        char ouiStr[38] = {'\0'};
+        *ouiStr = {'\0'};
         sprintf( ouiStr, ouiTpl, BleCard->ouiname );
         hop = Out.println( ouiStr );
         blockHeight += hop;
@@ -830,14 +859,14 @@ class UIUtils {
       
       if ( BleCard->appearance != 0 ) {
         blockHeight += Out.println(SPACE);
-        char appearanceStr[48];
+        *appearanceStr = {'\0'};
         sprintf( appearanceStr, appearanceTpl, BleCard->appearance );
         hop = Out.println( appearanceStr );
         blockHeight += hop;
       }
       if ( !isEmpty( BleCard->manufname ) ) {
         blockHeight += Out.println(SPACE);
-        char manufStr[38] = {'\0'};
+        *manufStr = {'\0'};
         sprintf( manufStr, manufTpl, BleCard->manufname );
         hop = Out.println( manufStr );
         blockHeight += hop;
@@ -854,7 +883,7 @@ class UIUtils {
         }
       }
       if ( !isEmpty( BleCard->name ) ) {
-        char nameStr[38] = {'\0'};
+        *nameStr = {'\0'};
         sprintf(nameStr, nameTpl, BleCard->name);
         blockHeight += Out.println(SPACE);
         hop = Out.println( nameStr );
