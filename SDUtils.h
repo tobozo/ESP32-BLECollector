@@ -1,5 +1,4 @@
 
-
 static bool sd_mounted = false;
 
 bool SDSetup() {
@@ -64,3 +63,8 @@ static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char
   }
   Serial.printf("\nTotal space used: %d Bytes\n\n", totalSize);
 }
+
+
+#ifdef NEEDS_SDUPDATER
+  #include "SDUpdater.h" // multi roms system
+#endif

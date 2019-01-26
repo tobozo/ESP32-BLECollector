@@ -37,7 +37,7 @@
 
 
 
-#define DS1307_ADDR 0x68
+#define DS1307_ADDR 0x68 // I2C address
 
 class BLE_RTC_DS1307 {
   public:
