@@ -148,8 +148,14 @@ static void timeHousekeeping() {
   #endif // SKETCH_MODE==SKETCH_MODE_BUILD_DEFAULT
 
   nowDateTime = internalDateTime;
-  sprintf(UpTimeString, UpTimeStringTpl, hh, mm);
-  log_d("Time:%s, Uptime:", hhmmString, UpTimeString );
+  if( hh < 24 ) {
+    sprintf(UpTimeString, UpTimeStringTpl, hh, mm);
+  } else if( round(hh/24) == 1 ) {
+    sprintf(UpTimeString, UpTimeStringTplDays, 1, "day");
+  } else {
+    sprintf(UpTimeString, UpTimeStringTplDays, round(hh/24), "days");
+  }
+  log_d("Time: %s, Uptime: %s", hhmmString, UpTimeString );
 }
 
 
@@ -184,6 +190,6 @@ void timeSetup() {
     #else
       NTPSetup();
     #endif
+    timeHousekeeping();
   #endif
-  timeHousekeeping();
 }

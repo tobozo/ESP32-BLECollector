@@ -6,7 +6,7 @@ bool SDSetup() {
   unsigned long max_wait = 500;
   byte attempts = 100;
   while ( sd_mounted == false && attempts>0) {
-    if (BLE_FS.begin() ) {
+    if ( SD_begin() ) {
       sd_mounted = true;
     } else {
       log_e("[SD] Mount Failed");

@@ -1,11 +1,80 @@
 
+#define WROVER_KIT
+//#define M5STACK
+
+
+#ifdef WROVER_KIT
+
 #include <FS.h>
 #include <Adafruit_GFX.h>   // Core graphics library
 #include "WROVER_KIT_LCD.h" // Latest version must have the VScroll def patch: https://github.com/espressif/WROVER_KIT_LCD/pull/3/files
 WROVER_KIT_LCD tft;
+
 #include <SD_MMC.h>
 fs::SDMMCFS &BLE_FS = SD_MMC;
-const char* BLE_FS_TYPE = "sdcard";
+#define BLE_FS_TYPE "sdcard"
+#define SD_begin() BLE_FS.begin()
+
+#define tft_setupScrollArea tft.setupScrollArea
+#define tft_scrollTo tft.scrollTo
+#define tft_getTextBounds tft.getTextBounds
+#define tft_readPixels tft.readPixels
+#define tft_initOrientation() tft.setRotation(0)
+#define scrollpanel_height() tft.height()
+#define scrollpanel_width() tft.width()
+
+
+#elif defined(M5STACK)
+
+
+#include <M5Stack.h>
+#include <M5StackUpdater.h>
+
+M5Display tft;
+
+#include <SD.h>
+fs::SDFS &BLE_FS = SD;
+#define BLE_FS_TYPE "sd"
+#define SD_begin() BLE_FS.begin()
+
+#define tft_readPixels tft.readRect
+#define tft_initOrientation() tft.setRotation(1)
+#define scrollpanel_height() tft.width()
+#define scrollpanel_width() tft.height()
+
+void tft_getTextBounds(const char *string, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h) {
+  *w = tft.textWidth( string );
+  *h = tft.fontHeight( tft.textfont );  
+}
+void tft_getTextBounds(const __FlashStringHelper *s, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h) {
+  *w = tft.textWidth( s );
+  *h = tft.fontHeight( tft.textfont );  
+}
+void tft_getTextBounds(const String &str, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h) {
+  *w = tft.textWidth( str );
+  *h = tft.fontHeight( tft.textfont );  
+}
+
+
+void tft_setupScrollArea(uint16_t tfa, uint16_t bfa) {
+  tft.writecommand(ILI9341_VSCRDEF); // Vertical scroll definition
+  tft.writedata(tfa >> 8);           // Top Fixed Area line count
+  tft.writedata(tfa);
+  tft.writedata((scrollpanel_width()-tfa-bfa)>>8);  // Vertical Scrolling Area line count
+  tft.writedata(scrollpanel_width()-tfa-bfa);
+  tft.writedata(bfa >> 8);           // Bottom Fixed Area line count
+  tft.writedata(bfa);
+  log_e("Init Scroll area with tfa/bfa %d/%d on w/h %d/%d", tfa, bfa, scrollpanel_width(), scrollpanel_height());
+}
+
+void tft_scrollTo(uint16_t vsp) {
+  uint16_t rotation = tft.getRotation();
+  //tft.setRotation(0);
+  tft.writecommand(ILI9341_VSCRSADD); // Vertical scrolling pointer
+  tft.writedata(vsp>>8);
+  tft.writedata(vsp);
+  //tft.setRotation(rotation);
+}
 
 
 /*
@@ -41,6 +110,8 @@ ILI9341 &tft = GO.lcd;
 #include <SD_MMC.h>
 fs::SDMMCFS &BLE_FS = SD_MMC;
 */
+
+#endif
 
 // UI palette
 #define BLE_WHITE       0xFFFF

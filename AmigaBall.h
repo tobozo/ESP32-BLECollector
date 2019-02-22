@@ -36,9 +36,9 @@ struct AmigaBallConfig {
   long Framelength = 25;
   byte Wires = 0; // 0 = no wireframes
   uint16_t BGColor = tft.color565(0x22, 0x22, 0x44);
-  uint16_t YPos = 150;
+  uint16_t YPos = 40;
   uint16_t XPos = 0;
-  uint16_t Width = tft.width();
+  uint16_t Width = scrollpanel_width();
   uint16_t Height = 132;
 
 } amigaBallConfig;

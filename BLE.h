@@ -161,6 +161,7 @@ class FoundDeviceCallback: public BLEAdvertisedDeviceCallbacks {
 
   void onResult(BLEAdvertisedDevice advertisedDevice) {
 
+    #if TIME_UPDATE_SOURCE==TIME_UPDATE_BLE
     // TODO: add security
     if (advertisedDevice.haveServiceUUID() && advertisedDevice.isAdvertisingService( timeServiceUUID )) {
       stdBLEAddress = advertisedDevice.getAddress().toString();
@@ -176,10 +177,13 @@ class FoundDeviceCallback: public BLEAdvertisedDeviceCallbacks {
         return;
       }
     }
+    #endif
+    
 
     if( onScanDone  ) return;
 
     if( scan_cursor < MAX_DEVICES_PER_SCAN ) {
+      log_e("will store advertisedDevice in cache #%d", scan_cursor);
       BLEDevHelper.store( BLEDevScanCache[scan_cursor], advertisedDevice );
       //bool is_random = strcmp( BLEDevScanCache[scan_cursor]->ouiname, "[random]" ) == 0;
       bool is_random = (BLEDevScanCache[scan_cursor]->addr_type == BLE_ADDR_TYPE_RANDOM || BLEDevScanCache[scan_cursor]->addr_type == BLE_ADDR_TYPE_RPA_RANDOM );
@@ -262,8 +266,11 @@ class BLEScanUtils {
       pClient  = BLEDevice::createClient();
       pClient->setClientCallbacks( pTimeClientCallback );
       UI.init(); // launch all UI tasks
-      DB.init(); // mount DB
-      WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
+      if( ! DB.init() ) { // mount DB
+        log_e("Failed to mount DB, check files...");
+        return;
+      }
+      //WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
       getPrefs();
       startScanCB();
       startSerialTask();

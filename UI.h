@@ -1,3 +1,4 @@
+
 /*
 
   ESP32 BLE Collector - A BLE scanner with sqlite data persistence on the SD Card
@@ -201,7 +202,7 @@ class UIUtils {
       }
 
       tft.begin();
-      tft.setRotation( 0 ); // required to get smooth scrolling
+      tft_initOrientation(); //tft.setRotation( 0 ); // required to get smooth scrolling
       tft.setTextColor(BLE_YELLOW);
 
       if (clearScreen) {
@@ -233,7 +234,9 @@ class UIUtils {
       #endif
       timeStateIcon();
       footerStats();
+      #ifndef M5STACK
       xTaskCreatePinnedToCore(taskHeapGraph, "taskHeapGraph", 2048, NULL, 2, NULL, 1);
+      #endif
       if ( clearScreen ) {
         playIntro();
       } else {
@@ -272,6 +275,8 @@ class UIUtils {
       for (int i = 0; i < 5; i++) {
         Out.println(SPACE);
       }
+      delay(2000);
+      Out.scrollNextPage();
       giveMuxSemaphore();
       xTaskCreatePinnedToCore(introUntilScroll, "introUntilScroll", 2048, NULL, 1, NULL, 1);
     }
@@ -288,19 +293,19 @@ class UIUtils {
       }
       takeMuxSemaphore();
       for(uint16_t y=0; y<HEADER_HEIGHT; y++) { // header portion
-        tft.readPixels(0, y, Out.width, 1, imgBuffer);
+        tft_readPixels(0, y, Out.width, 1, imgBuffer);
         screenshotFile.write( (uint8_t*)imgBuffer, sizeof(uint16_t)*Out.width );
       }
       for(uint16_t y=Out.yStart; y<Out.height-FOOTER_HEIGHT; y++) { // lower scroll portion
-        tft.readPixels(0, y, Out.width, 1, imgBuffer);
+        tft_readPixels(0, y, Out.width, 1, imgBuffer);
         screenshotFile.write( (uint8_t*)imgBuffer, sizeof(uint16_t)*Out.width );
       }
       for(uint16_t y=HEADER_HEIGHT; y<Out.yStart; y++) { // upper scroll portion
-        tft.readPixels(0, y, Out.width, 1, imgBuffer);
+        tft_readPixels(0, y, Out.width, 1, imgBuffer);
         screenshotFile.write( (uint8_t*)imgBuffer, sizeof(uint16_t)*Out.width );
       }
       for(uint16_t y=Out.height-FOOTER_HEIGHT; y<Out.height; y++) { // footer portion
-        tft.readPixels(0, y, Out.width, 1, imgBuffer);
+        tft_readPixels(0, y, Out.width, 1, imgBuffer);
         screenshotFile.write( (uint8_t*)imgBuffer, sizeof(uint16_t)*Out.width );
       }
       giveMuxSemaphore();
@@ -385,14 +390,24 @@ class UIUtils {
       int16_t posX = tft.getCursorX();
       int16_t posY = tft.getCursorY();
 
-      alignTextAt( hhmmString,   85, 288, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
-      alignTextAt( UpTimeString, 85, 298, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
-      alignTextAt("(c+) tobozo", 77, 308, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+
+/*
+tft.height() - 32; // 288
+tft.height() - 22; // 298
+tft.height() - 12; // 208
+
+      HHMM_POS_Y 288
+      UPTIME_POS_Y 298
+      COPYLEFT_POS_Y 308
+*/
+      alignTextAt( hhmmString,   85, Out.height - 32/*288*/, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+      alignTextAt( UpTimeString, 85, Out.height - 22/*298*/, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+      alignTextAt("(c+) tobozo", 77, Out.height - 12/*308*/, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
 
       if( gpsIconVisible ) {
-        tft.drawJpg( gps_jpg, gps_jpg_len, 128, 286, 10,  10);
+        tft.drawJpg( gps_jpg, gps_jpg_len, 128, Out.height - 34/*286*/, 10,  10);
       } else {
-        tft.fillRect( 128, 286, 10,  10, FOOTER_BGCOLOR );
+        tft.fillRect( 128, Out.height - 34/*286*/, 10,  10, FOOTER_BGCOLOR );
       }
       *sessDevicesCountStr = {'\0'};
       *devicesCountStr = {'\0'};
@@ -402,9 +417,9 @@ class UIUtils {
       sprintf( devicesCountStr, devicesCountTpl, formatUnit(devicesCount) );
       sprintf( newDevicesCountStr, newDevicesCountTpl, formatUnit(scan_rounds) );
 
-      alignTextAt( devicesCountStr, 0, 288, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
-      alignTextAt( sessDevicesCountStr, 0, 298, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
-      alignTextAt( newDevicesCountStr, 0, 308, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
+      alignTextAt( devicesCountStr, 0, Out.height - 32/*288*/, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
+      alignTextAt( sessDevicesCountStr, 0, Out.height - 22/*298*/, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
+      alignTextAt( newDevicesCountStr, 0, Out.height - 12/*308*/, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
 
       tft.setCursor(posX, posY);
       giveMuxSemaphore();
@@ -413,13 +428,13 @@ class UIUtils {
 
     void cacheStats() {
       takeMuxSemaphore();
-      percentBox(164, 284, 10, 10, BLEDevCacheUsed, BLE_CYAN, BLE_BLACK);
-      percentBox(164, 296, 10, 10, VendorCacheUsed, BLE_ORANGE, BLE_BLACK);
-      percentBox(164, 308, 10, 10, OuiCacheUsed, BLE_GREENYELLOW, BLE_BLACK);
+      percentBox(164, Out.height - 36/*284*/, 10, 10, BLEDevCacheUsed, BLE_CYAN, BLE_BLACK);
+      percentBox(164, Out.height - 24/*296*/, 10, 10, VendorCacheUsed, BLE_ORANGE, BLE_BLACK);
+      percentBox(164, Out.height - 12/*308*/, 10, 10, OuiCacheUsed, BLE_GREENYELLOW, BLE_BLACK);
       if( filterVendors ) {
-        tft.drawJpg( filter_jpeg, filter_jpeg_len, 152, 308, 10,  8);
+        tft.drawJpg( filter_jpeg, filter_jpeg_len, 152, Out.height - 12/*308*/, 10,  8);
       } else {
-        tft.fillRect( 152, 308, 10,  8, FOOTER_BGCOLOR );
+        tft.fillRect( 152, Out.height - 12/*308*/, 10,  8, FOOTER_BGCOLOR );
       }
       giveMuxSemaphore();
     }
@@ -580,7 +595,9 @@ class UIUtils {
     static void taskHeapGraph( void * pvParameters ) { // always running
       mux = xSemaphoreCreateMutex();
       xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 4096, NULL, 4, NULL, 0); /* last = Task Core */
+      #if HAS_EXTERNAL_RTC
       xTaskCreatePinnedToCore(clockSync, "clockSync", 2048, NULL, 4, NULL, 1); // RTC wants to run on core 1 or it fails
+      #endif
       vTaskDelete(NULL);
     }
 
@@ -592,9 +609,11 @@ class UIUtils {
           vTaskDelay( 100 );
           continue;
         }
+        #if HAS_EXTERNAL_RTC
         takeMuxSemaphore();
         timeHousekeeping();
         giveMuxSemaphore();
+        #endif
         lastClockTick = millis();
         #if HAS_GPS
           if( GPSHasDateTime ) {
@@ -616,7 +635,7 @@ class UIUtils {
       int16_t GRAPH_LINE_WIDTH = HEAPMAP_BUFFLEN - 1;
       int16_t GRAPH_LINE_HEIGHT = 35;
       int16_t GRAPH_X = Out.width - GRAPH_LINE_WIDTH - 2;
-      int16_t GRAPH_Y = 283;
+      int16_t GRAPH_Y = Out.height - 37/*283*/;
 
       while (1) {
 
@@ -950,7 +969,7 @@ class UIUtils {
 
     static void alignTextAt(const char* text, uint16_t x, uint16_t y, int16_t color = BLE_YELLOW, int16_t bgcolor = BGCOLOR, byte textAlign = ALIGN_FREE) {
       tft.setTextColor(color, bgcolor);
-      tft.getTextBounds(text, x, y, &Out.x1_tmp, &Out.y1_tmp, &Out.w_tmp, &Out.h_tmp);
+      tft_getTextBounds(text, x, y, &Out.x1_tmp, &Out.y1_tmp, &Out.w_tmp, &Out.h_tmp);
       switch (textAlign) {
         case ALIGN_FREE:
           tft.setCursor(x, y);

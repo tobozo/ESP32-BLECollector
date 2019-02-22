@@ -50,9 +50,19 @@
 
 #include "Settings.h"
 
-
 void setup() {
+  #ifdef M5STACK
+  M5.begin();
+  Wire.begin();
+  delay(100); // need this to avoid a boot loop
+  if (digitalRead(BUTTON_A_PIN) == 0) {
+    Serial.println("Will Load menu binary");
+    updateFromFS(SD);
+    ESP.restart();
+  }
+  #else
   Serial.begin(115200);
+  #endif
   Serial.println(welcomeMessage);
   Serial.printf("RTC_PROFILE: %s\nHAS_EXTERNAL_RTC: %s\nHAS_GPS: %s\nTIME_UPDATE_SOURCE: %d\nSKECTH_MODE: %d\n",
     RTC_PROFILE,

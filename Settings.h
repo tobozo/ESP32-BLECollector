@@ -50,9 +50,9 @@
 #define SKETCH_MODE_BUILD_NTP_UPDATER 2 // build the NTP Updater for external RTC
 
 // edit these values to fit your mode
-#define HAS_EXTERNAL_RTC true
-#define HAS_GPS true
-#define TIME_UPDATE_SOURCE     TIME_UPDATE_GPS
+#define HAS_EXTERNAL_RTC false
+#define HAS_GPS false
+#define TIME_UPDATE_SOURCE     TIME_UPDATE_NONE
 #define SKETCH_MODE     SKETCH_MODE_BUILD_DEFAULT
 //#define SKETCH_MODE     SKETCH_MODE_BUILD_NTP_UPDATER
 
@@ -93,7 +93,7 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN 4
 #define MAX_BLECARDS_WITHOUT_TIMESTAMPS_ON_SCREEN 5
 #define BLEDEVCACHE_PSRAM_SIZE 1024 // use PSram to cache BLECards
-#define BLEDEVCACHE_HEAP_SIZE 32 // use some heap to cache BLECards. min = 5, max = 64, higher value = smaller uptime
+#define BLEDEVCACHE_HEAP_SIZE 16 // use some heap to cache BLECards. min = 5, max = 64, higher value = smaller uptime
 #define MAX_DEVICES_PER_SCAN MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN // also max displayed devices on the screen, affects initial scan duration
 
 #define MENU_FILENAME "/" BUILD_TYPE ".bin"
@@ -134,26 +134,27 @@ Preferences preferences;
 #endif
 
 #if SKETCH_MODE==SKETCH_MODE_BUILD_NTP_UPDATER
+  #include "certificates.h"
   #include <WiFi.h>
   #include <HTTPClient.h>
   #include <NtpClientLib.h> // https://github.com/gmag11/NtpClient
-  #include "certificates.h"
 #else
   // don't load BLE stack and SQLite3 when compiling the NTP Utility
   #include <BLEDevice.h>
   #include <BLEUtils.h>
   #include <BLEScan.h>
   #include <BLEAdvertisedDevice.h>
-  // used to disable brownout detector
-  #include "soc/soc.h"
-  #include "soc/rtc_cntl_reg.h"
-  #include "esp_task_wdt.h"
 
   #include <stdio.h>
   #include <stdlib.h>
   #include <sqlite3.h> // https://github.com/siara-cc/esp32_arduino_sqlite3_lib
 #endif
 
+
+// used to disable brownout detector
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
+#include "esp_task_wdt.h"
 
 /*
  * Data sources:

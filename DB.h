@@ -180,6 +180,17 @@ struct OUIPsramCacheStruct {
 #define OUIDBSize 25523 // how many entries in the OUI lookup DB
 OUIPsramCacheStruct** OuiPsramCache = NULL;
 
+#define BLE_COLLECTOR_DB_FILE "blemacs.db"
+#define MAC_OUI_NAMES_DB_FILE "mac-oui-light.db"
+#define BLE_VENDOR_NAMES_DB_FILE "ble-oui.db"
+
+#define BLE_COLLECTOR_DB_SQLITE_PATH  "/" BLE_FS_TYPE "/" BLE_COLLECTOR_DB_FILE
+#define MAC_OUI_NAMES_DB_SQLITE_PATH  "/" BLE_FS_TYPE "/" MAC_OUI_NAMES_DB_FILE
+#define BLE_VENDOR_NAMES_DB_SQLITE_PATH  "/" BLE_FS_TYPE "/" BLE_VENDOR_NAMES_DB_FILE
+#define BLE_COLLECTOR_DB_FS_PATH  "/" BLE_COLLECTOR_DB_FILE
+#define MAC_OUI_NAMES_DB_FS_PATH  "/" MAC_OUI_NAMES_DB_FILE
+#define BLE_VENDOR_NAMES_DB_FS_PATH  "/" BLE_VENDOR_NAMES_DB_FILE
+
 
 class DBUtils {
   public:
@@ -208,6 +219,19 @@ class DBUtils {
       MAC_OUI_NAMES_DB = 1,
       BLE_VENDOR_NAMES_DB =2
     };
+
+    struct DBInfo {
+      DBName id;
+      char* sqlitepath;
+      char* fspath;
+    };
+
+    DBInfo dbcollection[3] = {
+      { .id=BLE_COLLECTOR_DB,    .sqlitepath=(char *)BLE_COLLECTOR_DB_SQLITE_PATH,    .fspath=(char *)BLE_COLLECTOR_DB_FS_PATH },
+      { .id=MAC_OUI_NAMES_DB,    .sqlitepath=(char *)MAC_OUI_NAMES_DB_SQLITE_PATH,    .fspath=(char *)MAC_OUI_NAMES_DB_FS_PATH },
+      { .id=BLE_VENDOR_NAMES_DB, .sqlitepath=(char *)BLE_VENDOR_NAMES_DB_SQLITE_PATH, .fspath=(char *)BLE_VENDOR_NAMES_DB_FS_PATH }
+    };
+
   
     bool isOOM = false; // for stability
     bool isCorrupt = false; // for maintenance
@@ -219,7 +243,7 @@ class DBUtils {
     bool initDone = false;
 
 
-    void init() {
+    bool init() {
       while(SDSetup()==false) {
         UI.headerStats("Card Mount Failed");
         delay(500);
@@ -231,16 +255,42 @@ class DBUtils {
       BLEMacsDbFSPath = (char*)malloc(32);
       
       setBLEDBPath();
-      sqlite3_initialize();
+      if( !checkDBFiles() ) {
+        return false;
+      } else {
+        log_e("OUI and Mac DB Files okay");
+      }
+      
       initial_free_heap = freeheap;
       if( !BLE_FS.exists( BLEMacsDbFSPath ) ) {
         log_w("%s DB does not exist", BLEMacsDbFSPath);
+/*
+        File createFile = BLE_FS.open( dbcollection[BLE_COLLECTOR_DB].fspath, FILE_WRITE );
+        if(!createFile) {
+          log_e("Whoopsie could not open path");
+          return false;
+        } else {
+          log_e("yay");
+          //log_e("%s creating file", dbcollection[BLE_COLLECTOR_DB].fspath);
+          //const uint8_t sqlite_header[17] = "SQLite format 3\000";
+          //createFile.write(sqlite_header, 17);
+        }
+        createFile.close();*/
+        sqlite3_initialize();
         createDB(); // only if no exists
       } else {
         log_d("%s DB file already exists", BLEMacsDbFSPath);
+        sqlite3_initialize();
       }
       entries = getEntries();
       cacheWarmup();
+
+
+
+      //DBExec( OUIVendorsDB, "SELECT count(*) FROM 'ble-oui'", (char*)"count(*)" );
+      //Serial.printf("OUI vendors DB has %s entries\n", colValue);
+      
+      return true;
     }
 
 
@@ -264,8 +314,22 @@ class DBUtils {
         sprintf(BLEMacsDbSQLitePath, "/%s/blemacs.db", BLE_FS_TYPE);
         sprintf(BLEMacsDbFSPath, "%s", "/blemacs.db");
       }
+      dbcollection[BLE_COLLECTOR_DB].sqlitepath = BLEMacsDbSQLitePath;
     }
 
+
+    bool checkDBFiles() {
+      bool ret = true;
+      if( ! BLE_FS.exists( MAC_OUI_NAMES_DB_FS_PATH ) ) {
+        log_e("Missing critical DB file %s, aborting\n", dbcollection[MAC_OUI_NAMES_DB].sqlitepath);
+        ret = false;
+      }
+      if( ! BLE_FS.exists( BLE_VENDOR_NAMES_DB_FS_PATH ) ) {
+        log_e("Missing critical DB file %s, aborting\n", dbcollection[BLE_VENDOR_NAMES_DB].sqlitepath);
+        ret = false;
+      }
+      return ret;
+    }
 
     void OUICacheWarmup() {
       if( hasPsram ) {
@@ -324,7 +388,7 @@ class DBUtils {
           log_e("[ERROR][%d][%d][%d] can't allocate", i, freeheap, freepsheap);
           continue;
         }
-        BLEDevHelper.init( BLEDevRAMCache[i] );
+        BLEDevHelper.init( BLEDevRAMCache[i], hasPsram );
         delay(1);
       }
       BLEDevScanCache = (BlueToothDevice**)ble_calloc(MAX_DEVICES_PER_SCAN, sizeof( BlueToothDevice ) );
@@ -334,7 +398,7 @@ class DBUtils {
           log_e("[ERROR][%d][%d][%d] can't allocate", i, freeheap, freepsheap);
           continue;
         }
-        BLEDevHelper.init( BLEDevScanCache[i] );
+        BLEDevHelper.init( BLEDevScanCache[i], hasPsram );
         delay(1);
       }
     }
@@ -448,13 +512,13 @@ class DBUtils {
      int rc;
       switch(dbName) {
         case BLE_COLLECTOR_DB: // will be created upon first boot
-          rc = sqlite3_open(/*"/sdcard/blemacs.db"*/BLEMacsDbSQLitePath, &BLECollectorDB); 
+          rc = sqlite3_open( dbcollection[dbName].sqlitepath/*"/sdcard/blemacs.db"*/, &BLECollectorDB); 
         break;
         case MAC_OUI_NAMES_DB: // https://code.wireshark.org/review/gitweb?p=wireshark.git;a=blob_plain;f=manuf
-          rc = sqlite3_open("/sdcard/mac-oui-light.db", &OUIVendorsDB); 
+          rc = sqlite3_open( dbcollection[dbName].sqlitepath /*"/sdcard/mac-oui-light.db"*/, &OUIVendorsDB); 
         break;
         case BLE_VENDOR_NAMES_DB: // https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers
-          rc = sqlite3_open("/sdcard/ble-oui.db", &BLEVendorsDB); 
+          rc = sqlite3_open( dbcollection[dbName].sqlitepath /*"/sdcard/ble-oui.db"*/, &BLEVendorsDB); 
         break;
         default: log_e("Can't open null DB"); UI.DBStateIconSetColor(-1); return rc;
       }
@@ -567,7 +631,11 @@ class DBUtils {
     // shit happens
     void error(const char* zErrMsg) {
       log_e("SQL error: %s", zErrMsg);
+      HourChangeTrigger = false;
+      DayChangeTrigger = false;
       if (strcmp(zErrMsg, "database disk image is malformed")==0) {
+        needsReset = true;
+      } else if (strcmp(zErrMsg, "file is not a database")==0) {
         needsReset = true;
       } else if (strcmp(zErrMsg, "no such table: blemacs")==0) {
         needsReset = true;
@@ -694,13 +762,14 @@ class DBUtils {
 
 
     void resetDB() {
-      Out.println("Re-creating database :");
-      Out.println( BLEMacsDbFSPath );
+      Serial.println("Re-creating database :");
+      Serial.println( BLEMacsDbFSPath );
       BLE_FS.remove( BLEMacsDbFSPath );
       ESP.restart();
     }
 
     void createDB() {
+      log_e("creating db");
       open(BLE_COLLECTOR_DB, false);
       log_d("created %s if no exists:  : %s", BLEMacsDbSQLitePath, createTableQuery);
       DBExec( BLECollectorDB, createTableQuery ) ;
@@ -1050,6 +1119,7 @@ class DBUtils {
 
     // counts results from a DB query
     static int DBCallback(void *data, int argc, char **argv, char **azColName) {
+      //log_e("got one result");
       results++;
       int i;
       for (i = 0; i < argc; i++) {
@@ -1058,6 +1128,7 @@ class DBUtils {
             memset( colValue, 0, MAX_FIELD_LEN );
             if( argv[i] ) {
               memcpy( colValue, argv[i], strlen(argv[i]) );
+              log_e("got one result :%s", colValue);
             }
             //colValue = argv[i] ? argv[i] : "";
           }

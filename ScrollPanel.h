@@ -34,8 +34,8 @@ static bool isScrolling = false;
 
 class ScrollableOutput {
   public:
-    uint16_t height = tft.height();//ILI9341_HEIGHT (=320)
-    uint16_t width  = tft.width();//ILI9341_WIDTH (=240)
+    uint16_t height = scrollpanel_height();//ILI9341_HEIGHT (=320)
+    uint16_t width  = scrollpanel_width();//ILI9341_WIDTH (=240)
     // scroll control variables
     uint16_t scrollTopFixedArea = 0;
     uint16_t scrollBottomFixedArea = 0;
@@ -65,7 +65,7 @@ class ScrollableOutput {
 
     void setupScrollArea(uint16_t TFA, uint16_t BFA, bool clear = false) {
       tft.setCursor(0, TFA);
-      tft.setupScrollArea(TFA, BFA); // driver needs patching for that, see https://github.com/espressif/WROVER_KIT_LCD/pull/3/files
+      tft_setupScrollArea(TFA, BFA); // driver needs patching for that, see https://github.com/espressif/WROVER_KIT_LCD/pull/3/files
       scrollPosY = TFA;
       scrollTopFixedArea = TFA;
       scrollBottomFixedArea = BFA;
@@ -78,7 +78,7 @@ class ScrollableOutput {
     }
 
     void scrollNextPage() {
-      tft.getTextBounds("O", scrollPosX, scrollPosY, &x1_tmp, &y1_tmp, &w_tmp, &h_tmp);
+      tft_getTextBounds("O", scrollPosX, scrollPosY, &x1_tmp, &y1_tmp, &w_tmp, &h_tmp);
       int linesInPage = (yArea-(scrollPosY-scrollTopFixedArea)) / h_tmp;
       for(int i=0; i<linesInPage; i++) {
         println();
@@ -142,7 +142,7 @@ class ScrollableOutput {
       if (scrollPosY >= (height - scrollBottomFixedArea)) {
         scrollPosY = (scrollPosY % (height - scrollBottomFixedArea)) + scrollTopFixedArea;
       }
-      tft.getTextBounds(str, scrollPosX, scrollPosY, &x1_tmp, &y1_tmp, &w_tmp, &h_tmp);
+      tft_getTextBounds(str, scrollPosX, scrollPosY, &x1_tmp, &y1_tmp, &w_tmp, &h_tmp);
   
       if (scrollPosX == 0) {
         tft.fillRect(0, scrollPosY, width, h_tmp, BGCOLOR);
@@ -163,7 +163,7 @@ class ScrollableOutput {
       for (int i = 0; i < lines; i++) {
         yStart++;
         if (yStart == height - scrollBottomFixedArea) yStart = scrollTopFixedArea;
-        tft.scrollTo(yStart);
+        tft_scrollTo(yStart);
         delay(wait);
       }
       return  yTemp;
