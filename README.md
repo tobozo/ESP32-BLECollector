@@ -6,7 +6,7 @@ Like a BLE Scanner but with persistence.
 
 
 
-All BLE data found by the [BLE Scanner](https://github.com/nkolban/ESP32_BLE_Arduino) is collected into a [sqlite3](https://github.com/siara-cc/esp32_arduino_sqlite3_lib) format on the SD Card.
+All BLE data found by the [BLE Scanner](https://github.com/wakwak-koba/ESP32_BLE_Arduino) is collected into a [sqlite3](https://github.com/siara-cc/esp32_arduino_sqlite3_lib) format on the SD Card.
 
 Public Mac addresses are compared against [OUI list](https://code.wireshark.org/review/gitweb?p=wireshark.git;a=blob_plain;f=manuf), while Vendor names are compared against [BLE Device list](https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers).
 
@@ -74,4 +74,5 @@ Credits/requirements:
 
 - https://github.com/siara-cc/esp32_arduino_sqlite3_lib
 - ~~https://github.com/nkolban/ESP32_BLE_Arduino~~ 
-- https://github.com/chegewara (see [this issue](https://github.com/tobozo/ESP32-BLECollector/issues/2)
+- https://github.com/wakwak-koba/ESP32_BLE_Arduino (specifically patched for the current version)
+- thanks to https://github.com/chegewara (see [this issue](https://github.com/tobozo/ESP32-BLECollector/issues/2))
