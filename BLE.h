@@ -270,7 +270,7 @@ class BLEScanUtils {
         log_e("Failed to mount DB, check files...");
         return;
       }
-      //WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
+      WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
       getPrefs();
       startScanCB();
       startSerialTask();
@@ -352,6 +352,7 @@ class BLEScanUtils {
     }
     static void rmFileTask( void * param = NULL ) {
       // YOLO style
+      isQuerying = true;
       if( param != NULL ) {
         if( BLE_FS.remove( (const char*)param ) ) {
           Serial.printf("File %s deleted\n", param);
@@ -361,6 +362,7 @@ class BLEScanUtils {
       } else {
         Serial.println("Nothing to delete");
       }
+      isQuerying = false;
       vTaskDelete( NULL );
     }
     static void screenShowCB( void * param = NULL ) {
@@ -382,7 +384,9 @@ class BLEScanUtils {
       xTaskCreatePinnedToCore(listDirTask, "listDirTask", 5000, NULL, 2, NULL, 1); /* last = Task Core */      
     }
     static void listDirTask( void * param = NULL ) {
+      isQuerying = true;
       listDir(BLE_FS, "/", 0, DB.BLEMacsDbFSPath);
+      isQuerying = false;
       vTaskDelete( NULL );    
     }
     static void toggleCB( void * param = NULL ) {

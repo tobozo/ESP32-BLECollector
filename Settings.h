@@ -113,6 +113,7 @@ static xSemaphoreHandle mux = NULL; // this is needed to prevent rendering colli
                                     // between scrollpanel and heap graph
 
 static bool DBneedsReplication = false;
+static bool isQuerying = false; // state maintained while SD is accessed, useful when SD is used instead of SD_MMC
 
 
 // used to get the resetReason

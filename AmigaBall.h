@@ -35,8 +35,8 @@
 struct AmigaBallConfig {
   long Framelength = 25;
   byte Wires = 0; // 0 = no wireframes
-  uint16_t BGColor = tft.color565(0x22, 0x22, 0x44);
-  uint16_t YPos = 40;
+  uint16_t BGColor = tft_color565(0x22, 0x22, 0x44);
+  uint16_t YPos = 0;
   uint16_t XPos = 0;
   uint16_t Width = scrollpanel_width();
   uint16_t Height = 132;
@@ -83,29 +83,29 @@ class AmigaRulez {
     long lastTick    = millis();
     long processTicks = 0;
 
-    uint16_t variableScale = Scale;
-    uint16_t oldScale = Scale;
-    uint16_t ScaleAmplitude = 8;
-    uint16_t MaxScaleAmplitude;
-    uint16_t TiltDeg = 17; // 17 degrees tilting to the right
-    uint16_t LeftBoundary;
-    uint16_t RightBoundary;
-    uint16_t XPos;
-    uint16_t YPos;
-    uint16_t Width;
-    uint16_t Height;
+    float variableScale = Scale;
+    float oldScale = Scale;
+    float ScaleAmplitude = 8;
+    float MaxScaleAmplitude;
+    float TiltDeg = 17; // 17 degrees tilting to the right
+    float LeftBoundary;
+    float RightBoundary;
+    float XPos;
+    float YPos;
+    float Width;
+    float Height;
     
-    uint16_t VCentering;
-    uint16_t Scale;
-    uint16_t YPosAmplitude;
+    float VCentering;
+    float Scale;
+    float YPosAmplitude;
     uint16_t BGColor;
-    uint16_t lastPositionX;
-    uint16_t lastPositionY;
-    uint16_t positionX;
-    uint16_t positionY;
+    float lastPositionX;
+    float lastPositionY;
+    float positionX;
+    float positionY;
 
     void init( AmigaBallConfig conf=amigaBallConfig ) {
-      BGColor        = amigaBallConfig.BGColor;//tft.color565(0x22, 0x22, 0x44);
+      BGColor        = amigaBallConfig.BGColor;//tft_color565(0x22, 0x22, 0x44);
       Framelength    = amigaBallConfig.Framelength;//33; // millis
       XPos   = amigaBallConfig.XPos;
       YPos   = amigaBallConfig.YPos;
@@ -175,7 +175,7 @@ class AmigaRulez {
       }
     }
 
-    float scaleTranslate(float s, uint16_t tx, uint16_t ty) {
+    float scaleTranslate(float s, float tx, float ty) {
       for( int i=0; i<10; i++) {
         for( int j=0; j<9; j++ ) {
           float _x = points[i][j].x * s + tx;
@@ -186,7 +186,7 @@ class AmigaRulez {
       }
     }
 
-    void transform(float s, uint16_t tx, uint16_t ty) {
+    void transform(float s, float tx, float ty) {
       tiltSphere( TiltRad );
       scaleTranslate( s, tx, ty );
     }
@@ -202,7 +202,7 @@ class AmigaRulez {
       }
     }
 
-    void clearCrescent(float r0, float r1, uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1) {
+    void clearCrescent(float r0, float r1, float x0, float y0, float x1, float y1) {
       float vectorX = x1 - x0;
       float vectorY = y1 - y0;
       float vectAngleRadians = atan2(vectorY, vectorX); // angle in radians
@@ -215,10 +215,10 @@ class AmigaRulez {
       float h = sqrt( ( r0*r0 ) - ( a*a ) );
 
       // circle intersection points
-      uint16_t xx2 = 0; // x0 + a * vectorX / d;
-      uint16_t yy2 = 0; // y0 + a * vectorY / d;
-      uint16_t xx3 = 0; // x2 + h * vectorY / d;  // also x3=x2-h*(y1-y0)/d;
-      uint16_t yy3 = 0; // y2 - h * vectorX / d;  // also y3=y2+h*(x1-x0)/d;
+      float xx2 = 0; // x0 + a * vectorX / d;
+      float yy2 = 0; // y0 + a * vectorY / d;
+      float xx3 = 0; // x2 + h * vectorY / d;  // also x3=x2-h*(y1-y0)/d;
+      float yy3 = 0; // y2 - h * vectorX / d;  // also y3=y2+h*(x1-x0)/d;
       
       float mobAngleRadians = atan2(h, a);
       float angleRad0 = vectAngleRadians-mobAngleRadians;
@@ -232,10 +232,10 @@ class AmigaRulez {
       for( float angle=angleRad0-angleStep; angle<angleRad1+angleStep; angle+=angleStep ) {
         float ct = sin(angle);
         float st = cos(angle);
-        uint16_t xx0 = x0 + st * r0;
-        uint16_t yy0 = y0 + ct * r0;
-        uint16_t xx1 = x1 + st * r1;
-        uint16_t yy1 = y1 + ct * r1;
+        float xx0 = x0 + st * r0;
+        float yy0 = y0 + ct * r0;
+        float xx1 = x1 + st * r1;
+        float yy1 = y1 + ct * r1;
         if( xx2 != 0 && yy2 != 0 ) {
           tft.fillTriangle(xx0, yy0, xx1, yy1, xx2, yy2, BGColor );
         }
@@ -249,7 +249,7 @@ class AmigaRulez {
       }
     }
 
-    void draw(float phase, float scale, float oldscale, uint16_t x, uint16_t y) {
+    void draw(float phase, float scale, float oldscale, float x, float y) {
       calcPoints( fmod(phase, phase8Rad) );
       transform(scale, x, y);
       if(lastPositionX!=0 && lastPositionY!=0) {

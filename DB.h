@@ -29,6 +29,7 @@
 
 */
 
+
 #if SKETCH_MODE==SKETCH_MODE_BUILD_NTP_UPDATER
 
   class DBUtils {
@@ -262,6 +263,7 @@ class DBUtils {
       }
       
       initial_free_heap = freeheap;
+      isQuerying = true;
       if( !BLE_FS.exists( BLEMacsDbFSPath ) ) {
         log_w("%s DB does not exist", BLEMacsDbFSPath);
 /*
@@ -282,6 +284,7 @@ class DBUtils {
         log_d("%s DB file already exists", BLEMacsDbFSPath);
         sqlite3_initialize();
       }
+      isQuerying = false;
       entries = getEntries();
       cacheWarmup();
 
@@ -320,6 +323,7 @@ class DBUtils {
 
     bool checkDBFiles() {
       bool ret = true;
+      isQuerying = true;
       if( ! BLE_FS.exists( MAC_OUI_NAMES_DB_FS_PATH ) ) {
         log_e("Missing critical DB file %s, aborting\n", dbcollection[MAC_OUI_NAMES_DB].sqlitepath);
         ret = false;
@@ -328,6 +332,7 @@ class DBUtils {
         log_e("Missing critical DB file %s, aborting\n", dbcollection[BLE_VENDOR_NAMES_DB].sqlitepath);
         ret = false;
       }
+      isQuerying = false;
       return ret;
     }
 
@@ -509,6 +514,7 @@ class DBUtils {
 
 
     int open(DBName dbName, bool readonly=true) {
+     isQuerying = true;
      int rc;
       switch(dbName) {
         case BLE_COLLECTOR_DB: // will be created upon first boot
@@ -520,7 +526,7 @@ class DBUtils {
         case BLE_VENDOR_NAMES_DB: // https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers
           rc = sqlite3_open( dbcollection[dbName].sqlitepath /*"/sdcard/ble-oui.db"*/, &BLEVendorsDB); 
         break;
-        default: log_e("Can't open null DB"); UI.DBStateIconSetColor(-1); return rc;
+        default: log_e("Can't open null DB"); UI.DBStateIconSetColor(-1); isQuerying = false; return rc;
       }
       if (rc) {
         log_e("Can't open database %d", dbName);
@@ -528,6 +534,7 @@ class DBUtils {
         // isOOM = true;
         UI.DBStateIconSetColor(-1); // OOM or I/O error
         delay(1);
+        isQuerying = false;
         return rc;
       } else {
         log_v("Opened database %d successfully", dbName);
@@ -551,6 +558,7 @@ class DBUtils {
         default: /* duh ! */ log_e("Can't open null DB");
       }
       delay(1);
+      isQuerying = false;
     }
 
     // replaces any needle from haystack (defaults to double=>single quotes)
@@ -764,7 +772,9 @@ class DBUtils {
     void resetDB() {
       Serial.println("Re-creating database :");
       Serial.println( BLEMacsDbFSPath );
+      isQuerying = true;
       BLE_FS.remove( BLEMacsDbFSPath );
+      isQuerying = false;
       ESP.restart();
     }
 

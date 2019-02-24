@@ -234,9 +234,7 @@ class UIUtils {
       #endif
       timeStateIcon();
       footerStats();
-      #ifndef M5STACK
       xTaskCreatePinnedToCore(taskHeapGraph, "taskHeapGraph", 2048, NULL, 2, NULL, 1);
-      #endif
       if ( clearScreen ) {
         playIntro();
       } else {
@@ -270,21 +268,26 @@ class UIUtils {
       pos += Out.println("         ");
       pos += Out.println("           (c+)  tobozo  2018   ");
       pos += Out.println("         ");
-      tft.drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, 106, Out.scrollPosY - pos + 8, 28,  28);
+      tft_drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, 106, Out.scrollPosY - pos + 8, 28,  28);
       Out.drawScrollableRoundRect( 58, Out.scrollPosY-pos, 128, pos, 8, BLE_GREENYELLOW );
       for (int i = 0; i < 5; i++) {
         Out.println(SPACE);
       }
+      giveMuxSemaphore();
       delay(2000);
+      takeMuxSemaphore();
       Out.scrollNextPage();
       giveMuxSemaphore();
+      #ifndef M5STACK
       xTaskCreatePinnedToCore(introUntilScroll, "introUntilScroll", 2048, NULL, 1, NULL, 1);
+      #endif
     }
 
 
     static void screenShot() {
       *screenshotFilenameStr = {'\0'};
       sprintf(screenshotFilenameStr, screenshotFilenameTpl, year(), month(), day(), hour(), minute(), second());
+      isQuerying = true;
       File screenshotFile = BLE_FS.open( screenshotFilenameStr, FILE_WRITE);
       if(!screenshotFile) {
         Serial.printf("Failed to open file %s\n", screenshotFilenameStr);
@@ -310,11 +313,13 @@ class UIUtils {
       }
       giveMuxSemaphore();
       screenshotFile.close();
+      isQuerying = false;
       Serial.printf("Screenshot saved as %s, now go to http://rawpixels.net/ to decode it (RGB565 240x320 Little Endian)\n", screenshotFilenameStr);
     }
 
     static void screenShow( void * fileName = NULL ) {
       if( fileName == NULL ) return;
+      isQuerying = true;
       File screenshotFile = BLE_FS.open( (const char*)fileName );
       if(!screenshotFile) {
         Serial.printf("Failed to open file %s\n", (const char*) fileName);
@@ -328,6 +333,7 @@ class UIUtils {
         tft.drawBitmap(0, y, Out.width, 1, imgBuffer);
       }
       giveMuxSemaphore();
+      isQuerying = false;
     }
 
 
@@ -343,7 +349,7 @@ class UIUtils {
 
 
     static void headerStats(const char *status = "") {
-      if (isScrolling) return;
+      if ( isInScroll() || isInQuery() ) return;
       takeMuxSemaphore();
       int16_t posX = tft.getCursorX();
       int16_t posY = tft.getCursorY();
@@ -357,13 +363,13 @@ class UIUtils {
         byte alignoffset = 5;
         tft.fillRect(0, 18, ICON_APP_X, 8, HEADER_BGCOLOR); // clear whole message status area
         if (strstr(status, "Inserted")) {
-          tft.drawJpg(disk_jpeg, disk_jpeg_len, alignoffset, 18, 8, 8); // disk icon
+          tft_drawJpg(disk_jpeg, disk_jpeg_len, alignoffset, 18, 8, 8); // disk icon
           alignoffset +=10;
         } else if (strstr(status, "Cache")) {
-          tft.drawJpg(ghost_jpeg, ghost_jpeg_len, alignoffset, 18, 8, 8); // disk icon
+          tft_drawJpg(ghost_jpeg, ghost_jpeg_len, alignoffset, 18, 8, 8); // disk icon
           alignoffset +=10;
         } else if (strstr(status, "DB")) {
-          tft.drawJpg(moai_jpeg, moai_jpeg_len, alignoffset, 18, 8, 8); // disk icon
+          tft_drawJpg(moai_jpeg, moai_jpeg_len, alignoffset, 18, 8, 8); // disk icon
           alignoffset +=10;
         } else {
           
@@ -372,11 +378,11 @@ class UIUtils {
         statuspos = Out.x1_tmp + Out.w_tmp;
       }
       alignTextAt( entriesStr, 128, 18, BLE_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
-      tft.drawJpg(ram_jpeg, ram_jpeg_len, 156, 4, 8, 8); // heap icon
-      tft.drawJpg(earth_jpeg, earth_jpeg_len, 156, 18, 8, 8); // entries icon
+      tft_drawJpg(ram_jpeg, ram_jpeg_len, 156, 4, 8, 8); // heap icon
+      tft_drawJpg(earth_jpeg, earth_jpeg_len, 156, 18, 8, 8); // entries icon
 
       if( !appIconVisible || statuspos > ICON_APP_X ) { // only draw if text has overlapped
-        tft.drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, ICON_APP_X, ICON_APP_Y, 28,  28); // app icon
+        tft_drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, ICON_APP_X, ICON_APP_Y, 28,  28); // app icon
         appIconVisible = true;
       }
       tft.setCursor(posX, posY);
@@ -385,27 +391,17 @@ class UIUtils {
 
 
     void footerStats() {
-      if (isScrolling) return;
+      if ( isInScroll() || isInQuery() ) return;
       takeMuxSemaphore();
       int16_t posX = tft.getCursorX();
       int16_t posY = tft.getCursorY();
 
-
-/*
-tft.height() - 32; // 288
-tft.height() - 22; // 298
-tft.height() - 12; // 208
-
-      HHMM_POS_Y 288
-      UPTIME_POS_Y 298
-      COPYLEFT_POS_Y 308
-*/
       alignTextAt( hhmmString,   85, Out.height - 32/*288*/, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
       alignTextAt( UpTimeString, 85, Out.height - 22/*298*/, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
       alignTextAt("(c+) tobozo", 77, Out.height - 12/*308*/, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
 
       if( gpsIconVisible ) {
-        tft.drawJpg( gps_jpg, gps_jpg_len, 128, Out.height - 34/*286*/, 10,  10);
+        tft_drawJpg( gps_jpg, gps_jpg_len, 128, Out.height - 34/*286*/, 10,  10);
       } else {
         tft.fillRect( 128, Out.height - 34/*286*/, 10,  10, FOOTER_BGCOLOR );
       }
@@ -432,7 +428,7 @@ tft.height() - 12; // 208
       percentBox(164, Out.height - 24/*296*/, 10, 10, VendorCacheUsed, BLE_ORANGE, BLE_BLACK);
       percentBox(164, Out.height - 12/*308*/, 10, 10, OuiCacheUsed, BLE_GREENYELLOW, BLE_BLACK);
       if( filterVendors ) {
-        tft.drawJpg( filter_jpeg, filter_jpeg_len, 152, Out.height - 12/*308*/, 10,  8);
+        tft_drawJpg( filter_jpeg, filter_jpeg_len, 152, Out.height - 12/*308*/, 10,  8);
       } else {
         tft.fillRect( 152, Out.height - 12/*308*/, 10,  8, FOOTER_BGCOLOR );
       }
@@ -465,7 +461,7 @@ tft.height() - 12; // 208
 
 
     static void timeStateIcon() {
-      tft.drawJpg( clock_jpeg, clock_jpeg_len, ICON_RTC_X-ICON_R, ICON_RTC_Y-ICON_R+1, 8,  8);
+      tft_drawJpg( clock_jpeg, clock_jpeg_len, ICON_RTC_X-ICON_R, ICON_RTC_Y-ICON_R+1, 8,  8);
       //tft.fillCircle(ICON_RTC_X, ICON_RTC_Y, ICON_R, BLE_GREENYELLOW);
       if (RTCisRunning) {
         //tft.drawCircle(ICON_RTC_X, ICON_RTC_Y, ICON_R, BLE_DARKGREEN);
@@ -480,7 +476,7 @@ tft.height() - 12; // 208
 
 
     static void startBlink() { // runs one and detaches
-      tft.drawJpg( zzz_jpeg, zzz_jpeg_len, 5, 18, 8,  8 );
+      tft_drawJpg( zzz_jpeg, zzz_jpeg_len, 5, 18, 8,  8 );
       blinkit = true;
       blinknow = millis();
       scanTime = SCAN_DURATION * 1000;
@@ -548,7 +544,7 @@ tft.height() - 12; // 208
         }
         if( !foundTimeServer ) {
           tft.drawCircle(ICON_RTC_X, ICON_RTC_Y, ICON_R, HEADER_BGCOLOR);
-          tft.drawJpg( clock_jpeg, clock_jpeg_len, ICON_RTC_X-ICON_R, ICON_RTC_Y-ICON_R+1, 8,  8);
+          tft_drawJpg( clock_jpeg, clock_jpeg_len, ICON_RTC_X-ICON_R, ICON_RTC_Y-ICON_R+1, 8,  8);
         }
         giveMuxSemaphore();
       }
@@ -639,7 +635,7 @@ tft.height() - 12; // 208
 
       while (1) {
 
-        if (isScrolling) {
+        if ( isInScroll() || isInQuery() ) {
           vTaskDelay( 10 );
           continue;
         }
@@ -755,7 +751,7 @@ tft.height() - 12; // 208
       takeMuxSemaphore();
 
       //MacScrollView
-      uint16_t randomcolor = tft.color565( random(128, 255), random(128, 255), random(128, 255) );
+      uint16_t randomcolor = tft_color565( random(128, 255), random(128, 255), random(128, 255) );
       uint16_t blockHeight = 0;
       uint16_t hop;
       uint16_t initialPosY = Out.scrollPosY;
@@ -797,23 +793,23 @@ tft.height() - 12; // 208
       tft.setCursor( 0, Out.scrollPosY );
       drawRSSI( Out.width - 18, Out.scrollPosY - hop - 1, BleCard->rssi, BLECardTheme.textColor );
       if ( BleCard->in_db ) { // 'already seen this' icon
-        tft.drawJpg( update_jpeg, update_jpeg_len, 138, Out.scrollPosY - hop, 8,  8);
+        tft_drawJpg( update_jpeg, update_jpeg_len, 138, Out.scrollPosY - hop, 8,  8);
       } else { // 'just inserted this' icon
-        tft.drawJpg( insert_jpeg, insert_jpeg_len, 138, Out.scrollPosY - hop, 8,  8);
+        tft_drawJpg( insert_jpeg, insert_jpeg_len, 138, Out.scrollPosY - hop, 8,  8);
       }
       if ( !isEmpty( BleCard->uuid ) ) { // 'has service UUID' Icon
-        tft.drawJpg( service_jpeg, service_jpeg_len, 128, Out.scrollPosY - hop, 8,  8);
+        tft_drawJpg( service_jpeg, service_jpeg_len, 128, Out.scrollPosY - hop, 8,  8);
       }
 
       switch( BleCard->hits ) {
         case 0:
-          tft.drawJpg( ghost_jpeg, ghost_jpeg_len, 118, Out.scrollPosY - hop, 8,  8);
+          tft_drawJpg( ghost_jpeg, ghost_jpeg_len, 118, Out.scrollPosY - hop, 8,  8);
         break;
         case 1:
-          tft.drawJpg( moai_jpeg, moai_jpeg_len, 118, Out.scrollPosY - hop, 8,  8);
+          tft_drawJpg( moai_jpeg, moai_jpeg_len, 118, Out.scrollPosY - hop, 8,  8);
         break;
         default:
-          tft.drawJpg( disk_jpeg, disk_jpeg_len, 118, Out.scrollPosY - hop, 8,  8);
+          tft_drawJpg( disk_jpeg, disk_jpeg_len, 118, Out.scrollPosY - hop, 8,  8);
         break;
       }
 
@@ -855,7 +851,7 @@ tft.height() - 12; // 208
             hop = Out.println( hitsTimeStampStr );
             blockHeight += hop;
     
-            tft.drawJpg( clock_jpeg, clock_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
+            tft_drawJpg( clock_jpeg, clock_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
           }
           
         }
@@ -869,9 +865,9 @@ tft.height() - 12; // 208
         blockHeight += hop;
         
         if ( strstr( BleCard->ouiname, "Espressif" ) ) {
-          tft.drawJpg( espressif_jpeg  , espressif_jpeg_len, 11, Out.scrollPosY - hop, 8, 8 );
+          tft_drawJpg( espressif_jpeg  , espressif_jpeg_len, 11, Out.scrollPosY - hop, 8, 8 );
         } else {
-          tft.drawJpg( nic16_jpeg, nic16_jpeg_len, 10, Out.scrollPosY - hop, 13, 8 );
+          tft_drawJpg( nic16_jpeg, nic16_jpeg_len, 10, Out.scrollPosY - hop, 13, 8 );
         }
         
       }
@@ -890,15 +886,15 @@ tft.height() - 12; // 208
         hop = Out.println( manufStr );
         blockHeight += hop;
         if ( strstr( BleCard->manufname, "Apple" ) ) {
-          tft.drawJpg( apple16_jpeg, apple16_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
+          tft_drawJpg( apple16_jpeg, apple16_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
         } else if ( strstr( BleCard->manufname, "IBM" ) ) {
-          tft.drawJpg( ibm8_jpg, ibm8_jpg_len, 10, Out.scrollPosY - hop, 20,  8);
+          tft_drawJpg( ibm8_jpg, ibm8_jpg_len, 10, Out.scrollPosY - hop, 20,  8);
         } else if ( strstr (BleCard->manufname, "Microsoft" ) ) {
-          tft.drawJpg( crosoft_jpeg, crosoft_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
+          tft_drawJpg( crosoft_jpeg, crosoft_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
         } else if ( strstr( BleCard->manufname, "Bose" ) ) {
-          tft.drawJpg( speaker_icon_jpg, speaker_icon_jpg_len, 12, Out.scrollPosY - hop, 6,  8 );
+          tft_drawJpg( speaker_icon_jpg, speaker_icon_jpg_len, 12, Out.scrollPosY - hop, 6,  8 );
         } else {
-          tft.drawJpg( generic_jpeg, generic_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
+          tft_drawJpg( generic_jpeg, generic_jpeg_len, 12, Out.scrollPosY - hop, 8,  8 );
         }
       }
       if ( !isEmpty( BleCard->name ) ) {
@@ -907,7 +903,7 @@ tft.height() - 12; // 208
         blockHeight += Out.println(SPACE);
         hop = Out.println( nameStr );
         blockHeight += hop;
-        tft.drawJpg( name_jpeg, name_jpeg_len, 12, Out.scrollPosY - hop, 7,  8);
+        tft_drawJpg( name_jpeg, name_jpeg_len, 12, Out.scrollPosY - hop, 7,  8);
       }
       hop = Out.println( SPACE) ;
       blockHeight += hop;
@@ -957,7 +953,7 @@ tft.height() - 12; // 208
       uint16_t boxWidth  = Out.width - 2;
       uint16_t boxPosY   = newYPos + 1;
       for( int16_t color=255; color>64; color-- ) {
-        Out.drawScrollableRoundRect( 1, boxPosY, boxWidth, boxHeight, 4, tft.color565(color, color, color) );
+        Out.drawScrollableRoundRect( 1, boxPosY, boxWidth, boxHeight, 4, tft_color565(color, color, color) );
         delay(8); // TODO: use a timer
       }
       Out.drawScrollableRoundRect( 1, boxPosY, boxWidth, MacScrollView[card_index].blockHeight-2, 4, MacScrollView[card_index].borderColor );

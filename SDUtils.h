@@ -12,9 +12,9 @@ bool SDSetup() {
       log_e("[SD] Mount Failed");
       //delay(max_wait);
       if(attempts%2==0) {
-        tft.drawJpg( disk00_jpg, disk00_jpg_len, (tft.width()-30)/2, 100, 30, 30);
+        tft_drawJpg( disk00_jpg, disk00_jpg_len, (tft.width()-30)/2, 100, 30, 30);
       } else {
-        tft.drawJpg( disk01_jpg, disk00_jpg_len, (tft.width()-30)/2, 100, 30, 30);
+        tft_drawJpg( disk01_jpg, disk00_jpg_len, (tft.width()-30)/2, 100, 30, 30);
       }
       AmigaBall.animate( max_wait, false );
       attempts--;

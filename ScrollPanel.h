@@ -31,6 +31,9 @@
 
 #define SPACE " "
 static bool isScrolling = false;
+static bool isInScroll() {
+  return isScrolling;
+}
 
 class ScrollableOutput {
   public:
