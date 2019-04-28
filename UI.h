@@ -48,6 +48,20 @@
 #define SCROLL_HEIGHT ( Out.height - ( HEADER_HEIGHT + FOOTER_HEIGHT ))
 // heap map settings
 #define HEAPMAP_BUFFLEN 61 // graph width (+ 1 for hscroll)
+
+/*
+#ifndef GRAPH_X
+  #define GRAPH_X (Out.width - GRAPH_LINE_WIDTH - 2)
+#endif
+#ifndef GRAPH_Y
+  #define GRAPH_Y (Out.height - 37)
+#endif
+*/
+#ifndef FOOTER_BOTTOMPOS
+  #define FOOTER_BOTTOMPOS Out.height
+#endif
+
+
 // heap management (used by graph)
 static uint32_t min_free_heap = 90000; // sql out of memory errors eventually occur under 100000
 static uint32_t initial_free_heap = freeheap;
@@ -213,7 +227,7 @@ class UIUtils {
       }
 
       tft.fillRect(0, 0, Out.width, HEADER_HEIGHT, HEADER_BGCOLOR);
-      tft.fillRect(0, Out.height - FOOTER_HEIGHT, Out.width, FOOTER_HEIGHT, FOOTER_BGCOLOR);
+      tft.fillRect(0, FOOTER_BOTTOMPOS - FOOTER_HEIGHT, Out.width, FOOTER_HEIGHT, FOOTER_BGCOLOR);
       tft.fillRect(0, PROGRESSBAR_Y, Out.width, 2, BLE_GREENYELLOW);
 
       AmigaBall.init();
@@ -278,7 +292,7 @@ class UIUtils {
       takeMuxSemaphore();
       Out.scrollNextPage();
       giveMuxSemaphore();
-      #ifndef M5STACK
+      #ifndef SKIP_INTRO
       xTaskCreatePinnedToCore(introUntilScroll, "introUntilScroll", 2048, NULL, 1, NULL, 1);
       #endif
     }
@@ -330,7 +344,7 @@ class UIUtils {
       Out.scrollNextPage(); // reset scroll position to zero otherwise image will have offset
       for(uint16_t y=0; y<Out.height; y++) {
         screenshotFile.read( (uint8_t*)imgBuffer, sizeof(uint16_t)*Out.width );
-        tft.drawBitmap(0, y, Out.width, 1, imgBuffer);
+        tft_drawBitmap(0, y, Out.width, 1, imgBuffer);
       }
       giveMuxSemaphore();
       isQuerying = false;
@@ -396,14 +410,14 @@ class UIUtils {
       int16_t posX = tft.getCursorX();
       int16_t posY = tft.getCursorY();
 
-      alignTextAt( hhmmString,   85, Out.height - 32/*288*/, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
-      alignTextAt( UpTimeString, 85, Out.height - 22/*298*/, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
-      alignTextAt("(c+) tobozo", 77, Out.height - 12/*308*/, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+      alignTextAt( hhmmString,   85, FOOTER_BOTTOMPOS - 32/*288*/, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+      alignTextAt( UpTimeString, 85, FOOTER_BOTTOMPOS - 22/*298*/, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+      alignTextAt("(c+) tobozo", 77, FOOTER_BOTTOMPOS - 12/*308*/, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
 
       if( gpsIconVisible ) {
-        tft_drawJpg( gps_jpg, gps_jpg_len, 128, Out.height - 34/*286*/, 10,  10);
+        tft_drawJpg( gps_jpg, gps_jpg_len, 128, FOOTER_BOTTOMPOS - 34/*286*/, 10,  10);
       } else {
-        tft.fillRect( 128, Out.height - 34/*286*/, 10,  10, FOOTER_BGCOLOR );
+        tft.fillRect( 128, FOOTER_BOTTOMPOS - 34/*286*/, 10,  10, FOOTER_BGCOLOR );
       }
       *sessDevicesCountStr = {'\0'};
       *devicesCountStr = {'\0'};
@@ -413,9 +427,9 @@ class UIUtils {
       sprintf( devicesCountStr, devicesCountTpl, formatUnit(devicesCount) );
       sprintf( newDevicesCountStr, newDevicesCountTpl, formatUnit(scan_rounds) );
 
-      alignTextAt( devicesCountStr, 0, Out.height - 32/*288*/, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
-      alignTextAt( sessDevicesCountStr, 0, Out.height - 22/*298*/, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
-      alignTextAt( newDevicesCountStr, 0, Out.height - 12/*308*/, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
+      alignTextAt( devicesCountStr, 0, FOOTER_BOTTOMPOS - 32/*288*/, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
+      alignTextAt( sessDevicesCountStr, 0, FOOTER_BOTTOMPOS - 22/*298*/, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
+      alignTextAt( newDevicesCountStr, 0, FOOTER_BOTTOMPOS - 12/*308*/, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
 
       tft.setCursor(posX, posY);
       giveMuxSemaphore();
@@ -424,13 +438,13 @@ class UIUtils {
 
     void cacheStats() {
       takeMuxSemaphore();
-      percentBox(164, Out.height - 36/*284*/, 10, 10, BLEDevCacheUsed, BLE_CYAN, BLE_BLACK);
-      percentBox(164, Out.height - 24/*296*/, 10, 10, VendorCacheUsed, BLE_ORANGE, BLE_BLACK);
-      percentBox(164, Out.height - 12/*308*/, 10, 10, OuiCacheUsed, BLE_GREENYELLOW, BLE_BLACK);
+      percentBox(164, FOOTER_BOTTOMPOS - 36/*284*/, 10, 10, BLEDevCacheUsed, BLE_CYAN, BLE_BLACK);
+      percentBox(164, FOOTER_BOTTOMPOS - 24/*296*/, 10, 10, VendorCacheUsed, BLE_ORANGE, BLE_BLACK);
+      percentBox(164, FOOTER_BOTTOMPOS - 12/*308*/, 10, 10, OuiCacheUsed, BLE_GREENYELLOW, BLE_BLACK);
       if( filterVendors ) {
-        tft_drawJpg( filter_jpeg, filter_jpeg_len, 152, Out.height - 12/*308*/, 10,  8);
+        tft_drawJpg( filter_jpeg, filter_jpeg_len, 152, FOOTER_BOTTOMPOS - 12/*308*/, 10,  8);
       } else {
-        tft.fillRect( 152, Out.height - 12/*308*/, 10,  8, FOOTER_BGCOLOR );
+        tft.fillRect( 152, FOOTER_BOTTOMPOS - 12/*308*/, 10,  8, FOOTER_BGCOLOR );
       }
       giveMuxSemaphore();
     }
@@ -631,7 +645,7 @@ class UIUtils {
       int16_t GRAPH_LINE_WIDTH = HEAPMAP_BUFFLEN - 1;
       int16_t GRAPH_LINE_HEIGHT = 35;
       int16_t GRAPH_X = Out.width - GRAPH_LINE_WIDTH - 2;
-      int16_t GRAPH_Y = Out.height - 37/*283*/;
+      int16_t GRAPH_Y = FOOTER_BOTTOMPOS - 37/*283*/;
 
       while (1) {
 
@@ -782,7 +796,7 @@ class UIUtils {
 
       //if ( !isEmpty( BleCard->ouiname ) && strcmp( BleCard->ouiname, "[random]" )!=0 ) {
         uint16_t macColor = macAddressToColor( (const char*) BleCard->address );
-        tft.drawBitmap( 150, Out.scrollPosY - hop, 16, 8, macBytesToColors );
+        tft_drawBitmap( 150, Out.scrollPosY - hop, 16, 8, macBytesToColors );
         //maclastbytes
         //tft.setTextColor( macColor, BLE_WHITE /*BLECardTheme.bgColor */);
       //}

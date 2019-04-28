@@ -14,12 +14,15 @@ static bool isInQuery() {
   return isQuerying; // M5Stack uses SPI SD, isolate SD accesses from TFT rendering
 }
 
+#define SKIP_INTRO // don't play intro (tft spi access messes up SD/DB init)
+
 #define tft_drawJpg tft.drawJpg
 #define tft_color565 tft.color565
 #define tft_readPixels tft.readRect
 #define tft_initOrientation() tft.setRotation(1)
 #define scrollpanel_height() tft.width()
 #define scrollpanel_width() tft.height()
+#define tft_drawBitmap tft.drawBitmap
 
 void tft_getTextBounds(const char *string, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h) {
   *w = tft.textWidth( string );

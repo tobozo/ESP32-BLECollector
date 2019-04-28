@@ -347,6 +347,18 @@ class BLEScanUtils {
       setPrefs();
       Serial.printf("Out.serialEcho = %s\n", Out.serialEcho ? "true" : "false" );
     }
+    static void uptimeCB( void * param = NULL ) {
+      xTaskCreatePinnedToCore(uptimeTask, "uptimeTask", 5000, param, 2, NULL, 1); /* last = Task Core */ 
+    }
+    static void uptimeTask( void * param = NULL ) {
+      if( param != NULL ) {
+        Serial.printf("Parsing %s\n", (const char*) param);
+        uint16_t parsedParam = String( (const char*) param ).toInt();
+        Serial.printf("Parsed %d\n", parsedParam);
+        forcedUptime = (unsigned long) parsedParam;
+      }
+      vTaskDelete( NULL );
+    }
     static void rmFileCB( void * param = NULL ) {
       xTaskCreatePinnedToCore(rmFileTask, "rmFileTask", 5000, param, 2, NULL, 1); /* last = Task Core */ 
     }
@@ -436,6 +448,7 @@ class BLEScanUtils {
         { "screenshot",   screenShotCB,   "Make a screenshot and save it on the SD" },
         { "screenshow",   screenShowCB,   "Show a screenshot" },
         { "toggle",       toggleCB,       "toggle a bool value" },
+        { "uptime",       uptimeCB,       "force a specific uptime" },
         #if HAS_GPS
         { "gpstime",      setGPSTime,     "sync time from GPS" },
         #endif
@@ -453,9 +466,9 @@ class BLEScanUtils {
         { "DB.needsReset",       DB.needsReset },
         { "DBneedsReplication",  DBneedsReplication },
         { "DB.needsPruning",     DB.needsPruning },
-        { "TimeIsSet",         TimeIsSet },
+        { "TimeIsSet",           TimeIsSet },
         { "foundTimeServer",     foundTimeServer },
-        { "RTCisRunning",      RTCisRunning },
+        { "RTCisRunning",        RTCisRunning },
         { "ForceBleTime",        ForceBleTime },
         { "DayChangeTrigger",    DayChangeTrigger },
         { "HourChangeTrigger",   HourChangeTrigger }

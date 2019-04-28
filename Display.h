@@ -1,11 +1,30 @@
 
-//#define WROVER_KIT
-//#define ODROIDGO
-#define M5STACK
 
 
-//#undef M5STACK
-//#define D32PRO
+#if defined( ARDUINO_M5Stack_Core_ESP32 )
+  #warning M5STACK CLASSIC DETECTED !!
+  #define M5STACK
+#elif defined( ARDUINO_M5STACK_FIRE )
+  #warning M5STACK FIRE DETECTED !
+  #define M5STACK
+#elif defined( ARDUINO_ODROID_ESP32 )
+  #warning ODROID DETECTED !!
+  #define ODROIDGO
+#elif defined ( ARDUINO_ESP32_DEV ) 
+  #warning WROVER DETECTED !!
+  #define WROVER_KIT
+#else
+  #warning NOTHING DETECTED !!
+  //#define WROVER_KIT
+  //#define ODROIDGO
+  
+  //#define M5STACK
+  
+  //#define DDUINO32XS
+  
+  //#undef M5STACK
+  //#define D32PRO
+#endif
 
 #if defined(WROVER_KIT)
   // Adafruit_GFX based driver with SD_MMC
@@ -19,6 +38,8 @@
 #elif defined(ODROIDGO)
   // ???
   #include "Display.ODROIDGO.h"
+#elif defined(DDUINO32XS)
+  #include "Display.DDuino32XS.h"
 #else
   #error "Please select a display profile"
 #endif

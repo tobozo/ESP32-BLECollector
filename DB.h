@@ -252,6 +252,9 @@ class DBUtils {
         delay(300);
       }
       hasPsram = psramInit();
+
+      log_i("Has PSRAM: %s", hasPsram?"true":"false");
+      
       BLEMacsDbSQLitePath = (char*)malloc(32);
       BLEMacsDbFSPath = (char*)malloc(32);
       

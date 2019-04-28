@@ -29,7 +29,7 @@
 
 */
 
-
+static unsigned long forcedUptime = 0;
 
 enum TimeUpdateSources {
   SOURCE_NONE = 0,
@@ -148,12 +148,13 @@ static void timeHousekeeping() {
   #endif // SKETCH_MODE==SKETCH_MODE_BUILD_DEFAULT
 
   nowDateTime = internalDateTime;
-  if( hh < 24 ) {
-    sprintf(UpTimeString, UpTimeStringTpl, hh, mm);
-  } else if( round(hh/24) == 1 ) {
-    sprintf(UpTimeString, UpTimeStringTplDays, 1, "day");
+  unsigned long forcedUptimes = forcedUptime + hh;
+  if( forcedUptimes < 24 ) {
+    sprintf( UpTimeString, UpTimeStringTpl, forcedUptimes, mm );
+  } else if( forcedUptimes <= 48 ) {
+    sprintf( UpTimeString, UpTimeStringTplDays, forcedUptimes, "hours" );
   } else {
-    sprintf(UpTimeString, UpTimeStringTplDays, round(hh/24), "days");
+    sprintf( UpTimeString, UpTimeStringTplDays, forcedUptimes / 24, "days" );
   }
   log_d("Time: %s, Uptime: %s", hhmmString, UpTimeString );
 }

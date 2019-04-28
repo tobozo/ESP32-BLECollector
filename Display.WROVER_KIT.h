@@ -5,6 +5,9 @@
 #include "WROVER_KIT_LCD.h" // Latest version must have the VScroll def patch: https://github.com/espressif/WROVER_KIT_LCD/pull/3/files
 WROVER_KIT_LCD tft;
 
+#define AMIGABALL_YPOS 150
+
+
 #include <SD_MMC.h>
 fs::SDMMCFS &BLE_FS = SD_MMC;
 #define BLE_FS_TYPE "sdcard"
@@ -23,3 +26,4 @@ static bool isInQuery() {
 #define tft_initOrientation() tft.setRotation(0)
 #define scrollpanel_height() tft.height()
 #define scrollpanel_width() tft.width()
+#define tft_drawBitmap tft.drawBitmap

@@ -50,9 +50,9 @@
 #define SKETCH_MODE_BUILD_NTP_UPDATER 2 // build the NTP Updater for external RTC
 
 // edit these values to fit your mode
-#define HAS_EXTERNAL_RTC false
-#define HAS_GPS false
-#define TIME_UPDATE_SOURCE     TIME_UPDATE_NONE
+#define HAS_EXTERNAL_RTC true
+#define HAS_GPS true
+#define TIME_UPDATE_SOURCE     TIME_UPDATE_GPS
 #define SKETCH_MODE     SKETCH_MODE_BUILD_DEFAULT
 //#define SKETCH_MODE     SKETCH_MODE_BUILD_NTP_UPDATER
 

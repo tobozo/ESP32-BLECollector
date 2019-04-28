@@ -59,6 +59,7 @@ static bool isInQuery() {
 #define tft_initOrientation() tft.setRotation(2)
 #define scrollpanel_height() tft.height()
 #define scrollpanel_width() tft.width()
+#define tft_drawBitmap tft.drawBitmap
 
 void tft_getTextBounds(const char *string, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h) {
   *w = tft.textWidth( string );
