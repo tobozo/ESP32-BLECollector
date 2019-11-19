@@ -70,7 +70,17 @@ Some ideas I'll try to implement in the upcoming changes:
 - Have the data easily exported without removing the sd card (wifi, ble, serial)
 - Auto downloading/refreshing sqlite databases
 
+
+Other ESP32 security related tools:
+-----------------------------------
+
+  - https://github.com/cyberman54/ESP32-Paxcounter
+  - https://github.com/G4lile0/ESP32-WiFi-Hash-Monster
+  - https://github.com/justcallmekoko/ESP32Marauder
+
+
 Credits/requirements:
+---------------------
 
 - https://github.com/siara-cc/esp32_arduino_sqlite3_lib
 - ~~https://github.com/nkolban/ESP32_BLE_Arduino~~ 
