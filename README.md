@@ -2,9 +2,7 @@
 
 Like a BLE Scanner but with persistence.
 
-  [![ESP32 BLECollector running on Wrover-Kit](https://raw.githubusercontent.com/tobozo/ESP32-BLECollector/master/screenshots/capture3.png)](https://www.youtube.com/watch?v=434LDAfpGjE)
-
-
+  [![ESP32 BLECollector running on Wrover-Kit](https://raw.githubusercontent.com/tobozo/ESP32-BLECollector/master/screenshots/capture3.png)][![ESP32 BLECollector running on M5Stack](https://raw.githubusercontent.com/tobozo/ESP32-BLECollector/unstable/screenshots/BLECollector-M5Stack.jpeg)
 
 All BLE data found by the [BLE Scanner](https://github.com/wakwak-koba/ESP32_BLE_Arduino) is collected into a [sqlite3](https://github.com/siara-cc/esp32_arduino_sqlite3_lib) format on the SD Card.
 
@@ -28,9 +26,18 @@ Hardware requirements
   - [mandatory] BLE Library by @chegewara [patched](https://github.com/tobozo/ESP32-BLECollector/files/2614534/ESP32_ble_library.zip)
   - [mandatory] Micro SD (FAT32 formatted, **max 32GB**)
   - [mandatory] [mac-oui-light.db](https://github.com/tobozo/ESP32-BLECollector/blob/master/SD/mac-oui-light.db) and [ble-oui.db](https://github.com/tobozo/ESP32-BLECollector/blob/master/SD/ble-oui.db) files copied on the Micro SD Card root
-  - [mandatory] ILI9341 320x240 TFT (or bundled in Wrover-Kit, M5Stack, LoLinD32 Pro)
+  - [mandatory] ILI9341 320x240 TFT (or bundled in Wrover-Kit, M5Stack, Odroid-Go, LoLinD32 Pro)
   - [optional] I2C RTC Module (see "#define RTC_PROFILE" in settings.h)
 
+Software requirements
+---------------------
+  - [mandatory] Arduino IDE
+  - [mandatory] https://github.com/tobozo/ESP32-Chimera-Core
+  - [mandatory] https://github.com/tobozo/M5Stack-SD-Updater
+  - [mandatory] https://github.com/PaulStoffregen/Time
+  - [mandatory] https://github.com/siara-cc/esp32_arduino_sqlite3_lib
+  - [optional] https://github.com/mikalhart/TinyGPSPlus
+  - [optional] https://github.com/gmag11/NtpClient
 
 RTC available Profiles: 
 -----------------------
@@ -65,8 +72,6 @@ Some ideas I'll try to implement in the upcoming changes:
 
 - Implement [GATT services](https://www.bluetooth.com/specifications/gatt/services)
 - Use the RTC to add timestamps (and/or) GPS Coords to entries for better pruning [as suggested by /u/playaspect](https://www.reddit.com/r/esp8266/comments/9s594c/esp32blecollector_ble_scanner_data_persistence_on/e8nipr6/?context=3)
-- ~~move the ble-oui query outside the devicecallback (this is causing watchdog messages) and populate between scans~~
-- Reduce the memory problems to avoid restarting the ESP too often (currently restarts when heap is under 100k)
 - Have the data easily exported without removing the sd card (wifi, ble, serial)
 - Auto downloading/refreshing sqlite databases
 
@@ -82,7 +87,5 @@ Other ESP32 security related tools:
 Credits/requirements:
 ---------------------
 
-- https://github.com/siara-cc/esp32_arduino_sqlite3_lib
-- ~~https://github.com/nkolban/ESP32_BLE_Arduino~~ 
 - https://github.com/wakwak-koba/ESP32_BLE_Arduino (specifically patched for the current version)
-- thanks to https://github.com/chegewara (see [this issue](https://github.com/tobozo/ESP32-BLECollector/issues/2))
+- thanks to https://github.com/chegewara for the help and inspiration
