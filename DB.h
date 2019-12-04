@@ -185,12 +185,14 @@ OUIPsramCacheStruct** OuiPsramCache = NULL;
 #define MAC_OUI_NAMES_DB_FILE "mac-oui-light.db"
 #define BLE_VENDOR_NAMES_DB_FILE "ble-oui.db"
 
-#define BLE_COLLECTOR_DB_SQLITE_PATH  "/" BLE_FS_TYPE "/" BLE_COLLECTOR_DB_FILE
-#define MAC_OUI_NAMES_DB_SQLITE_PATH  "/" BLE_FS_TYPE "/" MAC_OUI_NAMES_DB_FILE
+#define BLE_COLLECTOR_DB_SQLITE_PATH     "/" BLE_FS_TYPE "/" BLE_COLLECTOR_DB_FILE
+#define MAC_OUI_NAMES_DB_SQLITE_PATH     "/" BLE_FS_TYPE "/" MAC_OUI_NAMES_DB_FILE
 #define BLE_VENDOR_NAMES_DB_SQLITE_PATH  "/" BLE_FS_TYPE "/" BLE_VENDOR_NAMES_DB_FILE
-#define BLE_COLLECTOR_DB_FS_PATH  "/" BLE_COLLECTOR_DB_FILE
-#define MAC_OUI_NAMES_DB_FS_PATH  "/" MAC_OUI_NAMES_DB_FILE
-#define BLE_VENDOR_NAMES_DB_FS_PATH  "/" BLE_VENDOR_NAMES_DB_FILE
+#define BLE_COLLECTOR_DB_FS_PATH         "/" BLE_COLLECTOR_DB_FILE
+#define MAC_OUI_NAMES_DB_FS_PATH         "/" MAC_OUI_NAMES_DB_FILE
+#define BLE_VENDOR_NAMES_DB_FS_PATH      "/" BLE_VENDOR_NAMES_DB_FILE
+#define MAC_OUI_NAMES_DB_FS_SIZE         933888
+#define BLE_VENDOR_NAMES_DB_FS_SIZE      73728
 
 
 class DBUtils {
@@ -258,7 +260,8 @@ class DBUtils {
       BLEMacsDbSQLitePath = (char*)malloc(32);
       BLEMacsDbFSPath = (char*)malloc(32);
       
-      setBLEDBPath();
+      setBLEDBPath(); // TODO: move this after time init
+
       if( !checkDBFiles() ) {
         return false;
       } else {
@@ -289,14 +292,10 @@ class DBUtils {
       }
       isQuerying = false;
       entries = getEntries();
-      cacheWarmup();
-
-
-
       //DBExec( OUIVendorsDB, "SELECT count(*) FROM 'ble-oui'", (char*)"count(*)" );
       //Serial.printf("OUI vendors DB has %s entries\n", colValue);
       
-      return true;
+      return cacheWarmup();
     }
 
 
@@ -330,14 +329,31 @@ class DBUtils {
       if( ! BLE_FS.exists( MAC_OUI_NAMES_DB_FS_PATH ) ) {
         log_e("Missing critical DB file %s, aborting\n", dbcollection[MAC_OUI_NAMES_DB].sqlitepath);
         ret = false;
+      } else {
+        File tmpFile = BLE_FS.open( MAC_OUI_NAMES_DB_FS_PATH );
+        size_t size = tmpFile.size();
+        tmpFile.close();
+        if( size != MAC_OUI_NAMES_DB_FS_SIZE ) {
+          log_e("Critical DB file %s is corrupted (expected: %d, found: %d), aborting", dbcollection[MAC_OUI_NAMES_DB].sqlitepath, MAC_OUI_NAMES_DB_FS_SIZE, size);
+          ret = false;
+        }
       }
       if( ! BLE_FS.exists( BLE_VENDOR_NAMES_DB_FS_PATH ) ) {
         log_e("Missing critical DB file %s, aborting\n", dbcollection[BLE_VENDOR_NAMES_DB].sqlitepath);
         ret = false;
+      } else {
+        File tmpFile = BLE_FS.open( BLE_VENDOR_NAMES_DB_FS_PATH );
+        size_t size = tmpFile.size();
+        tmpFile.close();
+        if( size != BLE_VENDOR_NAMES_DB_FS_SIZE ) {
+          log_e("Critical DB file %s is corrupted (expected: %d, found: %d), aborting", dbcollection[BLE_VENDOR_NAMES_DB].sqlitepath, BLE_VENDOR_NAMES_DB_FS_SIZE, size);
+          ret = false;
+        }
       }
       isQuerying = false;
       return ret;
     }
+
 
     void OUICacheWarmup() {
       if( hasPsram ) {
@@ -421,22 +437,27 @@ class DBUtils {
       }
     }
 
-    void cacheWarmup() {
+    bool cacheWarmup() {
+
       setCacheSize();
       OUICacheWarmup();
       VendorCacheWarmup();
       BLEDevCacheWarmup();
+
       if( hasPsram ) {
         loadOUIToPSRam();
         loadVendorsToPSRam();
       } else {
-        testOUI(); // test oui database
-        testVendorNames(); // test vendornames database        
+        if( !testOUI() || !testVendorNames() ) {
+          return false;
+        }
       }
+
       BLEDevTmp = (BlueToothDevice*)calloc(1, sizeof( BlueToothDevice ) );
       BLEDevDBCache = (BlueToothDevice*)calloc(1, sizeof( BlueToothDevice ) );
       BLEDevHelper.init( BLEDevTmp, false ); // false = make sure the copy placeholder isn't using SPI ram
       BLEDevHelper.init( BLEDevDBCache, false ); // false = make sure the copy placeholder isn't using SPI ram
+      return true;
     }
 
 
@@ -463,13 +484,18 @@ class DBUtils {
         needsReset = true;
       }
       if( DayChangeTrigger ) {
+        log_e("Day change, will generate new DB name and trigger replication");
         DayChangeTrigger = false;
         setBLEDBPath();
         createDB();
         updateDBFromCache( BLEDevRAMCache, false );
         getEntries();
+        HourChangeTrigger = false;
+        DBneedsReplication = false;
+        return;
       }
       if( HourChangeTrigger ) {
+        log_e("Hour change, will trigger replication");
         DBneedsReplication = true;
         HourChangeTrigger = false;
       }
@@ -512,7 +538,7 @@ class DBUtils {
       BLEDevCacheUsed = BLEDevCacheUsed*100 / BLEDEVCACHE_SIZE;
       VendorCacheUsed = VendorCacheUsed*100 / VENDORCACHE_SIZE;
       OuiCacheUsed = OuiCacheUsed*100 / OUICACHE_SIZE;
-      log_v("Circular-Buffered Cache Fill: BLEDevRAMCache: %s%s, VendorCache: %s%s, OUICache: %s%s", BLEDevCacheUsed, "%", VendorCacheUsed, "%", OuiCacheUsed, "%");
+      log_v("Circular-Buffered Cache Fill: BLEDevRAMCache: %d%s, VendorCache: %d%s, OUICache: %d%s", BLEDevCacheUsed, "%", VendorCacheUsed, "%", OuiCacheUsed, "%");
     }
 
 
@@ -641,7 +667,13 @@ class DBUtils {
 
     // shit happens
     void error(const char* zErrMsg) {
-      log_e("SQL error: %s", zErrMsg);
+      if( zErrMsg!= nullptr && zErrMsg != NULL ) {
+        log_e( "SQL error: %s", zErrMsg );
+      } else {
+        log_e( "Unknown SQL error" );
+        isCorrupt = true;
+        return;
+      }
       HourChangeTrigger = false;
       DayChangeTrigger = false;
       if (strcmp(zErrMsg, "database disk image is malformed")==0) {
@@ -658,7 +690,8 @@ class DBUtils {
         needsReset = true;
       } else {
         UI.headerStats(zErrMsg);
-        delay(1000); 
+        Out.println( zErrMsg );
+        delay(1000);
       }
     }
 
@@ -760,7 +793,8 @@ class DBUtils {
 
 
     unsigned int getEntries(bool _display_results = false) {
-      open(BLE_COLLECTOR_DB);
+      int rc = open(BLE_COLLECTOR_DB);
+      log_w("open collector db response=%d", rc);
       if (_display_results) {
         DBExec( BLECollectorDB, allEntriesQuery );
       } else {
@@ -783,10 +817,12 @@ class DBUtils {
 
     void createDB() {
       log_e("creating db");
+      UI.headerStats("DB: creating...");
       open(BLE_COLLECTOR_DB, false);
       log_d("created %s if no exists:  : %s", BLEMacsDbSQLitePath, createTableQuery);
       DBExec( BLECollectorDB, createTableQuery ) ;
       close(BLE_COLLECTOR_DB);
+      UI.headerStats(" ");
     }
 
     void dropDB() {
@@ -810,7 +846,7 @@ class DBUtils {
       UI.footerStats();
     }
 
-    void testVendorNames() {
+    bool testVendorNames() {
       open(BLE_VENDOR_NAMES_DB);
       DBExec( BLEVendorsDB, testVendorNamesQuery );
       close(BLE_VENDOR_NAMES_DB);
@@ -819,13 +855,15 @@ class DBUtils {
       if (strcmp(vendorname, "Qualcomm")!=0) {
         tft.setTextColor(BLE_RED);
         Out.println(vendorname);
-        Out.println("Vendor Names Test failed, looping");
-        while (1) yield();
+        Out.println("Vendor Names Test failed");
+        return false;
       }
+      return true;
     }
 
-    void testOUI() {
-      open(MAC_OUI_NAMES_DB);
+    bool testOUI() {
+      int rc = open(MAC_OUI_NAMES_DB);
+      log_w("open OUI DB responded with: %d", rc);
       DBExec( OUIVendorsDB, testOUIQuery );
       close(MAC_OUI_NAMES_DB);
       char *ouiname = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
@@ -833,9 +871,10 @@ class DBUtils {
       if ( strcmp(ouiname, "Hewlett Packard")!=0 ) {
         tft.setTextColor(BLE_RED);
         Out.println(ouiname);
-        Out.println("MAC OUI Test failed, looping");
-        while (1) yield();
+        Out.println("MAC OUI Test failed");
+        return false;
       }
+      return true;
     }
 
 
@@ -853,7 +892,14 @@ class DBUtils {
     }
 
     bool updateDBFromCache( BlueToothDevice** SourceCache, bool resetAfter = true ) {
+      UI.headerStats("DB replicating...");
+      UI.PrintProgressBar( Out.width );
       for(uint16_t i=0; i<BLEDEVCACHE_SIZE ;i++) {
+        vTaskDelay(10);
+
+        float percent = i*100 / BLEDEVCACHE_SIZE;
+        UI.PrintProgressBar( (Out.width * percent) / 100 );
+
         if( isEmpty( SourceCache[i]->address ) ) continue;
         if( SourceCache[i]->is_anonymous ) {
           if( resetAfter ) {
@@ -870,6 +916,8 @@ class DBUtils {
         cacheState();
         UI.cacheStats();
       }
+      UI.PrintProgressBar( Out.width );
+      UI.headerStats(" ");
       return true;
     }
 

@@ -58,6 +58,8 @@ static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char
         Serial.printf("    %-32s | %8d Bytes\n", fileName, fileSize);
       }
       totalSize += fileSize;
+    } else {
+      Serial.printf("    %-32s | DIRECTORY\n", file.name());
     }
     file = root.openNextFile();
   }

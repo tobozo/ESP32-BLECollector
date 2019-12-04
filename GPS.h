@@ -44,7 +44,12 @@ static void GPSRead() {
 
 
 static void setGPSTime( void * param ) {
-  if(gps.date.isValid() && gps.time.isValid()) {
+  if( !GPSHasDateTime ) {
+    Serial.println("GPS has no valid DateTime, cowardly aborting");
+    return;
+  }
+
+  if(gps.date.isValid() && gps.time.isValid() && gps.date.year() > 2000) {
     DateTime UTCTime = DateTime(gps.date.year(), gps.date.month(), gps.date.day(), gps.time.hour(), gps.time.minute(), gps.time.second());
     DateTime LocalTime = UTCTime.unixtime() + timeZone*3600;
     #if HAS_EXTERNAL_RTC

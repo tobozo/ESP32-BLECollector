@@ -37,10 +37,10 @@ static bool checkForTimeUpdate( DateTime &internalDateTime ) {
     // - adjust internal RTC
     #if HAS_EXTERNAL_RTC // have external RTC, adjust internal RTC accordingly
       setTime( externalDateTime.unixtime() );
-      if(drift > 1) {
+      if(drift > 5) {
         log_e("[***** WTF Clocks don't agree after adjustment] %d - %d = %d", internalDateTime.unixtime(), externalDateTime.unixtime(), drift);  
       } else {
-        log_i("[***** OK Clocks agree] %d - %d = %d", internalDateTime.unixtime(), externalDateTime.unixtime(), drift);
+        log_i("[***** OK Clocks agree-ish] %d - %d = %d", internalDateTime.unixtime(), externalDateTime.unixtime(), drift);
       }
       return true;
     #else

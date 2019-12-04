@@ -138,6 +138,7 @@ BlueToothDevice*  BLEDevDBCache = NULL; // temporary placeholder used to hold DB
 static int BLEDEVCACHE_SIZE; // will be set after PSRam detection
 
 static void copy(char* dest, const char* source, byte maxlen) {
+  if( source == nullptr || source == NULL ) return;
   byte sourcelen = strlen(source);
   if( sourcelen < maxlen ) {
     maxlen = sourcelen;

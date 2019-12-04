@@ -55,9 +55,10 @@ static bool onScanDone = true;
 static bool scanTaskRunning = false;
 static bool scanTaskStopped = true;
 
+
 static char* serialBuffer = NULL;
 static char* tempBuffer = NULL;
-#define SERIAL_BUFFER_SIZE 48
+#define SERIAL_BUFFER_SIZE 64
 
 unsigned long lastheap = 0;
 uint16_t lastscanduration = SCAN_DURATION;
@@ -66,8 +67,8 @@ char scantimesign[5]; // unicode sign terminated
 BLEScanResults bleresults;
 BLEScan *pBLEScan;
 BLEClient *pClient;
-BLEAddress *pClientAddress = (BLEAddress*)calloc(1, sizeof(BLEAddress));
-char* charBleAddress = (char*)calloc(17, sizeof(char));
+//BLEAddress *pClientAddress = (BLEAddress*)calloc(1, sizeof(BLEAddress));
+//char* charBleAddress = (char*)calloc(17, sizeof(char));
 std::string stdBLEAddress;
 
 esp_ble_addr_type_t pClientType;
@@ -98,6 +99,22 @@ typedef struct {
 } bt_time_t;
 
 bt_time_t BLERemoteTime;// = calloc(0, sizeof(bt_time_t));
+
+const char MacList[3][MAC_LEN+1] = {
+  "aa:aa:aa:aa:aa:aa",
+  "bb:bb:bb:bb:bb:bb",
+  "cc:cc:cc:cc:cc:cc"
+};
+
+
+static bool isListed( const char* address ) {
+  for( byte i=0;i<sizeof(MacList);i++ ) {
+    if( strcmp(address, MacList[i] )==0) {
+      return true;
+    }
+  }
+  return false;
+}
 
 
 static void setBLETime() {
@@ -178,15 +195,37 @@ class FoundDeviceCallback: public BLEAdvertisedDeviceCallbacks {
       }
     }
     #endif
+
+    if (advertisedDevice.haveServiceUUID() && advertisedDevice.getServiceUUID().equals(FileSharingServiceUUID) ) {
+      log_i( "Found %s : %s", advertisedDevice.getAddress().toString().c_str(), advertisedDevice.getServiceUUID().toString().c_str() );
+      foundFileServer = true;
+      if( fileSharingEnabled ) {
+        stdBLEAddress = advertisedDevice.getAddress().toString();
+        pClientType = advertisedDevice.getAddressType();
+        log_e("Ready to connect to %s", stdBLEAddress.c_str());
+        scan_cursor = 0;
+        processedDevicesCount = 0;
+        onScanDone = true;
+        advertisedDevice.getScan()->stop();
+        return;
+      }
+    }
+
+    #if BLACKLIST_MAC_DETECTOR_ENABLED
+      stdBLEAddress = advertisedDevice.getAddress().toString();
+      // iterate over the list
+      // 
+    #endif
     
 
     if( onScanDone  ) return;
 
     if( scan_cursor < MAX_DEVICES_PER_SCAN ) {
-      log_e("will store advertisedDevice in cache #%d", scan_cursor);
+      log_i("will store advertisedDevice in cache #%d", scan_cursor);
       BLEDevHelper.store( BLEDevScanCache[scan_cursor], advertisedDevice );
       //bool is_random = strcmp( BLEDevScanCache[scan_cursor]->ouiname, "[random]" ) == 0;
       bool is_random = (BLEDevScanCache[scan_cursor]->addr_type == BLE_ADDR_TYPE_RANDOM || BLEDevScanCache[scan_cursor]->addr_type == BLE_ADDR_TYPE_RPA_RANDOM );
+      //bool is_blacklisted = isBlackListed( BLEDevScanCache[scan_cursor]->address );
       if( UI.filterVendors && is_random ) {
         //TODO: scan_cursor++
         log_w( "Filtering %s", BLEDevScanCache[scan_cursor]->address );
@@ -256,27 +295,49 @@ struct ToggleTpl {
 ToggleTpl* TogglableProps;
 uint16_t Tsize = 0;
 
+//extern void OTA_over_BLE_Client(void);
+
 class BLEScanUtils {
 
   public:
 
     void init() {
+
       BLEDevice::init("");
-      BLEDevice::setMTU(100);
-      pClient  = BLEDevice::createClient();
-      pClient->setClientCallbacks( pTimeClientCallback );
+
       UI.init(); // launch all UI tasks
       if( ! DB.init() ) { // mount DB
-        log_e("Failed to mount DB, check files...");
+        log_e("Error with .db files (not found or corrupted), starting BLE File Sharing");
+        startSerialTask();
+        //UI.begin();
+        takeMuxSemaphore();
+        Out.scrollNextPage();
+        Out.println();
+        Out.scrollNextPage();
+        UI.PrintFatalError( "[ERROR]: .db files not found" );
+        //Out.println( "[ERROR]: .db files not found" );
+        giveMuxSemaphore();
+        startFileSharingServer();
         return;
       }
+      pClient  = BLEDevice::createClient();
+      pClient->setClientCallbacks( pTimeClientCallback );
       WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
       getPrefs();
       startScanCB();
       startSerialTask();
+      UI.begin();
     }
 
     static void startScanCB( void * param = NULL ) {
+      if( fileSharingServerTaskIsRunning ) {
+        fileSharingServerTaskShouldStop = true;
+        while( fileSharingServerTaskIsRunning ) {
+          log_d("Waiting for BLE_OTA to stop ...");
+          vTaskDelay(1000);
+        }
+      }
+      BLEDevice::setMTU(100);
       if( !scanTaskRunning ) {
         log_d("Starting scan" );
         xTaskCreatePinnedToCore(scanTask, "scanTask", 10000, NULL, 5, NULL, 1); /* last = Task Core */
@@ -285,6 +346,7 @@ class BLEScanUtils {
           vTaskDelay(1000);
         }
         Serial.println("Scan started...");
+        UI.headerStats("Scan started...");
       }
     }
     static void stopScanCB( void * param = NULL) {
@@ -297,6 +359,7 @@ class BLEScanUtils {
           vTaskDelay(1000);
         }
         Serial.println("Scan stopped...");
+        UI.headerStats("Scan stopped...");
       }
     }
     static void restartCB( void * param = NULL ) {
@@ -304,6 +367,34 @@ class BLEScanUtils {
       DB.needsRestart = true;
       stopScanCB();
     }
+
+    static void startFileSharingServer( void * param = NULL) {
+      bool scanWasRunning = scanTaskRunning;
+      if( scanTaskRunning ) stopScanCB();
+      if( fileSharingServerTaskIsRunning) {
+        log_w("FileSharingClientTask already running!");
+        fileSharingServerTaskShouldStop = true;
+      }
+      while( fileSharingServerTaskIsRunning ) {
+        log_e("Waiting for old instance of FileSharingClientTask to stop...");
+        vTaskDelay( 1000 );
+      }
+      xTaskCreatePinnedToCore(FileSharingServerTask, "FileSharingServerTask", 12000, NULL, 5, NULL, 1); 
+    }
+
+    static void setFileSharingClientOn( void * param ) {
+      fileSharingEnabled = true;
+    }
+
+    static void startFileSharingClient( void * param ) {
+      if( stdBLEAddress == "" ) {
+        // continue scanning
+        scanTaskRunning = true;
+      }  else {
+        xTaskCreatePinnedToCore(FileSharingClientTask, "FileSharingClientTask", 12000, param, 0, NULL, 1); // last = Task Core
+      }
+    }
+
     #ifdef NEEDS_SDUPDATER
       static void updateCB( void * param = NULL ) {
         stopScanCB();
@@ -338,7 +429,7 @@ class BLEScanUtils {
       bool scanWasRunning = scanTaskRunning;
       if( scanTaskRunning ) stopScanCB();
       while( DBneedsReplication ) { 
-        delay(1000);
+        vTaskDelay(1000);
       }
       if( scanWasRunning ) startScanCB();
     }
@@ -430,25 +521,27 @@ class BLEScanUtils {
     static void startSerialTask() {
       serialBuffer = (char*)calloc( SERIAL_BUFFER_SIZE, sizeof(char) );
       tempBuffer   = (char*)calloc( SERIAL_BUFFER_SIZE, sizeof(char) );
-      xTaskCreatePinnedToCore(serialTask, "serialTask", 2048, NULL, 0, NULL, 0); /* last = Task Core */
+      xTaskCreatePinnedToCore(serialTask, "serialTask", 2048+SERIAL_BUFFER_SIZE, NULL, 0, NULL, 0); /* last = Task Core */
     }
 
     static void serialTask( void * parameter ) {
       CommandTpl Commands[] = {
-        { "help",         nullCB,         "Print this list" },
-        { "start",        startScanCB,    "Start/resume scan" },
-        { "stop",         stopScanCB,     "Stop scan" },
-        { "toggleFilter", toggleFilterCB, "Toggle vendor filter (persistent)" },
-        { "toggleEcho",   toggleEchoCB,   "Toggle BLECards in serial console (persistent)" },
-        { "dump",         startDumpCB,    "Dump returning BLE devices to the display and updates DB" },
-        { "ls",           listDirCB,      "Show the SD root dir Content" },
-        { "rm",           rmFileCB,       "Delete a file from the SD" },
-        { "restart",      restartCB,      "Restart BLECollector" },
-        { "bletime",      startTimeClient,"Get time from another BLE Device" },
-        { "screenshot",   screenShotCB,   "Make a screenshot and save it on the SD" },
-        { "screenshow",   screenShowCB,   "Show a screenshot" },
-        { "toggle",       toggleCB,       "toggle a bool value" },
-        { "uptime",       uptimeCB,       "force a specific uptime" },
+        { "help",         nullCB,                 "Print this list" },
+        { "start",        startScanCB,            "Start/resume scan" },
+        { "stop",         stopScanCB,             "Stop scan" },
+        { "toggleFilter", toggleFilterCB,         "Toggle vendor filter (persistent)" },
+        { "toggleEcho",   toggleEchoCB,           "Toggle BLECards in serial console (persistent)" },
+        { "dump",         startDumpCB,            "Dump returning BLE devices to the display and updates DB" },
+        { "ls",           listDirCB,              "Show the SD root dir Content" },
+        { "rm",           rmFileCB,               "Delete a file from the SD" },
+        { "restart",      restartCB,              "Restart BLECollector" },
+        { "bletime",      startTimeClient,        "Get time from another BLE Device" },
+        { "blereceive",   startFileSharingServer, "Update .db files from another BLE app"},
+        { "blesend",      setFileSharingClientOn, "Share .db files with anothe BLE app" },
+        { "screenshot",   screenShotCB,           "Make a screenshot and save it on the SD" },
+        { "screenshow",   screenShowCB,           "Show a screenshot" },
+        { "toggle",       toggleCB,               "toggle a bool value" },
+        { "uptime",       uptimeCB,               "force a specific uptime" },
         #if HAS_GPS
         { "gpstime",      setGPSTime,     "sync time from GPS" },
         #endif
@@ -471,7 +564,8 @@ class BLEScanUtils {
         { "RTCisRunning",        RTCisRunning },
         { "ForceBleTime",        ForceBleTime },
         { "DayChangeTrigger",    DayChangeTrigger },
-        { "HourChangeTrigger",   HourChangeTrigger }
+        { "HourChangeTrigger",   HourChangeTrigger },
+        { "fileSharingEnabled",  fileSharingEnabled }
       };
       TogglableProps = ToggleProps;
       Tsize = (sizeof(ToggleProps) / sizeof(ToggleProps[0]));
@@ -479,7 +573,7 @@ class BLEScanUtils {
       if (resetReason != 12) { // HW Reset
         runCommand( (char*)"help" );
         runCommand( (char*)"toggle" );
-        runCommand( (char*)"ls" );
+        //runCommand( (char*)"ls" );
       }
       #if HAS_GPS
         GPSInit();
@@ -553,7 +647,6 @@ class BLEScanUtils {
         Serial.printf( "Command '%s' not found\n", command );
       }
     }
-
 
     static void startTimeClient( void * param) {
       if( foundTimeServer ) {
@@ -864,11 +957,21 @@ class BLEScanUtils {
       onScanPostPopulated = false;
       onScanRendered = false;
       foundTimeServer = false;
+      foundFileServer = false;
     }
 
     static void onAfterScan() {
 
       UI.stopBlink();
+
+      if( fileSharingEnabled ) {
+        UI.headerStats("File Sharing ...");
+        log_e("Launching FileSharingClient Task");
+        //xTaskCreatePinnedToCore(FileSharingClientTask, "FileSharingClientTask", 12000, NULL, 0, NULL, 1); /* last = Task Core */
+        scanTaskRunning = false;
+        startFileSharingClient( NULL );
+        return;
+      }
 
       if( foundTimeServer && (!TimeIsSet || ForceBleTime) ) {
         UI.headerStats("BLE Time sync ...");

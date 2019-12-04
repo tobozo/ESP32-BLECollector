@@ -92,6 +92,23 @@ struct TimeActivity {
 #include "NTP.h"
 
 
+void uptimeSet() {
+  unsigned long seconds_since_boot = millis() / 1000;
+  unsigned long minutes_since_boot = seconds_since_boot / 60;
+  unsigned long hours_since_boot   = minutes_since_boot / 60;
+  unsigned long days_since_boot    = hours_since_boot / 24;
+  unsigned long mm = minutes_since_boot % 60;
+  unsigned long hh = minutes_since_boot / 60;
+  unsigned long ss = seconds_since_boot % 60;
+  unsigned long forcedUptimes = forcedUptime + hh;
+  if( forcedUptimes < 24 ) {
+    sprintf( UpTimeString, UpTimeStringTpl, forcedUptimes, mm );
+  } else if( forcedUptimes <= 48 ) {
+    sprintf( UpTimeString, UpTimeStringTplDays, forcedUptimes, "hours" );
+  } else {
+    sprintf( UpTimeString, UpTimeStringTplDays, forcedUptimes / 24, "days" );
+  }
+}
 
 
 static void timeHousekeeping() {
@@ -110,20 +127,25 @@ static void timeHousekeeping() {
     log_e("hourchangeTrigger=true (%d vs %d)", current_hour, internalDateTime.hour());
     HourChangeTrigger = true;
     current_hour = internalDateTime.hour();
+  } else {
+    HourChangeTrigger = false;
   }
 
   if( current_day!= internalDateTime.day() ) {
     // day changed! update bool so DB.maintain() and BLE know what to do
     log_e("DayChangeTrigger=true (%d vs %d)", current_day, internalDateTime.day());
     DayChangeTrigger = true;
+    HourChangeTrigger = false;
     current_day = internalDateTime.day();
+  } else {
+    DayChangeTrigger = false;
   }
 
   #if SKETCH_MODE==SKETCH_MODE_BUILD_DEFAULT
   
     // - get the time from the internal clock
     // - compare with external clocks sources if applicable
-    if( HourChangeTrigger ) {
+    if( HourChangeTrigger || DayChangeTrigger ) {
       if( checkForTimeUpdate( internalDateTime ) ) { // and update internal clock if necessary
         internalDateTime = DateTime(year(), month(), day(), hour(), minute(), second());
         current_hour = internalDateTime.hour();
@@ -148,16 +170,10 @@ static void timeHousekeeping() {
   #endif // SKETCH_MODE==SKETCH_MODE_BUILD_DEFAULT
 
   nowDateTime = internalDateTime;
-  unsigned long forcedUptimes = forcedUptime + hh;
-  if( forcedUptimes < 24 ) {
-    sprintf( UpTimeString, UpTimeStringTpl, forcedUptimes, mm );
-  } else if( forcedUptimes <= 48 ) {
-    sprintf( UpTimeString, UpTimeStringTplDays, forcedUptimes, "hours" );
-  } else {
-    sprintf( UpTimeString, UpTimeStringTplDays, forcedUptimes / 24, "days" );
-  }
+  uptimeSet();
   log_d("Time: %s, Uptime: %s", hhmmString, UpTimeString );
 }
+
 
 
 bool RTCSetup() {
@@ -192,5 +208,7 @@ void timeSetup() {
       NTPSetup();
     #endif
     timeHousekeeping();
+  #else
+    uptimeSet();
   #endif
 }

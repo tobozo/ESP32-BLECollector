@@ -33,20 +33,20 @@
 #include <TimeLib.h> // https://github.com/PaulStoffregen/Time
 
 
-int8_t timeZone = 2;
+int8_t timeZone = 1; // 1 = GMT+1
 int8_t minutesTimeZone = 0;
 const char* NTP_SERVER = "europe.pool.ntp.org";
 static bool RTCisRunning = false;
 static bool ForceBleTime = false;
 static bool HasBTTime = false;
 // some date/time formats used in this app
-const char* hhmmStringTpl = "  %02d:%02d  ";
-static char hhmmString[13] = "  --:--  ";
+const char* hhmmStringTpl = "%02d:%02d";
+static char hhmmString[13] = "--:--";
 const char* hhmmssStringTpl = "%02d:%02d:%02d";
 static char hhmmssString[13] = "--:--:--"; 
-const char* UpTimeStringTpl = "  %02d:%02d  ";
+const char* UpTimeStringTpl = "%02d:%02d";
 const char* UpTimeStringTplDays = "  %2d %s  ";
-static char UpTimeString[32] = "  --:--  ";
+static char UpTimeString[32] = "--:--";
 const char* YYYYMMDD_HHMMSS_Tpl = "%04d-%02d-%02d %02d:%02d:%02d";
 static char YYYYMMDD_HHMMSS_Str[32] = "YYYY-MM-DD HH:MM:SS";
 static bool DayChangeTrigger = false;

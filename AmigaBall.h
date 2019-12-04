@@ -29,9 +29,7 @@
 
 */
 
-#ifndef AMIGABALL_YPOS
-  #define AMIGABALL_YPOS 0
-#endif
+extern const int AMIGABALL_YPOS;
 
 
 struct AmigaBallConfig {

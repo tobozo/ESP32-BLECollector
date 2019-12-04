@@ -30,36 +30,51 @@
 
 */
 
-// icon positions for RTC/DB/BLE
-#define ICON_APP_X 124
-#define ICON_APP_Y 0
-#define ICON_RTC_X 92
-#define ICON_RTC_Y 7
-#define ICON_BLE_X 104
-#define ICON_BLE_Y 7
-#define ICON_DB_X 116
-#define ICON_DB_Y 7
-#define ICON_R 4
-// blescan progress bar vertical position
-#define PROGRESSBAR_Y 30
-// sizing the UI
-#define HEADER_HEIGHT 40 // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
-#define FOOTER_HEIGHT 40 // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
-#define SCROLL_HEIGHT ( Out.height - ( HEADER_HEIGHT + FOOTER_HEIGHT ))
+
 // heap map settings
 #define HEAPMAP_BUFFLEN 61 // graph width (+ 1 for hscroll)
 
-/*
-#ifndef GRAPH_X
-  #define GRAPH_X (Out.width - GRAPH_LINE_WIDTH - 2)
-#endif
-#ifndef GRAPH_Y
-  #define GRAPH_Y (Out.height - 37)
-#endif
-*/
-#ifndef FOOTER_BOTTOMPOS
-  #define FOOTER_BOTTOMPOS Out.height
-#endif
+// variables used to manage landscape/portrait displays
+int16_t GRAPH_LINE_WIDTH;
+int16_t GRAPH_LINE_HEIGHT;
+int16_t GRAPH_X;
+int16_t GRAPH_Y;
+int16_t PERCENTBOX_X;
+int16_t PERCENTBOX_Y;
+int16_t HEADERSTATS_X;
+int16_t FOOTER_BOTTOMPOS;
+int16_t PERCENTBOX_SIZE;
+int16_t HEADERSTATS_ICONS_X;
+int16_t HEADERSTATS_ICONS_Y;
+int16_t PROGRESSBAR_Y;
+int16_t HEADER_LINEHEIGHT;
+int16_t HHMM_POSX;
+int16_t HHMM_POSY;
+int16_t UPTIME_POSX;
+int16_t UPTIME_POSY;
+int16_t COPYLEFT_POSX;
+int16_t COPYLEFT_POSY;
+int16_t CDEV_C_POSX;
+int16_t CDEV_C_POSY;
+int16_t SESS_C_POSX;
+int16_t SESS_C_POSY;
+int16_t NDEV_C_POSX;
+int16_t NDEV_C_POSY;
+int16_t GPSICON_POSX;
+int16_t GPSICON_POSY;
+int16_t HEADER_HEIGHT;
+int16_t FOOTER_HEIGHT;
+int16_t SCROLL_HEIGHT;
+// icon positions for RTC/DB/BLE
+int16_t ICON_APP_X = 124;
+int16_t ICON_APP_Y = 0;
+int16_t ICON_RTC_X = 92;
+int16_t ICON_RTC_Y = 7;
+int16_t ICON_BLE_X = 104;
+int16_t ICON_BLE_Y = 7;
+int16_t ICON_DB_X = 116;
+int16_t ICON_DB_Y = 7;
+int16_t ICON_R = 4;
 
 
 // heap management (used by graph)
@@ -72,7 +87,11 @@ static bool blinkit = false; // task blinker state
 static bool blinktoggler = true;
 static bool appIconVisible = false;
 static bool foundTimeServer = false;
+static bool fileSharingEnabled = false;
+static bool foundFileServer = false;
 static bool gpsIconVisible = false;
+static bool uptimeIconWasRendered = false;
+static bool foundFileServerIconWasRendered = true;
 static uint16_t blestateicon;
 static uint16_t lastblestateicon;
 static uint16_t dbIconColor;
@@ -83,11 +102,11 @@ static unsigned long blinkthen = blinknow + scanTime; // task blinker end time
 static unsigned long lastblink = millis(); // task blinker last blink
 static unsigned long lastprogress = millis(); // task blinker progress
 
-const char* sessDevicesCountTpl = " Seen: %4s ";
-const char* devicesCountTpl = " Last: %4s ";
-const char* newDevicesCountTpl = " Scans:%4s ";
-const char* heapTpl = " Heap: %6d";
-const char* entriesTpl = " Entries:%4s";
+const char* sessDevicesCountTpl = "Seen: %4s";
+const char* devicesCountTpl = "Last: %4s";
+const char* newDevicesCountTpl = "Scans:%4s";
+const char* heapTpl = "Heap: %6d";
+const char* entriesTpl = "Entries:%4s";
 const char* addressTpl = "  %s";
 const char* dbmTpl = "%d dBm    ";
 const char* ouiTpl = "      %s";
@@ -186,6 +205,8 @@ enum BLECardThemes {
 
 
 
+
+
 class UIUtils {
   public:
 
@@ -209,14 +230,25 @@ class UIUtils {
     BLECardStyle BLECardTheme;
 
     void init() {
+      Serial.begin(115200);
+      Serial.println(welcomeMessage);
+      Serial.printf("RTC_PROFILE: %s\nHAS_EXTERNAL_RTC: %s\nHAS_GPS: %s\nTIME_UPDATE_SOURCE: %d\nSKECTH_MODE: %d\n",
+        RTC_PROFILE,
+        HAS_EXTERNAL_RTC ? "true" : "false",
+        HAS_GPS ? "true" : "false",
+        TIME_UPDATE_SOURCE,
+        SKETCH_MODE
+      );
+      Serial.println("Free heap at boot: " + String(initial_free_heap));
 
       bool clearScreen = true;
       if (resetReason == 12) { // SW Reset
         clearScreen = false;
       }
 
-      tft.begin();
+      tft_begin();
       tft_initOrientation(); //tft.setRotation( 0 ); // required to get smooth scrolling
+      setUISizePos(); // set position/dimensions for widgets and other UI items
       tft.setTextColor(BLE_YELLOW);
 
       if (clearScreen) {
@@ -248,7 +280,6 @@ class UIUtils {
       #endif
       timeStateIcon();
       footerStats();
-      xTaskCreatePinnedToCore(taskHeapGraph, "taskHeapGraph", 2048, NULL, 2, NULL, 1);
       if ( clearScreen ) {
         playIntro();
       } else {
@@ -257,7 +288,11 @@ class UIUtils {
       
     }
 
+    void begin() {
+      xTaskCreatePinnedToCore(taskHeapGraph, "taskHeapGraph", 1024, NULL, 0, NULL, 1);
+    }
 
+    
     void update() {
       if ( freeheap + heap_tolerance < min_free_heap ) {
         headerStats("Out of heap..!");
@@ -274,9 +309,22 @@ class UIUtils {
       takeMuxSemaphore();
       uint16_t pos = 0;
       tft.setTextColor(BLE_GREENYELLOW, BGCOLOR);
+      
       for (int i = 0; i < 5; i++) {
         pos += Out.println();
       }
+
+      pos += Out.println(SPACE);
+      alignTextAt( "ESP32 BLE Collector", 6, Out.scrollPosY, BLE_GREENYELLOW, HEADER_BGCOLOR, ALIGN_CENTER );
+      pos += Out.println(SPACE);
+      pos += Out.println(SPACE);
+      alignTextAt( "(c+)  tobozo  2019", 6, Out.scrollPosY, BLE_GREENYELLOW, HEADER_BGCOLOR, ALIGN_CENTER );
+      pos += Out.println(SPACE);
+      pos += Out.println(SPACE);
+      tft_drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, (Out.width/2 - 14), Out.scrollPosY - pos + 8, 28,  28);
+      Out.drawScrollableRoundRect( (Out.width/2 - 64), Out.scrollPosY-pos, 128, pos, 8, BLE_GREENYELLOW );
+
+      /*
       pos += Out.println("         ");
       pos += Out.println("           ESP32 BLE Collector  ");
       pos += Out.println("         ");
@@ -284,6 +332,7 @@ class UIUtils {
       pos += Out.println("         ");
       tft_drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, 106, Out.scrollPosY - pos + 8, 28,  28);
       Out.drawScrollableRoundRect( 58, Out.scrollPosY-pos, 128, pos, 8, BLE_GREENYELLOW );
+      */
       for (int i = 0; i < 5; i++) {
         Out.println(SPACE);
       }
@@ -299,54 +348,47 @@ class UIUtils {
 
 
     static void screenShot() {
-      *screenshotFilenameStr = {'\0'};
-      sprintf(screenshotFilenameStr, screenshotFilenameTpl, year(), month(), day(), hour(), minute(), second());
-      isQuerying = true;
-      File screenshotFile = BLE_FS.open( screenshotFilenameStr, FILE_WRITE);
-      if(!screenshotFile) {
-        Serial.printf("Failed to open file %s\n", screenshotFilenameStr);
-        screenshotFile.close();
-        return;
-      }
+
       takeMuxSemaphore();
-      for(uint16_t y=0; y<HEADER_HEIGHT; y++) { // header portion
-        tft_readPixels(0, y, Out.width, 1, imgBuffer);
-        screenshotFile.write( (uint8_t*)imgBuffer, sizeof(uint16_t)*Out.width );
-      }
-      for(uint16_t y=Out.yStart; y<Out.height-FOOTER_HEIGHT; y++) { // lower scroll portion
-        tft_readPixels(0, y, Out.width, 1, imgBuffer);
-        screenshotFile.write( (uint8_t*)imgBuffer, sizeof(uint16_t)*Out.width );
-      }
-      for(uint16_t y=HEADER_HEIGHT; y<Out.yStart; y++) { // upper scroll portion
-        tft_readPixels(0, y, Out.width, 1, imgBuffer);
-        screenshotFile.write( (uint8_t*)imgBuffer, sizeof(uint16_t)*Out.width );
-      }
-      for(uint16_t y=Out.height-FOOTER_HEIGHT; y<Out.height; y++) { // footer portion
-        tft_readPixels(0, y, Out.width, 1, imgBuffer);
-        screenshotFile.write( (uint8_t*)imgBuffer, sizeof(uint16_t)*Out.width );
-      }
-      giveMuxSemaphore();
-      screenshotFile.close();
+      isQuerying = true;
+      M5.ScreenShot.snap("BLECollector", true);
       isQuerying = false;
-      Serial.printf("Screenshot saved as %s, now go to http://rawpixels.net/ to decode it (RGB565 240x320 Little Endian)\n", screenshotFilenameStr);
+      giveMuxSemaphore();
+
     }
 
     static void screenShow( void * fileName = NULL ) {
       if( fileName == NULL ) return;
       isQuerying = true;
-      File screenshotFile = BLE_FS.open( (const char*)fileName );
-      if(!screenshotFile) {
-        Serial.printf("Failed to open file %s\n", (const char*) fileName);
-        screenshotFile.close();
+
+      if( String( (const char*)fileName ).endsWith(".jpg" ) ) {
+        if( !BLE_FS.exists( (const char*)fileName ) ) {
+          log_e("File %s does not exist\n", (const char*)fileName );
+          isQuerying = false;
+          return;
+        }
+        takeMuxSemaphore();
+        Out.scrollNextPage(); // reset scroll position to zero otherwise image will have offset
+        tft.drawJpgFile( BLE_FS, (const char*)fileName, 0, 0, Out.width, Out.height, 0, 0, JPEG_DIV_NONE );
+        giveMuxSemaphore();
+        vTaskDelay( 5000 );
         return;
       }
-      takeMuxSemaphore();
-      Out.scrollNextPage(); // reset scroll position to zero otherwise image will have offset
-      for(uint16_t y=0; y<Out.height; y++) {
-        screenshotFile.read( (uint8_t*)imgBuffer, sizeof(uint16_t)*Out.width );
-        tft_drawBitmap(0, y, Out.width, 1, imgBuffer);
+      if( String( (const char*)fileName ).endsWith(".565" ) ) {
+        File screenshotFile = BLE_FS.open( (const char*)fileName );
+        if(!screenshotFile) {
+          Serial.printf("Failed to open file %s\n", (const char*)fileName );
+          screenshotFile.close();
+          return;
+        }
+        takeMuxSemaphore();
+        Out.scrollNextPage(); // reset scroll position to zero otherwise image will have offset
+        for(uint16_t y=0; y<Out.height; y++) {
+          screenshotFile.read( (uint8_t*)imgBuffer, sizeof(uint16_t)*Out.width );
+          tft_drawBitmap(0, y, Out.width, 1, imgBuffer);
+        }
+        giveMuxSemaphore();
       }
-      giveMuxSemaphore();
       isQuerying = false;
     }
 
@@ -355,7 +397,9 @@ class UIUtils {
       int initialscrollPosY = Out.scrollPosY;
       // animate until the scroll is called
       while(initialscrollPosY == Out.scrollPosY) {
+        takeMuxSemaphore();
         AmigaBall.animate(1, false);
+        giveMuxSemaphore();
         delay(1);
       }
       vTaskDelete(NULL);
@@ -370,35 +414,50 @@ class UIUtils {
       int16_t statuspos = 0;
       *heapStr = {'\0'};
       *entriesStr = {'\0'};
-      sprintf(heapStr, heapTpl, freeheap);
-      sprintf(entriesStr, entriesTpl, formatUnit(entries));
-      alignTextAt( heapStr, 128, 4, BLE_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
       if ( !isEmpty( status ) ) {
         byte alignoffset = 5;
-        tft.fillRect(0, 18, ICON_APP_X, 8, HEADER_BGCOLOR); // clear whole message status area
+        tft.fillRect(0, HEADERSTATS_ICONS_Y + HEADER_LINEHEIGHT, ICON_APP_X, 8, HEADER_BGCOLOR); // clear whole message status area
         if (strstr(status, "Inserted")) {
-          tft_drawJpg(disk_jpeg, disk_jpeg_len, alignoffset, 18, 8, 8); // disk icon
+          tft_drawJpg(disk_jpeg, disk_jpeg_len, alignoffset,   HEADERSTATS_ICONS_Y + HEADER_LINEHEIGHT, 8, 8); // disk icon
           alignoffset +=10;
         } else if (strstr(status, "Cache")) {
-          tft_drawJpg(ghost_jpeg, ghost_jpeg_len, alignoffset, 18, 8, 8); // disk icon
+          tft_drawJpg(ghost_jpeg, ghost_jpeg_len, alignoffset, HEADERSTATS_ICONS_Y + HEADER_LINEHEIGHT, 8, 8); // disk icon
           alignoffset +=10;
         } else if (strstr(status, "DB")) {
-          tft_drawJpg(moai_jpeg, moai_jpeg_len, alignoffset, 18, 8, 8); // disk icon
+          tft_drawJpg(moai_jpeg, moai_jpeg_len, alignoffset,   HEADERSTATS_ICONS_Y + HEADER_LINEHEIGHT, 8, 8); // disk icon
           alignoffset +=10;
         } else {
           
         }
-        alignTextAt( status, alignoffset, 18, BLE_YELLOW, HEADER_BGCOLOR, ALIGN_FREE );
+        alignTextAt( status, alignoffset, HEADERSTATS_ICONS_Y + HEADER_LINEHEIGHT, BLE_YELLOW, HEADER_BGCOLOR, ALIGN_FREE );
         statuspos = Out.x1_tmp + Out.w_tmp;
       }
-      alignTextAt( entriesStr, 128, 18, BLE_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
-      tft_drawJpg(ram_jpeg, ram_jpeg_len, 156, 4, 8, 8); // heap icon
-      tft_drawJpg(earth_jpeg, earth_jpeg_len, 156, 18, 8, 8); // entries icon
+
+      sprintf(heapStr, heapTpl, freeheap);
+      sprintf(entriesStr, entriesTpl, formatUnit(entries));
+      alignTextAt( heapStr,    HEADERSTATS_X, HEADERSTATS_ICONS_Y,      BLE_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
+      alignTextAt( entriesStr, HEADERSTATS_X, HEADERSTATS_ICONS_Y + HEADER_LINEHEIGHT, BLE_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
 
       if( !appIconVisible || statuspos > ICON_APP_X ) { // only draw if text has overlapped
         tft_drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, ICON_APP_X, ICON_APP_Y, 28,  28); // app icon
         appIconVisible = true;
       }
+
+      tft_drawJpg(earth_jpeg, earth_jpeg_len, HEADERSTATS_ICONS_X, HEADERSTATS_ICONS_Y + HEADER_LINEHEIGHT, 8, 8); // entries icon
+
+      if( foundFileServer ) {
+        if( !foundFileServerIconWasRendered ) {
+          tft.fillRect( HEADERSTATS_ICONS_X, HEADERSTATS_ICONS_Y, 8, 8, BLE_GREENYELLOW);
+          tft.drawRect( HEADERSTATS_ICONS_X, HEADERSTATS_ICONS_Y, 8, 8, BLE_DARKGREY);
+          foundFileServerIconWasRendered = true;
+        }
+      } else {
+        if( foundFileServerIconWasRendered ) {
+          tft_drawJpg(ram_jpeg,     ram_jpeg_len, HEADERSTATS_ICONS_X, HEADERSTATS_ICONS_Y,      8, 8); // heap icon
+          foundFileServerIconWasRendered = false;
+        }
+      }
+      
       tft.setCursor(posX, posY);
       giveMuxSemaphore();
     }
@@ -410,15 +469,23 @@ class UIUtils {
       int16_t posX = tft.getCursorX();
       int16_t posY = tft.getCursorY();
 
-      alignTextAt( hhmmString,   85, FOOTER_BOTTOMPOS - 32/*288*/, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
-      alignTextAt( UpTimeString, 85, FOOTER_BOTTOMPOS - 22/*298*/, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
-      alignTextAt("(c+) tobozo", 77, FOOTER_BOTTOMPOS - 12/*308*/, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+      #if HAS_EXTERNAL_RTC
+        alignTextAt( hhmmString,   HHMM_POSX,   HHMM_POSY, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+      #endif
+      alignTextAt( UpTimeString, UPTIME_POSX, UPTIME_POSY, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
 
-      if( gpsIconVisible ) {
-        tft_drawJpg( gps_jpg, gps_jpg_len, 128, FOOTER_BOTTOMPOS - 34/*286*/, 10,  10);
-      } else {
-        tft.fillRect( 128, FOOTER_BOTTOMPOS - 34/*286*/, 10,  10, FOOTER_BGCOLOR );
+      if( !uptimeIconWasRendered) {
+        uptimeIconWasRendered = true; // only draw once
+        tft_drawJpg( uptime_jpg, uptime_jpg_len, UPTIME_POSX - 16, UPTIME_POSY - 4, 12,  12);
       }
+      alignTextAt("(c+) tobozo", COPYLEFT_POSX, COPYLEFT_POSY, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+      #if HAS_GPS
+        if( gpsIconVisible ) {
+          tft_drawJpg( gps_jpg, gps_jpg_len, HHMM_POSX + 31, HHMM_POSY - 2, 10,  10);
+        } else {
+          tft.fillRect( HHMM_POSX + 31, HHMM_POSY - 2, 10,  10, FOOTER_BGCOLOR );
+        }
+      #endif
       *sessDevicesCountStr = {'\0'};
       *devicesCountStr = {'\0'};
       *newDevicesCountStr = {'\0'};
@@ -427,9 +494,9 @@ class UIUtils {
       sprintf( devicesCountStr, devicesCountTpl, formatUnit(devicesCount) );
       sprintf( newDevicesCountStr, newDevicesCountTpl, formatUnit(scan_rounds) );
 
-      alignTextAt( devicesCountStr, 0, FOOTER_BOTTOMPOS - 32/*288*/, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
-      alignTextAt( sessDevicesCountStr, 0, FOOTER_BOTTOMPOS - 22/*298*/, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
-      alignTextAt( newDevicesCountStr, 0, FOOTER_BOTTOMPOS - 12/*308*/, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_LEFT );
+      alignTextAt( devicesCountStr,     CDEV_C_POSX, CDEV_C_POSY, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+      alignTextAt( sessDevicesCountStr, SESS_C_POSX, SESS_C_POSY, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+      alignTextAt( newDevicesCountStr,  NDEV_C_POSX, NDEV_C_POSY, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
 
       tft.setCursor(posX, posY);
       giveMuxSemaphore();
@@ -438,9 +505,9 @@ class UIUtils {
 
     void cacheStats() {
       takeMuxSemaphore();
-      percentBox(164, FOOTER_BOTTOMPOS - 36/*284*/, 10, 10, BLEDevCacheUsed, BLE_CYAN, BLE_BLACK);
-      percentBox(164, FOOTER_BOTTOMPOS - 24/*296*/, 10, 10, VendorCacheUsed, BLE_ORANGE, BLE_BLACK);
-      percentBox(164, FOOTER_BOTTOMPOS - 12/*308*/, 10, 10, OuiCacheUsed, BLE_GREENYELLOW, BLE_BLACK);
+      percentBox( PERCENTBOX_X, PERCENTBOX_Y - 3*(PERCENTBOX_SIZE+2)/*284*/, PERCENTBOX_SIZE, PERCENTBOX_SIZE, BLEDevCacheUsed, BLE_CYAN, BLE_BLACK);
+      percentBox( PERCENTBOX_X, PERCENTBOX_Y - 2*(PERCENTBOX_SIZE+2)/*296*/, PERCENTBOX_SIZE, PERCENTBOX_SIZE, VendorCacheUsed, BLE_ORANGE, BLE_BLACK);
+      percentBox( PERCENTBOX_X, PERCENTBOX_Y - 1*(PERCENTBOX_SIZE+2)/*308*/, PERCENTBOX_SIZE, PERCENTBOX_SIZE, OuiCacheUsed, BLE_GREENYELLOW, BLE_BLACK);
       if( filterVendors ) {
         tft_drawJpg( filter_jpeg, filter_jpeg_len, 152, FOOTER_BOTTOMPOS - 12/*308*/, 10,  8);
       } else {
@@ -461,15 +528,21 @@ class UIUtils {
         tft.fillRect(x, y, w, h, barcolor);
         return;
       }
+      float ratio = 10.0;
+      if( w == h ) {
+        ratio = w;
+      } else {
+        ratio = (float)w / (float)h * (float)10.0;
+      }
       tft.drawRect(x - 1, y - 1, w + 2, h + 2, bordercolor);
       tft.fillRect(x, y, w, h, bgcolor);
-      byte yoffsetpercent = percent / 10;
-      byte boxh = (yoffsetpercent * h) / 10 ;
+      byte yoffsetpercent = percent / ratio;
+      byte boxh = (yoffsetpercent * h) / ratio ;
       tft.fillRect(x, y, w, boxh, barcolor);
 
-      byte xoffsetpercent = percent % 10;
+      byte xoffsetpercent = percent % (int)ratio;
       if (xoffsetpercent == 0) return;
-      byte linew = (xoffsetpercent * w) / 10;
+      byte linew = (xoffsetpercent * w) / ratio;
       tft.drawFastHLine(x, y + boxh, linew, barcolor);
     }
 
@@ -521,8 +594,12 @@ class UIUtils {
       blestateicon = color;
     }
 
+    static void PrintFatalError( const char* message, uint16_t yPos = AMIGABALL_YPOS ) {
+      alignTextAt( message, 0, yPos, BLE_YELLOW, BLECARD_BGCOLOR, ALIGN_CENTER );
+    }
+
     static void PrintProgressBar(uint16_t width) {
-      if( width == Out.width ) {
+      if( width == Out.width || width == 0 ) { // clear
         tft.fillRect(0, PROGRESSBAR_Y, width, 2, BLE_DARKGREY);
       } else {
         tft.fillRect(0, PROGRESSBAR_Y, width, 2, BLUETOOTH_COLOR);
@@ -605,9 +682,9 @@ class UIUtils {
     static void taskHeapGraph( void * pvParameters ) { // always running
       mux = xSemaphoreCreateMutex();
       xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 4096, NULL, 4, NULL, 0); /* last = Task Core */
-      #if HAS_EXTERNAL_RTC
+      //#if HAS_EXTERNAL_RTC
       xTaskCreatePinnedToCore(clockSync, "clockSync", 2048, NULL, 4, NULL, 1); // RTC wants to run on core 1 or it fails
-      #endif
+      //#endif
       vTaskDelete(NULL);
     }
 
@@ -620,9 +697,11 @@ class UIUtils {
           continue;
         }
         #if HAS_EXTERNAL_RTC
-        takeMuxSemaphore();
-        timeHousekeeping();
-        giveMuxSemaphore();
+          takeMuxSemaphore();
+          timeHousekeeping();
+          giveMuxSemaphore();
+        #else
+          uptimeSet();
         #endif
         lastClockTick = millis();
         #if HAS_GPS
@@ -632,7 +711,6 @@ class UIUtils {
             gpsIconVisible = false;
           }
         #endif
-        
         vTaskDelay( 100 );
       }
     }
@@ -642,11 +720,12 @@ class UIUtils {
       uint32_t lastfreeheap;
       uint32_t toleranceheap = min_free_heap + heap_tolerance;
       uint8_t i = 0;
+      /*
       int16_t GRAPH_LINE_WIDTH = HEAPMAP_BUFFLEN - 1;
       int16_t GRAPH_LINE_HEIGHT = 35;
       int16_t GRAPH_X = Out.width - GRAPH_LINE_WIDTH - 2;
-      int16_t GRAPH_Y = FOOTER_BOTTOMPOS - 37/*283*/;
-
+      int16_t GRAPH_Y = FOOTER_BOTTOMPOS - 37;// 283
+      */
       while (1) {
 
         if ( isInScroll() || isInQuery() ) {
@@ -1044,6 +1123,105 @@ class UIUtils {
       tft.fillRect(x + 6, y + 2, 2, 6, barColors[2]);
       tft.fillRect(x + 9, y + 1, 2, 7, barColors[3]);
     }
+
+
+
+  typedef enum {
+    TFT_SQUARE = 0,
+    TFT_PORTRAIT = 1,
+    TFT_LANDSCAPE = 2
+  } DisplayMode;
+  
+  
+  DisplayMode getDisplayMode() {
+    if( tft.width() > tft.height() ) {
+      return TFT_LANDSCAPE;
+    }
+    if( tft.width() < tft.height() ) {
+      return TFT_PORTRAIT;
+    }
+    return TFT_SQUARE;
+  }
+  
+  // landscape / portrait theme switcher
+  void setUISizePos() {
+    switch( getDisplayMode() ) {
+      case TFT_LANDSCAPE:
+        log_w("Using UI in landscape mode (w:%d, h:%d)", Out.width, Out.height);
+        HEADER_HEIGHT = 40; // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
+        FOOTER_HEIGHT = 16; // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
+        SCROLL_HEIGHT = ( Out.height - ( HEADER_HEIGHT + FOOTER_HEIGHT ));
+        FOOTER_BOTTOMPOS    = Out.height;
+        HEADERSTATS_X       = Out.width - 80;
+        GRAPH_LINE_WIDTH    = HEAPMAP_BUFFLEN - 1;
+        GRAPH_LINE_HEIGHT   = 30;
+        GRAPH_X             = Out.width - (150);
+        GRAPH_Y             = 0; // FOOTER_BOTTOMPOS - 37;// 283
+        PERCENTBOX_X        = (GRAPH_X - 12); // percentbox is 10px wide + 2px margin and 2px border
+        PERCENTBOX_Y        = 32;
+        PERCENTBOX_SIZE     = 8;
+        HEADERSTATS_ICONS_X = Out.width - (80 + 6);
+        HEADERSTATS_ICONS_Y = 4;
+        HEADER_LINEHEIGHT   = 16;
+        PROGRESSBAR_Y       = 34;
+        HHMM_POSX = 97;
+        HHMM_POSY = FOOTER_BOTTOMPOS - 32;
+        GPSICON_POSX = HHMM_POSX + 31;
+        GPSICON_POSY = HHMM_POSY - 2;
+        UPTIME_POSX = 214;
+        UPTIME_POSY = FOOTER_BOTTOMPOS - 10;
+        uptimeIconWasRendered = true; // never render
+        COPYLEFT_POSX = 250;
+        COPYLEFT_POSY = FOOTER_BOTTOMPOS - 10;
+        CDEV_C_POSX = 4;
+        CDEV_C_POSY = FOOTER_BOTTOMPOS - 10;
+        SESS_C_POSX = 74;
+        SESS_C_POSY = FOOTER_BOTTOMPOS - 10;
+        NDEV_C_POSX = 144;
+        NDEV_C_POSY = FOOTER_BOTTOMPOS - 10;
+      break;
+      case TFT_PORTRAIT:
+        log_w("Using UI in portrait mode");
+        HEADER_HEIGHT = 40; // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
+        FOOTER_HEIGHT = 40; // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
+        SCROLL_HEIGHT = ( Out.height - ( HEADER_HEIGHT + FOOTER_HEIGHT ));
+        FOOTER_BOTTOMPOS  = Out.height;
+        HEADERSTATS_X     = Out.width-112;
+        GRAPH_LINE_WIDTH  = HEAPMAP_BUFFLEN - 1;
+        GRAPH_LINE_HEIGHT = 35;
+        GRAPH_X           = Out.width - GRAPH_LINE_WIDTH - 2;
+        GRAPH_Y           = FOOTER_BOTTOMPOS - 37;// 283
+        PERCENTBOX_X      = (GRAPH_X - 14); // percentbox is 10px wide + 2px margin and 2px border
+        PERCENTBOX_Y      = FOOTER_BOTTOMPOS;
+        PERCENTBOX_SIZE   = 10;
+        HEADERSTATS_ICONS_X = 156;
+        HEADERSTATS_ICONS_Y = 4;
+        HEADER_LINEHEIGHT = 14;
+        PROGRESSBAR_Y = 30;
+        HHMM_POSX = 97;
+        HHMM_POSY = FOOTER_BOTTOMPOS - 32;
+        GPSICON_POSX = HHMM_POSX + 31;
+        GPSICON_POSY = HHMM_POSY - 2;
+        UPTIME_POSX = 97;
+        UPTIME_POSY = FOOTER_BOTTOMPOS - 22;
+        COPYLEFT_POSX = 77;
+        COPYLEFT_POSY = FOOTER_BOTTOMPOS - 12;
+        CDEV_C_POSX = 4;
+        CDEV_C_POSY = FOOTER_BOTTOMPOS - 32;
+        SESS_C_POSX = 4;
+        SESS_C_POSY = FOOTER_BOTTOMPOS - 22;
+        NDEV_C_POSX = 4;
+        NDEV_C_POSY = FOOTER_BOTTOMPOS - 12;
+      break;
+      case TFT_SQUARE:
+      default:
+        log_e("Unsupported display mode");
+        //uh-oh
+      break;    
+    }
+  }
+
+    
 };
 
 

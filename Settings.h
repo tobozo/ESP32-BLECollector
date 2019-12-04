@@ -45,16 +45,16 @@
 #define TIME_UPDATE_NONE 0 // update from nowhere, only using uptime as timestamps
 #define TIME_UPDATE_BLE  1 // update from BLE Time Server (see the /tools directory of this project)
 #define TIME_UPDATE_NTP  2 // update from NTP Time Server (requires WiFi and a separate build)
-#define TIME_UPDATE_GPS  3 // update from GPS external module (to be implemented)
+#define TIME_UPDATE_GPS  3 // update from GPS external module, see below for HardwareSerial pin settings
 #define SKETCH_MODE_BUILD_DEFAULT     1 // build the BLE Collector
 #define SKETCH_MODE_BUILD_NTP_UPDATER 2 // build the NTP Updater for external RTC
 
-// edit these values to fit your mode
-#define HAS_EXTERNAL_RTC true
-#define HAS_GPS true
-#define TIME_UPDATE_SOURCE     TIME_UPDATE_GPS
-#define SKETCH_MODE     SKETCH_MODE_BUILD_DEFAULT
-//#define SKETCH_MODE     SKETCH_MODE_BUILD_NTP_UPDATER
+// edit these values to fit your mode (can be #undef from display.h)
+#define HAS_EXTERNAL_RTC   false // uses I2C, search this file for RTC_SDA or RTC_SCL to change pins
+#define HAS_GPS            false
+#define TIME_UPDATE_SOURCE TIME_UPDATE_NONE // TIME_UPDATE_GPS
+#define SKETCH_MODE        SKETCH_MODE_BUILD_DEFAULT // this will be deprecated soon
+//#define SKETCH_MODE        SKETCH_MODE_BUILD_NTP_UPDATER // this will be deprecated soon
 
 byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define MIN_SCAN_DURATION 10 // seconds min
@@ -70,12 +70,12 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define NTP_MENU_NAME "NTPMenu"
 #define BLE_MENU_NAME "BLEMenu"
 
-#if SKETCH_MODE==SKETCH_MODE_BUILD_DEFAULT
+#if 1 // SKETCH_MODE==SKETCH_MODE_BUILD_DEFAULT
   #define BUILD_TYPE BLE_MENU_NAME
   #if HAS_EXTERNAL_RTC
    #if TIME_UPDATE_SOURCE==TIME_UPDATE_NTP
      #define RTC_PROFILE "CHRONOMANIAC"
-     #define NEEDS_SDUPDATER
+     //#define NEEDS_SDUPDATER // this will be deprecated soon
    #else
      #define RTC_PROFILE "ROGUE"
    #endif
@@ -85,7 +85,7 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #else
   #define BUILD_TYPE NTP_MENU_NAME
   #define RTC_PROFILE "NTP_MENU"
-  #define NEEDS_SDUPDATER true
+  //#define NEEDS_SDUPDATER true // this will be deprecated soon
   //#define WIFI_SSID "my-router-ssid"
   //#define WIFI_PASSWD "my-router-passwd
 #endif
@@ -132,6 +132,11 @@ Preferences preferences;
   static BLE_RTC_DS1307 RTC;
   #define RTC_SDA 26 // pin number
   #define RTC_SCL 27 // pin number
+#endif
+
+#if HAS_GPS
+  #define GPS_RX 39 // io pin number
+  #define GPS_TX 35 // io pin number
 #endif
 
 #if SKETCH_MODE==SKETCH_MODE_BUILD_NTP_UPDATER
@@ -197,4 +202,5 @@ static bool print_tabular = true;
 #include "TimeUtils.h"
 #include "UI.h"
 #include "DB.h"
+#include "BLEFileSharing.h"
 #include "BLE.h"
