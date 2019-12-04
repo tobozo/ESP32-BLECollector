@@ -1,43 +1,21 @@
 
 
 
-#if defined( ARDUINO_M5Stack_Core_ESP32 )
-  #warning M5STACK CLASSIC DETECTED !!
-  #define M5STACK
-#elif defined( ARDUINO_M5STACK_FIRE )
-  #warning M5STACK FIRE DETECTED !
-  #define M5STACK
-#elif defined( ARDUINO_ODROID_ESP32 )
-  #warning ODROID DETECTED !!
-  #define ODROIDGO
-#elif defined ( ARDUINO_ESP32_DEV ) 
-  #warning WROVER DETECTED !!
-  #define WROVER_KIT
+#if defined( ARDUINO_M5Stack_Core_ESP32 ) || defined( ARDUINO_M5STACK_FIRE ) || defined( ARDUINO_ODROID_ESP32 ) || defined ( ARDUINO_ESP32_DEV ) 
+  #define CHIMERA_CORE
 #else
-  #warning NOTHING DETECTED !!
-  //#define WROVER_KIT
-  //#define ODROIDGO
-  
-  //#define M5STACK
-  
-  //#define DDUINO32XS
-  
-  //#undef M5STACK
-  //#define D32PRO
+  #error NO SUPPORTED BOARD DETECTED !!
+  // #define D32PRO
+  // #define DDUINO32XS
 #endif
 
-#if defined(WROVER_KIT)
-  // Adafruit_GFX based driver with SD_MMC
-  #include "Display.WROVER_KIT.h"
-#elif defined(M5STACK)
-  // TFT_eSPI based driver with shared SD
-  #include "Display.M5STACK.h"
+
+#if defined(CHIMERA_CORE)
+  // TFT_eSPI based polyvalent core for M5Stack, Odroid, WROVER_KIT, 
+  #include "Display.ESP32ChimeraCore.h"
 #elif defined(D32PRO)
   // TFT_eSPI based driver with shared SD
   #include "Display.D32PRO.h"
-#elif defined(ODROIDGO)
-  // ???
-  #include "Display.ODROIDGO.h"
 #elif defined(DDUINO32XS)
   #include "Display.DDuino32XS.h"
 #else
