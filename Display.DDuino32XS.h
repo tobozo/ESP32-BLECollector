@@ -1,4 +1,4 @@
-
+#error "DEPRECATED!! THIS DRIVER IS NO LONGER SUPPORTED, USE CHIMERA_CORE INSTEAD"
 
 /*
  * This D32Pro profile isn't really useful as it's using a 128x128 display
@@ -9,9 +9,9 @@
  * 
  */
 
-//#define USER_SETUP_LOADED WHAAA // this should raise a warning at compilation
 //#define TFT_WIDTH 240
 //#define TFT_HEIGHT 240
+
 #define ILI9341_VSCRSADD 0x37
 #define ILI9341_VSCRDEF 0x33
 
@@ -34,6 +34,7 @@ static bool isInQuery() {
   return isQuerying; // M5Stack uses SPI SD, isolate SD accesses from TFT rendering
 }
 
+#define tft_begin tft.begin
 //#define tft_drawJpg tft.drawJpg
 #define tft_color565 tft.color565
 #define tft_readPixels tft.readRect

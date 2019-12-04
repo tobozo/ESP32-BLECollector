@@ -1,4 +1,6 @@
 
+#error "DEPRECATED!! THIS DRIVER IS NO LONGER SUPPORTED, USE CHIMERA_CORE INSTEAD"
+
 #include <M5Stack.h>
 #include <M5StackUpdater.h>
 
@@ -23,6 +25,10 @@ static bool isInQuery() {
 #define scrollpanel_height() tft.width()
 #define scrollpanel_width() tft.height()
 #define tft_drawBitmap tft.drawBitmap
+
+void tft_begin() {
+  M5.begin( true, true, false ); // don't start Serial
+}
 
 void tft_getTextBounds(const char *string, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h) {
   *w = tft.textWidth( string );

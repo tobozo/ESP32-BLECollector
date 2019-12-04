@@ -1,3 +1,4 @@
+#error "DEPRECATED!! THIS DRIVER IS NO LONGER SUPPORTED, USE CHIMERA_CORE INSTEAD"
 /*
 * LoLin D32 Pro Pins mapping
 * IO32 = TFT_LED
@@ -41,7 +42,7 @@
 #include "D32Pro.h" // a modified version of M5Stack.h with a different LCD profile
 //#include <M5StackUpdater.h>
 
-M5Display tft;
+#define tft M5.Lcd
 
 #include <SD.h>
 fs::SDFS &BLE_FS = SD;
@@ -53,6 +54,7 @@ static bool isInQuery() {
   return isQuerying; // M5Stack uses SPI SD, isolate SD accesses from TFT rendering
 }
 
+#define tft_begin tft.begin
 #define tft_drawJpg tft.drawJpg
 #define tft_color565 tft.color565
 #define tft_readPixels tft.readRect
