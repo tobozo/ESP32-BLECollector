@@ -88,9 +88,6 @@ Other ESP32 security related tools:
 Credits/requirements:
 ---------------------
 
-- thanks to https://github.com/chegewara for the help and inspiration
-=======
 - https://github.com/siara-cc/esp32_arduino_sqlite3_lib
-- ~~https://github.com/nkolban/ESP32_BLE_Arduino~~ 
 - https://github.com/wakwak-koba/arduino-esp32/tree/master/libraries/BLE (specifically patched for the current version)
-- thanks to https://github.com/chegewara (see [this issue](https://github.com/tobozo/ESP32-BLECollector/issues/2))
+- thanks to https://github.com/chegewara for the help and inspiration
