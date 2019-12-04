@@ -32,6 +32,7 @@ Hardware requirements
 Software requirements
 ---------------------
   - [mandatory] Arduino IDE
+  - [mandatory] https://github.com/wakwak-koba/arduino-esp32/tree/master/libraries/BLE
   - [mandatory] https://github.com/tobozo/ESP32-Chimera-Core
   - [mandatory] https://github.com/tobozo/M5Stack-SD-Updater
   - [mandatory] https://github.com/PaulStoffregen/Time
@@ -87,7 +88,6 @@ Other ESP32 security related tools:
 Credits/requirements:
 ---------------------
 
-- https://github.com/wakwak-koba/ESP32_BLE_Arduino (specifically patched for the current version)
 - thanks to https://github.com/chegewara for the help and inspiration
 =======
 - https://github.com/siara-cc/esp32_arduino_sqlite3_lib
