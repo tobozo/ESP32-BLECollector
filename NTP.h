@@ -37,10 +37,10 @@ static bool checkForTimeUpdate( DateTime &internalDateTime ) {
     // - adjust internal RTC
     #if HAS_EXTERNAL_RTC // have external RTC, adjust internal RTC accordingly
       setTime( externalDateTime.unixtime() );
-      if(drift > 1) {
+      if(drift > 5) {
         log_e("[***** WTF Clocks don't agree after adjustment] %d - %d = %d", internalDateTime.unixtime(), externalDateTime.unixtime(), drift);  
       } else {
-        log_i("[***** OK Clocks agree] %d - %d = %d", internalDateTime.unixtime(), externalDateTime.unixtime(), drift);
+        log_i("[***** OK Clocks agree-ish] %d - %d = %d", internalDateTime.unixtime(), externalDateTime.unixtime(), drift);
       }
       return true;
     #else
@@ -99,8 +99,9 @@ void TimeInit() {
   boolean RTCAdjusted = false;
   
   // used to retrieve DB files from the webs :]
-  void wget(String bin_url, String appName, const char* &ca ) {
-    log_d("Will check %s and save to SD as %s if filesizes differ", bin_url.c_str(), appName.c_str());
+  void wget(String bin_url, const char* appName, const char* &ca ) {
+    delay(200);
+    log_e("Will check %s and save to SD as %s if filesizes differ", bin_url.c_str(), appName );
     http.begin(bin_url, ca);
     int httpCode = http.GET();
     if(httpCode <= 0) {
@@ -124,7 +125,7 @@ void TimeInit() {
     WiFiClient * stream = http.getStreamPtr();
     File myFile = BLE_FS.open(appName, FILE_WRITE);
     if(!myFile) {
-      log_e("Failed to open %s for writing, aborting", appName.c_str() );
+      log_e("Failed to open %s for writing, aborting", appName );
       http.end();
       myFile.close();
       return;
@@ -146,12 +147,13 @@ void TimeInit() {
       delay(1);
     }
     myFile.close();
-    log_d("Copy done...");
+    log_e("Copy done...");
     http.end();
   }
 
   // HEAD request to check for remote file size
   size_t getRemoteFileSize( String bin_url, const char * &ca) {
+    log_e("Getting remote file size for url %s", bin_url);
     http.begin(bin_url, ca);
     int httpCode = http.sendRequest("HEAD");
     if(httpCode <= 0) {
@@ -168,6 +170,7 @@ void TimeInit() {
   void sudoMakeMeASandwich(String fileURL, const char* fileName, bool force = false) {
     size_t sdFileSize = 0;
     size_t remoteFileSize = 0;
+    /*
     File fileBin = BLE_FS.open(fileName);
     if (fileBin) {
       sdFileSize = fileBin.size();
@@ -175,23 +178,27 @@ void TimeInit() {
       fileBin.close();
     } else {
       log_e("[SD] %s not found, will proceed to initial download", fileName);
-    }
-    remoteFileSize = getRemoteFileSize( fileURL, raw_github_ca );
-    log_d("Remote file size is : %d", remoteFileSize);
-    if( remoteFileSize == 0 ) return; // shit happens
-    if( remoteFileSize != sdFileSize || force ) {
+    }*/
+    //remoteFileSize = getRemoteFileSize( fileURL, raw_github_ca );
+    //log_d("Remote file size is : %d", remoteFileSize);
+    //if( remoteFileSize == 0 ) return; // shit happens
+    //if( remoteFileSize != sdFileSize || force ) {
+      log_e("WTF happens here %s, %s", fileURL.c_str(), fileName);
       wget( fileURL, fileName, raw_github_ca );
-    }
+    //}
   }
 
   // very stubborn wifi connect
   bool WiFiConnect() {
+    log_e("WiFi will begin");
     unsigned long init_time = millis();
     unsigned long last_attempt = millis();
     unsigned long max_wait = 10000;
     byte attempts = 5;
-    btStop();
+    //btStop();
+    WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
     WiFi_Begin();
+    log_e("WiFi begun");
     while(WiFi.status() != WL_CONNECTED && attempts>0) {
       if( last_attempt + max_wait < millis() ) {
         attempts--;            
@@ -230,7 +237,9 @@ void TimeInit() {
         Serial.println (NTP.getTimeDateString (NTP.getLastNTPSync ()));
         dumpTime( "Collected/translated NTP time", nowUnixTime );
         Serial.printf("Adjusting RTC from unixtime %d\n", nowUnixTime);
-        RTC.adjust( nowUnixTime );
+        #if HAS_EXTERNAL_RTC
+          RTC.adjust( nowUnixTime );
+        #endif
         RTCAdjusted = true;
       } else {
         Serial.print ("Got BOGUS time: ");
@@ -242,30 +251,35 @@ void TimeInit() {
   }
 
   void NTPSync() {
+    log_e("NTP Sync");
     if(WiFiConnect()) {
-      NTP.begin ( NTP_SERVER, timeZone, true, minutesTimeZone );
-      NTP.setInterval(63);
-      while( !RTCAdjusted ) {
-        if( NTPSyncEventTriggered ) {
-          NTPSyncEvent(ntpEvent);
-          NTPSyncEventTriggered = false;
-        }
-        delay(0);
-      }
-      DateTime ExternalDateTime = RTC.now();
-      Serial.printf("[External RTC Time Set to]: %04d-%02d-%02d %02d:%02d:%02d\n", 
-        ExternalDateTime.year(),
-        ExternalDateTime.month(),
-        ExternalDateTime.day(),
-        ExternalDateTime.hour(),
-        ExternalDateTime.minute(),
-        ExternalDateTime.second()
-      );
-      logTimeActivity(SOURCE_NTP, ExternalDateTime.unixtime());
-      http.setReuse(true);
+      log_e("Will make a sandwich");  
+      //http.setReuse(true);
       sudoMakeMeASandwich("https://raw.githubusercontent.com/tobozo/ESP32-BLECollector/master/SD/mac-oui-light.db", "/mac-oui-light.db");
       delay( 500 );
       sudoMakeMeASandwich("https://raw.githubusercontent.com/tobozo/ESP32-BLECollector/master/SD/ble-oui.db", "/ble-oui.db");
+
+      #if HAS_EXTERNAL_RTC
+        NTP.begin ( NTP_SERVER, timeZone, true, minutesTimeZone );
+        NTP.setInterval(63);
+        while( !RTCAdjusted ) {
+          if( NTPSyncEventTriggered ) {
+            NTPSyncEvent(ntpEvent);
+            NTPSyncEventTriggered = false;
+          }
+          delay(0);
+        }
+        DateTime ExternalDateTime = RTC.now();
+        Serial.printf("[External RTC Time Set to]: %04d-%02d-%02d %02d:%02d:%02d\n", 
+          ExternalDateTime.year(),
+          ExternalDateTime.month(),
+          ExternalDateTime.day(),
+          ExternalDateTime.hour(),
+          ExternalDateTime.minute(),
+          ExternalDateTime.second()
+        );
+        logTimeActivity(SOURCE_NTP, ExternalDateTime.unixtime());
+      #endif
     } else {
       // give up
       Out.println("[WiFi] No NTP Sync, regressing to ROGUE mode");
@@ -278,6 +292,7 @@ void TimeInit() {
 
   
   void NTPSetup() {
+    log_e("NTP Setup");
     NTP.onNTPSyncEvent ([](NTPSyncEvent_t event) {
       ntpEvent = event;
       NTPSyncEventTriggered = true;

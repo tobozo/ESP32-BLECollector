@@ -50,18 +50,7 @@
 
 #include "Settings.h"
 
-
 void setup() {
-  Serial.begin(115200);
-  Serial.println(welcomeMessage);
-  Serial.printf("RTC_PROFILE: %s\nHAS_EXTERNAL_RTC: %s\nHAS_GPS: %s\nTIME_UPDATE_SOURCE: %d\nSKECTH_MODE: %d\n",
-    RTC_PROFILE,
-    HAS_EXTERNAL_RTC ? "true" : "false",
-    HAS_GPS ? "true" : "false",
-    TIME_UPDATE_SOURCE,
-    SKETCH_MODE
-  );
-  Serial.println("Free heap at boot: " + String(initial_free_heap));
   BLECollector.init();
 }
 

@@ -45,16 +45,16 @@
 #define TIME_UPDATE_NONE 0 // update from nowhere, only using uptime as timestamps
 #define TIME_UPDATE_BLE  1 // update from BLE Time Server (see the /tools directory of this project)
 #define TIME_UPDATE_NTP  2 // update from NTP Time Server (requires WiFi and a separate build)
-#define TIME_UPDATE_GPS  3 // update from GPS external module (to be implemented)
+#define TIME_UPDATE_GPS  3 // update from GPS external module, see below for HardwareSerial pin settings
 #define SKETCH_MODE_BUILD_DEFAULT     1 // build the BLE Collector
-#define SKETCH_MODE_BUILD_NTP_UPDATER 2 // build the NTP Updater for external RTC
+#define SKETCH_MODE_BUILD_NTP_UPDATER 2 // soon deprecated // build the NTP Updater for external RTC
 
-// edit these values to fit your mode
-#define HAS_EXTERNAL_RTC true
-#define HAS_GPS true
-#define TIME_UPDATE_SOURCE     TIME_UPDATE_GPS
-#define SKETCH_MODE     SKETCH_MODE_BUILD_DEFAULT
-//#define SKETCH_MODE     SKETCH_MODE_BUILD_NTP_UPDATER
+// edit these values to fit your mode (can be #undef from display.h)
+#define HAS_EXTERNAL_RTC   false // uses I2C, search this file for RTC_SDA or RTC_SCL to change pins
+#define HAS_GPS            false // uses hardware serial
+#define TIME_UPDATE_SOURCE TIME_UPDATE_NONE // TIME_UPDATE_GPS // soon deprecated, will be implicit
+#define SKETCH_MODE        SKETCH_MODE_BUILD_DEFAULT // this will be deprecated soon
+//#define SKETCH_MODE        SKETCH_MODE_BUILD_NTP_UPDATER // this will be deprecated soon
 
 byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define MIN_SCAN_DURATION 10 // seconds min
@@ -67,15 +67,32 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 
 // don't edit anything below this
 
-#define NTP_MENU_NAME "NTPMenu"
+#define NTP_MENU_NAME "NTPMenu" // to deprecate
 #define BLE_MENU_NAME "BLEMenu"
 
-#if SKETCH_MODE==SKETCH_MODE_BUILD_DEFAULT
+#if defined( ARDUINO_M5Stack_Core_ESP32 )
+  //#warning M5STACK CLASSIC DETECTED !!
+  #define PLATFORM_NAME "M5Stack"
+#elif defined( ARDUINO_M5STACK_FIRE )
+  //#warning M5STACK FIRE DETECTED !!
+  #define PLATFORM_NAME "M5Stack"
+#elif defined( ARDUINO_ODROID_ESP32 )
+  //#warning ODROID DETECTED !!
+  #define PLATFORM_NAME "Odroid-GO"
+#elif defined ( ARDUINO_ESP32_DEV )
+  //#warning WROVER DETECTED !!
+  #define PLATFORM_NAME "WROVER KIT"
+#else
+  #define PLATFORM_NAME "ESP32"
+#endif
+
+
+#if 1 // SKETCH_MODE==SKETCH_MODE_BUILD_DEFAULT
   #define BUILD_TYPE BLE_MENU_NAME
   #if HAS_EXTERNAL_RTC
    #if TIME_UPDATE_SOURCE==TIME_UPDATE_NTP
      #define RTC_PROFILE "CHRONOMANIAC"
-     #define NEEDS_SDUPDATER
+     //#define NEEDS_SDUPDATER // this will be deprecated soon
    #else
      #define RTC_PROFILE "ROGUE"
    #endif
@@ -83,9 +100,9 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
     #define RTC_PROFILE "HOBO"
   #endif
 #else
-  #define BUILD_TYPE NTP_MENU_NAME
-  #define RTC_PROFILE "NTP_MENU"
-  #define NEEDS_SDUPDATER true
+  #define BUILD_TYPE NTP_MENU_NAME // deprecate soon
+  #define RTC_PROFILE "NTP_MENU" // deprecate soon
+  //#define NEEDS_SDUPDATER true // this will be deprecated soon
   //#define WIFI_SSID "my-router-ssid"
   //#define WIFI_PASSWD "my-router-passwd
 #endif
@@ -93,14 +110,14 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN 4
 #define MAX_BLECARDS_WITHOUT_TIMESTAMPS_ON_SCREEN 5
 #define BLEDEVCACHE_PSRAM_SIZE 1024 // use PSram to cache BLECards
-#define BLEDEVCACHE_HEAP_SIZE 32 // use some heap to cache BLECards. min = 5, max = 64, higher value = smaller uptime
+#define BLEDEVCACHE_HEAP_SIZE 16 // use some heap to cache BLECards. min = 5, max = 64, higher value = smaller uptime
 #define MAX_DEVICES_PER_SCAN MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN // also max displayed devices on the screen, affects initial scan duration
 
 #define MENU_FILENAME "/" BUILD_TYPE ".bin"
 #define NTP_MENU_FILENAME "/" NTP_MENU_NAME ".bin"
 #define BLE_MENU_FILENAME "/" BLE_MENU_NAME ".bin"
 
-#define BUILD_NEEDLE "ESP32 BLE Scanner Compiled On " // this 'signature' string must be unique in the whole source tree
+#define BUILD_NEEDLE PLATFORM_NAME " BLE Scanner Compiled On " // this 'signature' string must be unique in the whole source tree
 #define BUILD_SIGNATURE __DATE__ " - " __TIME__ " - " BUILD_TYPE 
 #define WELCOME_MESSAGE BUILD_NEEDLE BUILD_SIGNATURE
 const char* needle = BUILD_NEEDLE;
@@ -113,6 +130,7 @@ static xSemaphoreHandle mux = NULL; // this is needed to prevent rendering colli
                                     // between scrollpanel and heap graph
 
 static bool DBneedsReplication = false;
+static bool isQuerying = false; // state maintained while SD is accessed, useful when SD is used instead of SD_MMC
 
 
 // used to get the resetReason
@@ -133,27 +151,33 @@ Preferences preferences;
   #define RTC_SCL 27 // pin number
 #endif
 
+#if HAS_GPS
+  #define GPS_RX 39 // io pin number
+  #define GPS_TX 35 // io pin number
+#endif
+
 #if SKETCH_MODE==SKETCH_MODE_BUILD_NTP_UPDATER
+  #include "certificates.h"
   #include <WiFi.h>
   #include <HTTPClient.h>
   #include <NtpClientLib.h> // https://github.com/gmag11/NtpClient
-  #include "certificates.h"
 #else
   // don't load BLE stack and SQLite3 when compiling the NTP Utility
   #include <BLEDevice.h>
   #include <BLEUtils.h>
   #include <BLEScan.h>
   #include <BLEAdvertisedDevice.h>
-  // used to disable brownout detector
-  #include "soc/soc.h"
-  #include "soc/rtc_cntl_reg.h"
-  #include "esp_task_wdt.h"
 
   #include <stdio.h>
   #include <stdlib.h>
   #include <sqlite3.h> // https://github.com/siara-cc/esp32_arduino_sqlite3_lib
 #endif
 
+
+// used to disable brownout detector
+#include "soc/soc.h"
+#include "soc/rtc_cntl_reg.h"
+#include "esp_task_wdt.h"
 
 /*
  * Data sources:
@@ -195,4 +219,5 @@ static bool print_tabular = true;
 #include "TimeUtils.h"
 #include "UI.h"
 #include "DB.h"
+#include "BLEFileSharing.h"
 #include "BLE.h"
