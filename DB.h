@@ -272,18 +272,6 @@ class DBUtils {
       isQuerying = true;
       if( !BLE_FS.exists( BLEMacsDbFSPath ) ) {
         log_w("%s DB does not exist", BLEMacsDbFSPath);
-/*
-        File createFile = BLE_FS.open( dbcollection[BLE_COLLECTOR_DB].fspath, FILE_WRITE );
-        if(!createFile) {
-          log_e("Whoopsie could not open path");
-          return false;
-        } else {
-          log_e("yay");
-          //log_e("%s creating file", dbcollection[BLE_COLLECTOR_DB].fspath);
-          //const uint8_t sqlite_header[17] = "SQLite format 3\000";
-          //createFile.write(sqlite_header, 17);
-        }
-        createFile.close();*/
         sqlite3_initialize();
         createDB(); // only if no exists
       } else {
@@ -294,7 +282,6 @@ class DBUtils {
       entries = getEntries();
       //DBExec( OUIVendorsDB, "SELECT count(*) FROM 'ble-oui'", (char*)"count(*)" );
       //Serial.printf("OUI vendors DB has %s entries\n", colValue);
-      
       return cacheWarmup();
     }
 
@@ -461,19 +448,17 @@ class DBUtils {
     }
 
 
-    void maintain() {
+    bool maintain() {
+      bool ret = true;
       if( isOOM ) {
-        log_e("[DB OOM] restarting");
-        log_i("During this session (%d), %d out of %d devices were added to the DB", UpTimeString, newDevicesCount-AnonymousCacheHit, sessDevicesCount);
-        delay(1000);
-        ESP.restart();
+        isOOM = false;
+        log_e("[DB OOM], please prune DB and restart manually");
+        ret = false;
       }
       if( isCorrupt ) {
-        log_e("[I/O ERROR] this DB file is too big");
-        log_i("During this session (%d), %d out of %d devices were added to the DB", UpTimeString, newDevicesCount-AnonymousCacheHit, sessDevicesCount);
-        resetDB();
-        delay(1000);
-        ESP.restart();
+        isCorrupt = false;
+        log_e("[I/O ERROR] a DB file is corrupt, please run diagnostics manually");
+        ret = false;
       }
       if( needsPruning ) {
         pruneDB();
@@ -484,7 +469,7 @@ class DBUtils {
         needsReset = true;
       }
       if( DayChangeTrigger ) {
-        log_e("Day change, will generate new DB name and trigger replication");
+        log_w("Day change, will generate new DB name and trigger replication");
         DayChangeTrigger = false;
         setBLEDBPath();
         createDB();
@@ -492,22 +477,20 @@ class DBUtils {
         getEntries();
         HourChangeTrigger = false;
         DBneedsReplication = false;
-        return;
+        return ret;
       }
       if( HourChangeTrigger ) {
-        log_e("Hour change, will trigger replication");
+        log_w("Hour change, will trigger replication");
         DBneedsReplication = true;
         HourChangeTrigger = false;
       }
       if( DBneedsReplication ) {
-        log_e("Replicating DB");
+        log_w("Replicating DB");
         DBneedsReplication = false;
         updateDBFromCache( BLEDevRAMCache, false );
       }
-      if( needsRestart ) {
-        ESP.restart();
-      }
       cacheState();
+      return ret;
     }
 
 
@@ -677,7 +660,7 @@ class DBUtils {
       HourChangeTrigger = false;
       DayChangeTrigger = false;
       if (strcmp(zErrMsg, "database disk image is malformed")==0) {
-        needsReset = true;
+        isCorrupt = true;
       } else if (strcmp(zErrMsg, "file is not a database")==0) {
         needsReset = true;
       } else if (strcmp(zErrMsg, "no such table: blemacs")==0) {
@@ -794,7 +777,7 @@ class DBUtils {
 
     unsigned int getEntries(bool _display_results = false) {
       int rc = open(BLE_COLLECTOR_DB);
-      log_w("open collector db response=%d", rc);
+      //log_w("open collector db response=%d", rc);
       if (_display_results) {
         DBExec( BLECollectorDB, allEntriesQuery );
       } else {
@@ -816,7 +799,7 @@ class DBUtils {
     }
 
     void createDB() {
-      log_e("creating db");
+      log_w("creating %s db", BLEMacsDbSQLitePath);
       UI.headerStats("DB: creating...");
       open(BLE_COLLECTOR_DB, false);
       log_d("created %s if no exists:  : %s", BLEMacsDbSQLitePath, createTableQuery);
@@ -863,7 +846,7 @@ class DBUtils {
 
     bool testOUI() {
       int rc = open(MAC_OUI_NAMES_DB);
-      log_w("open OUI DB responded with: %d", rc);
+      //log_w("open OUI DB responded with: %d", rc);
       DBExec( OUIVendorsDB, testOUIQuery );
       close(MAC_OUI_NAMES_DB);
       char *ouiname = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));

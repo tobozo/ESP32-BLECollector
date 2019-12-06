@@ -75,6 +75,8 @@ int16_t ICON_BLE_Y = 7;
 int16_t ICON_DB_X = 116;
 int16_t ICON_DB_Y = 7;
 int16_t ICON_R = 4;
+char SESS_SPACER[2] = "";
+char DEV_SPACER[2] = "";
 
 
 // heap management (used by graph)
@@ -87,7 +89,6 @@ static bool blinkit = false; // task blinker state
 static bool blinktoggler = true;
 static bool appIconVisible = false;
 static bool foundTimeServer = false;
-static bool fileSharingEnabled = false;
 static bool foundFileServer = false;
 static bool gpsIconVisible = false;
 static bool uptimeIconWasRendered = false;
@@ -102,8 +103,8 @@ static unsigned long blinkthen = blinknow + scanTime; // task blinker end time
 static unsigned long lastblink = millis(); // task blinker last blink
 static unsigned long lastprogress = millis(); // task blinker progress
 
-const char* sessDevicesCountTpl = "Seen: %4s";
-const char* devicesCountTpl = "Last: %4s";
+const char* sessDevicesCountTpl = "Seen:%s%4s";
+const char* devicesCountTpl = "Last:%s%4s";
 const char* newDevicesCountTpl = "Scans:%4s";
 const char* heapTpl = "Heap: %6d";
 const char* entriesTpl = "Entries:%4s";
@@ -202,8 +203,6 @@ enum BLECardThemes {
   NOT_IN_CACHE_ANON = 2,
   NOT_IN_CACHE_NOT_ANON = 3
 };
-
-
 
 
 
@@ -313,26 +312,20 @@ class UIUtils {
       for (int i = 0; i < 5; i++) {
         pos += Out.println();
       }
-
+      const char* introTextTitle = PLATFORM_NAME " BLE Collector";
+      tft_getTextBounds(introTextTitle, Out.scrollPosX, Out.scrollPosY, &Out.x1_tmp, &Out.y1_tmp, &Out.w_tmp, &Out.h_tmp);
+      uint16_t boxWidth = Out.w_tmp + 24;
       pos += Out.println(SPACE);
-      alignTextAt( "ESP32 BLE Collector", 6, Out.scrollPosY, BLE_GREENYELLOW, HEADER_BGCOLOR, ALIGN_CENTER );
+      alignTextAt( introTextTitle, 6, Out.scrollPosY, BLE_GREENYELLOW, HEADER_BGCOLOR, ALIGN_CENTER );
       pos += Out.println(SPACE);
       pos += Out.println(SPACE);
       alignTextAt( "(c+)  tobozo  2019", 6, Out.scrollPosY, BLE_GREENYELLOW, HEADER_BGCOLOR, ALIGN_CENTER );
       pos += Out.println(SPACE);
       pos += Out.println(SPACE);
+      pos += Out.println(SPACE);
       tft_drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, (Out.width/2 - 14), Out.scrollPosY - pos + 8, 28,  28);
-      Out.drawScrollableRoundRect( (Out.width/2 - 64), Out.scrollPosY-pos, 128, pos, 8, BLE_GREENYELLOW );
+      Out.drawScrollableRoundRect( (Out.width/2 - boxWidth/2), Out.scrollPosY-pos, boxWidth, pos, 8, BLE_GREENYELLOW );
 
-      /*
-      pos += Out.println("         ");
-      pos += Out.println("           ESP32 BLE Collector  ");
-      pos += Out.println("         ");
-      pos += Out.println("           (c+)  tobozo  2018   ");
-      pos += Out.println("         ");
-      tft_drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, 106, Out.scrollPosY - pos + 8, 28,  28);
-      Out.drawScrollableRoundRect( 58, Out.scrollPosY-pos, 128, pos, 8, BLE_GREENYELLOW );
-      */
       for (int i = 0; i < 5; i++) {
         Out.println(SPACE);
       }
@@ -469,10 +462,10 @@ class UIUtils {
       int16_t posX = tft.getCursorX();
       int16_t posY = tft.getCursorY();
 
-      #if HAS_EXTERNAL_RTC
+      if( TimeIsSet ) {
         alignTextAt( hhmmString,   HHMM_POSX,   HHMM_POSY, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
-      #endif
-      alignTextAt( UpTimeString, UPTIME_POSX, UPTIME_POSY, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+      }
+      alignTextAt( UpTimeString, UPTIME_POSX, UPTIME_POSY, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
 
       if( !uptimeIconWasRendered) {
         uptimeIconWasRendered = true; // only draw once
@@ -490,12 +483,12 @@ class UIUtils {
       *devicesCountStr = {'\0'};
       *newDevicesCountStr = {'\0'};
 
-      sprintf( sessDevicesCountStr, sessDevicesCountTpl, formatUnit(sessDevicesCount) );
-      sprintf( devicesCountStr, devicesCountTpl, formatUnit(devicesCount) );
+      sprintf( sessDevicesCountStr, sessDevicesCountTpl, SESS_SPACER, formatUnit(sessDevicesCount) );
+      sprintf( devicesCountStr, devicesCountTpl, DEV_SPACER, formatUnit(devicesCount) );
       sprintf( newDevicesCountStr, newDevicesCountTpl, formatUnit(scan_rounds) );
 
       alignTextAt( devicesCountStr,     CDEV_C_POSX, CDEV_C_POSY, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
-      alignTextAt( sessDevicesCountStr, SESS_C_POSX, SESS_C_POSY, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+      alignTextAt( sessDevicesCountStr, SESS_C_POSX, SESS_C_POSY, BLE_YELLOW,      FOOTER_BGCOLOR, ALIGN_FREE );
       alignTextAt( newDevicesCountStr,  NDEV_C_POSX, NDEV_C_POSY, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
 
       tft.setCursor(posX, posY);
@@ -696,13 +689,13 @@ class UIUtils {
           vTaskDelay( 100 );
           continue;
         }
-        #if HAS_EXTERNAL_RTC
+        if( TimeIsSet ) {
           takeMuxSemaphore();
           timeHousekeeping();
           giveMuxSemaphore();
-        #else
+        } else {
           uptimeSet();
-        #endif
+        }
         lastClockTick = millis();
         #if HAS_GPS
           if( GPSHasDateTime ) {
@@ -720,12 +713,7 @@ class UIUtils {
       uint32_t lastfreeheap;
       uint32_t toleranceheap = min_free_heap + heap_tolerance;
       uint8_t i = 0;
-      /*
-      int16_t GRAPH_LINE_WIDTH = HEAPMAP_BUFFLEN - 1;
-      int16_t GRAPH_LINE_HEIGHT = 35;
-      int16_t GRAPH_X = Out.width - GRAPH_LINE_WIDTH - 2;
-      int16_t GRAPH_Y = FOOTER_BOTTOMPOS - 37;// 283
-      */
+
       while (1) {
 
         if ( isInScroll() || isInQuery() ) {
@@ -1164,21 +1152,23 @@ class UIUtils {
         HEADERSTATS_ICONS_Y = 4;
         HEADER_LINEHEIGHT   = 16;
         PROGRESSBAR_Y       = 34;
-        HHMM_POSX = 97;
-        HHMM_POSY = FOOTER_BOTTOMPOS - 32;
+        HHMM_POSX = 182;
+        HHMM_POSY = FOOTER_BOTTOMPOS - 10;
         GPSICON_POSX = HHMM_POSX + 31;
         GPSICON_POSY = HHMM_POSY - 2;
-        UPTIME_POSX = 214;
+        UPTIME_POSX = 218;
         UPTIME_POSY = FOOTER_BOTTOMPOS - 10;
         uptimeIconWasRendered = true; // never render
         COPYLEFT_POSX = 250;
         COPYLEFT_POSY = FOOTER_BOTTOMPOS - 10;
         CDEV_C_POSX = 4;
         CDEV_C_POSY = FOOTER_BOTTOMPOS - 10;
-        SESS_C_POSX = 74;
+        SESS_C_POSX = 60;
         SESS_C_POSY = FOOTER_BOTTOMPOS - 10;
-        NDEV_C_POSX = 144;
+        NDEV_C_POSX = 116;
         NDEV_C_POSY = FOOTER_BOTTOMPOS - 10;
+        sprintf(SESS_SPACER, "%s", "");
+        sprintf(DEV_SPACER, "%s", "");
       break;
       case TFT_PORTRAIT:
         log_w("Using UI in portrait mode");
@@ -1212,6 +1202,8 @@ class UIUtils {
         SESS_C_POSY = FOOTER_BOTTOMPOS - 22;
         NDEV_C_POSX = 4;
         NDEV_C_POSY = FOOTER_BOTTOMPOS - 12;
+        sprintf(SESS_SPACER, "%s", " ");
+        sprintf(DEV_SPACER, "%s", " ");
       break;
       case TFT_SQUARE:
       default:

@@ -30,10 +30,11 @@
 
 */
 
+#include <sys/time.h> // needed by BLETimeServer
 #include <TimeLib.h> // https://github.com/PaulStoffregen/Time
 
 
-int8_t timeZone = 1; // 1 = GMT+1
+int8_t timeZone = 1; // 1 = GMT+1, 2 = GMT+2, etc
 int8_t minutesTimeZone = 0;
 const char* NTP_SERVER = "europe.pool.ntp.org";
 static bool RTCisRunning = false;

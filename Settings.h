@@ -47,12 +47,12 @@
 #define TIME_UPDATE_NTP  2 // update from NTP Time Server (requires WiFi and a separate build)
 #define TIME_UPDATE_GPS  3 // update from GPS external module, see below for HardwareSerial pin settings
 #define SKETCH_MODE_BUILD_DEFAULT     1 // build the BLE Collector
-#define SKETCH_MODE_BUILD_NTP_UPDATER 2 // build the NTP Updater for external RTC
+#define SKETCH_MODE_BUILD_NTP_UPDATER 2 // soon deprecated // build the NTP Updater for external RTC
 
 // edit these values to fit your mode (can be #undef from display.h)
 #define HAS_EXTERNAL_RTC   false // uses I2C, search this file for RTC_SDA or RTC_SCL to change pins
-#define HAS_GPS            false
-#define TIME_UPDATE_SOURCE TIME_UPDATE_NONE // TIME_UPDATE_GPS
+#define HAS_GPS            false // uses hardware serial
+#define TIME_UPDATE_SOURCE TIME_UPDATE_NONE // TIME_UPDATE_GPS // soon deprecated, will be implicit
 #define SKETCH_MODE        SKETCH_MODE_BUILD_DEFAULT // this will be deprecated soon
 //#define SKETCH_MODE        SKETCH_MODE_BUILD_NTP_UPDATER // this will be deprecated soon
 
@@ -67,8 +67,25 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 
 // don't edit anything below this
 
-#define NTP_MENU_NAME "NTPMenu"
+#define NTP_MENU_NAME "NTPMenu" // to deprecate
 #define BLE_MENU_NAME "BLEMenu"
+
+#if defined( ARDUINO_M5Stack_Core_ESP32 )
+  //#warning M5STACK CLASSIC DETECTED !!
+  #define PLATFORM_NAME "M5Stack"
+#elif defined( ARDUINO_M5STACK_FIRE )
+  //#warning M5STACK FIRE DETECTED !!
+  #define PLATFORM_NAME "M5Stack"
+#elif defined( ARDUINO_ODROID_ESP32 )
+  //#warning ODROID DETECTED !!
+  #define PLATFORM_NAME "Odroid-GO"
+#elif defined ( ARDUINO_ESP32_DEV )
+  //#warning WROVER DETECTED !!
+  #define PLATFORM_NAME "WROVER KIT"
+#else
+  #define PLATFORM_NAME "ESP32"
+#endif
+
 
 #if 1 // SKETCH_MODE==SKETCH_MODE_BUILD_DEFAULT
   #define BUILD_TYPE BLE_MENU_NAME
@@ -83,8 +100,8 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
     #define RTC_PROFILE "HOBO"
   #endif
 #else
-  #define BUILD_TYPE NTP_MENU_NAME
-  #define RTC_PROFILE "NTP_MENU"
+  #define BUILD_TYPE NTP_MENU_NAME // deprecate soon
+  #define RTC_PROFILE "NTP_MENU" // deprecate soon
   //#define NEEDS_SDUPDATER true // this will be deprecated soon
   //#define WIFI_SSID "my-router-ssid"
   //#define WIFI_PASSWD "my-router-passwd
@@ -100,7 +117,7 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define NTP_MENU_FILENAME "/" NTP_MENU_NAME ".bin"
 #define BLE_MENU_FILENAME "/" BLE_MENU_NAME ".bin"
 
-#define BUILD_NEEDLE "ESP32 BLE Scanner Compiled On " // this 'signature' string must be unique in the whole source tree
+#define BUILD_NEEDLE PLATFORM_NAME " BLE Scanner Compiled On " // this 'signature' string must be unique in the whole source tree
 #define BUILD_SIGNATURE __DATE__ " - " __TIME__ " - " BUILD_TYPE 
 #define WELCOME_MESSAGE BUILD_NEEDLE BUILD_SIGNATURE
 const char* needle = BUILD_NEEDLE;
