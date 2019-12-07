@@ -121,53 +121,52 @@ static void timeHousekeeping() {
   unsigned long ss = seconds_since_boot % 60;
   
   DateTime internalDateTime = DateTime(year(), month(), day(), hour(), minute(), second());
-
   // before adjustment checks
   if( current_hour != internalDateTime.hour() ) {
-    log_e("hourchangeTrigger=true (%d vs %d)", current_hour, internalDateTime.hour());
-    HourChangeTrigger = true;
+    if( current_hour != -1 ) {
+      log_e("hourchangeTrigger=true (%02dh => %02dh)", current_hour, internalDateTime.hour());
+      HourChangeTrigger = true;
+    }
     current_hour = internalDateTime.hour();
   } else {
     HourChangeTrigger = false;
   }
 
-  if( current_day!= internalDateTime.day() ) {
-    // day changed! update bool so DB.maintain() and BLE know what to do
-    log_e("DayChangeTrigger=true (%d vs %d)", current_day, internalDateTime.day());
-    DayChangeTrigger = true;
-    HourChangeTrigger = false;
+  if( current_day != internalDateTime.day() ) {
+    if( current_day != -1 ) {
+      // day changed! update bool so DB.maintain() and BLE know what to do
+      log_e("DayChangeTrigger=true (%02d => %02d)", current_day, internalDateTime.day());
+      DayChangeTrigger = true;
+      HourChangeTrigger = false;
+    }
     current_day = internalDateTime.day();
   } else {
     DayChangeTrigger = false;
   }
-
-  #if SKETCH_MODE==SKETCH_MODE_BUILD_DEFAULT
   
-    // - get the time from the internal clock
-    // - compare with external clocks sources if applicable
-    if( HourChangeTrigger || DayChangeTrigger ) {
-      if( checkForTimeUpdate( internalDateTime ) ) { // and update internal clock if necessary
-        internalDateTime = DateTime(year(), month(), day(), hour(), minute(), second());
-        current_hour = internalDateTime.hour();
-      }
+  // - get the time from the internal clock
+  // - compare with external clocks sources if applicable
+  if( HourChangeTrigger || DayChangeTrigger ) {
+    if( checkForTimeUpdate( internalDateTime ) ) { // and update internal clock if necessary
+      internalDateTime = DateTime(year(), month(), day(), hour(), minute(), second());
+      current_hour = internalDateTime.hour();
     }
-    sprintf(hhmmString, hhmmStringTpl, internalDateTime.hour(), internalDateTime.minute());
-      
-    #if HAS_EXTERNAL_RTC
+  }
+  sprintf(hhmmString, hhmmStringTpl, internalDateTime.hour(), internalDateTime.minute());
     
-      if( abs( seconds_since_boot - internalDateTime.unixtime() ) > 2 ) { // internal datetime is set
-        // safe to assume internal RTC is running
-        TimeIsSet = true;
-      } 
-      sprintf(hhmmssString, hhmmssStringTpl, hh, mm, ss);
-      
-    #else // HAS_EXTERNAL_RTC=false
+  #if HAS_EXTERNAL_RTC
+  
+    if( abs( seconds_since_boot - internalDateTime.unixtime() ) > 2 ) { // internal datetime is set
+      // safe to assume internal RTC is running
+      TimeIsSet = true;
+    } 
+    sprintf(hhmmssString, hhmmssStringTpl, hh, mm, ss);
+    
+  #else // HAS_EXTERNAL_RTC=false
 
-      sprintf(hhmmssString, hhmmssStringTpl, internalDateTime.hour(), internalDateTime.minute(), internalDateTime.second());
+    sprintf(hhmmssString, hhmmssStringTpl, internalDateTime.hour(), internalDateTime.minute(), internalDateTime.second());
 
-    #endif // HAS_EXTERNAL_RTC
-
-  #endif // SKETCH_MODE==SKETCH_MODE_BUILD_DEFAULT
+  #endif // HAS_EXTERNAL_RTC
 
   nowDateTime = internalDateTime;
   uptimeSet();
@@ -202,11 +201,7 @@ void timeSetup() {
     if(!RTCSetup()) { // RTC failure ....
       log_e("RTC Failure, switching to hobo mode");
     }
-    #if SKETCH_MODE==SKETCH_MODE_BUILD_DEFAULT
-      TimeInit();
-    #else
-      NTPSetup();
-    #endif
+    TimeInit();
     timeHousekeeping();
   #else
     uptimeSet();

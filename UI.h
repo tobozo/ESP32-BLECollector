@@ -31,6 +31,39 @@
 */
 
 
+// UI palette
+static const uint16_t BLE_WHITE       = 0xFFFF;
+static const uint16_t BLE_BLACK       = 0x0000;
+static const uint16_t BLE_GREEN       = 0x07E0;
+static const uint16_t BLE_YELLOW      = 0xFFE0;
+static const uint16_t BLE_GREENYELLOW = 0xAFE5;
+static const uint16_t BLE_CYAN        = 0x07FF;
+static const uint16_t BLE_ORANGE      = 0xFD20;
+static const uint16_t BLE_DARKGREY    = 0x7BEF;
+static const uint16_t BLE_LIGHTGREY   = 0xC618;
+static const uint16_t BLE_RED         = 0xF800;
+static const uint16_t BLE_DARKGREEN   = 0x03E0;
+static const uint16_t BLE_PURPLE      = 0x780F;
+static const uint16_t BLE_PINK        = 0xF81F;
+static const uint16_t BLE_TRANSPARENT = TFT_TRANSPARENT;
+
+// top and bottom non-scrolly zones
+static const uint16_t HEADER_BGCOLOR      = tft_color565(0x22, 0x22, 0x22);
+static const uint16_t FOOTER_BGCOLOR      = tft_color565(0x22, 0x22, 0x22);
+// BLECard info styling
+static const uint16_t IN_CACHE_COLOR      = tft_color565(0x37, 0x6b, 0x37);
+static const uint16_t NOT_IN_CACHE_COLOR  = tft_color565(0xa4, 0xa0, 0x5f);
+static const uint16_t ANONYMOUS_COLOR     = tft_color565(0x88, 0xaa, 0xaa);
+static const uint16_t NOT_ANONYMOUS_COLOR = tft_color565(0xee, 0xee, 0xee);
+// one carefully chosen blue
+static const uint16_t BLUETOOTH_COLOR     = tft_color565(0x14, 0x54, 0xf0);
+static const uint16_t BLE_DARKORANGE      = tft_color565(0x80, 0x40, 0x00);
+// middle scrolly zone
+static const uint16_t BLECARD_BGCOLOR     = tft_color565(0x22, 0x22, 0x44);
+// placehorder for variable background color
+static uint16_t BGCOLOR                   = tft_color565(0x22, 0x22, 0x44);
+
+
 // heap map settings
 #define HEAPMAP_BUFFLEN 61 // graph width (+ 1 for hscroll)
 
@@ -87,7 +120,8 @@ static uint32_t heapmap[HEAPMAP_BUFFLEN] = {0}; // stores the history of heapmap
 static uint16_t heapindex = 0; // index in the circular buffer
 static bool blinkit = false; // task blinker state
 static bool blinktoggler = true;
-static bool appIconVisible = false;
+static bool appIconWasRendered = false;
+static bool earthIconWasRendered = false;
 static bool foundTimeServer = false;
 static bool foundFileServer = false;
 static bool gpsIconVisible = false;
@@ -216,13 +250,14 @@ class UIUtils {
       uint16_t borderColor = BLE_WHITE;
       uint16_t bgColor = BLECARD_BGCOLOR;
       void setTheme( BLECardThemes themeID ) {
-        bgColor = BLECARD_BGCOLOR;
+        //bgColor = BLECARD_BGCOLOR;
         switch ( themeID ) {
           case IN_CACHE_ANON:         borderColor = IN_CACHE_COLOR;     textColor = ANONYMOUS_COLOR;     break; // = 0,
           case IN_CACHE_NOT_ANON:     borderColor = IN_CACHE_COLOR;     textColor = NOT_ANONYMOUS_COLOR; break; // = 1,
           case NOT_IN_CACHE_ANON:     borderColor = NOT_IN_CACHE_COLOR; textColor = ANONYMOUS_COLOR;     break; // = 2,
           case NOT_IN_CACHE_NOT_ANON: borderColor = NOT_IN_CACHE_COLOR; textColor = NOT_ANONYMOUS_COLOR; break; // = 3
         }
+        bgColor = textColor; // force transparency
       }
     };
 
@@ -231,12 +266,11 @@ class UIUtils {
     void init() {
       Serial.begin(115200);
       Serial.println(welcomeMessage);
-      Serial.printf("RTC_PROFILE: %s\nHAS_EXTERNAL_RTC: %s\nHAS_GPS: %s\nTIME_UPDATE_SOURCE: %d\nSKECTH_MODE: %d\n",
+      Serial.printf("RTC_PROFILE: %s\nHAS_EXTERNAL_RTC: %s\nHAS_GPS: %s\nTIME_UPDATE_SOURCE: %d\n",
         RTC_PROFILE,
         HAS_EXTERNAL_RTC ? "true" : "false",
         HAS_GPS ? "true" : "false",
-        TIME_UPDATE_SOURCE,
-        SKETCH_MODE
+        TIME_UPDATE_SOURCE
       );
       Serial.println("Free heap at boot: " + String(initial_free_heap));
 
@@ -248,11 +282,14 @@ class UIUtils {
       tft_begin();
       tft_initOrientation(); //tft.setRotation( 0 ); // required to get smooth scrolling
       setUISizePos(); // set position/dimensions for widgets and other UI items
-      tft.setTextColor(BLE_YELLOW);
+
+      RGBColor colorstart = { 0x44, 0x44, 0x88 };
+      RGBColor colorend   = { 0x22, 0x22, 0x44 };
 
       if (clearScreen) {
         tft.fillScreen(BLE_BLACK);
-        tft.fillRect(0, HEADER_HEIGHT, Out.width, SCROLL_HEIGHT, BLECARD_BGCOLOR);
+        tft_fillGradientHRect( 0, HEADER_HEIGHT, Out.width/2, SCROLL_HEIGHT, colorstart, colorend );
+        tft_fillGradientHRect( Out.width/2, HEADER_HEIGHT, Out.width/2, SCROLL_HEIGHT, colorend, colorstart );
         // clear heap map
         for (uint16_t i = 0; i < HEAPMAP_BUFFLEN; i++) heapmap[i] = 0;
       }
@@ -269,14 +306,10 @@ class UIUtils {
       } else {
         headerStats("Init UI");
       }
-      Out.setupScrollArea(HEADER_HEIGHT, FOOTER_HEIGHT);
-      tft.setTextColor( BLE_WHITE, BLECARD_BGCOLOR );
+      Out.setupScrollArea( HEADER_HEIGHT, FOOTER_HEIGHT, colorstart, colorend );
 
       SDSetup();
       timeSetup();
-      #ifdef NEEDS_SDUPDATER // NTP_MENU and CHRONOMANIAC SD-mirror themselves
-        selfReplicateToSD();
-      #endif
       timeStateIcon();
       footerStats();
       if ( clearScreen ) {
@@ -307,28 +340,28 @@ class UIUtils {
     void playIntro() {
       takeMuxSemaphore();
       uint16_t pos = 0;
-      tft.setTextColor(BLE_GREENYELLOW, BGCOLOR);
-      
+
       for (int i = 0; i < 5; i++) {
         pos += Out.println();
       }
       const char* introTextTitle = PLATFORM_NAME " BLE Collector";
       tft_getTextBounds(introTextTitle, Out.scrollPosX, Out.scrollPosY, &Out.x1_tmp, &Out.y1_tmp, &Out.w_tmp, &Out.h_tmp);
       uint16_t boxWidth = Out.w_tmp + 24;
-      pos += Out.println(SPACE);
-      alignTextAt( introTextTitle, 6, Out.scrollPosY, BLE_GREENYELLOW, HEADER_BGCOLOR, ALIGN_CENTER );
-      pos += Out.println(SPACE);
-      pos += Out.println(SPACE);
-      alignTextAt( "(c+)  tobozo  2019", 6, Out.scrollPosY, BLE_GREENYELLOW, HEADER_BGCOLOR, ALIGN_CENTER );
-      pos += Out.println(SPACE);
-      pos += Out.println(SPACE);
-      pos += Out.println(SPACE);
+      pos += Out.println();
+      alignTextAt( introTextTitle, 6, Out.scrollPosY-Out.h_tmp, BLE_GREENYELLOW, BLE_TRANSPARENT/*BLECARD_BGCOLOR*/, ALIGN_CENTER );
+      pos += Out.println();
+      pos += Out.println();
+      alignTextAt( "(c+)  tobozo  2019", 6, Out.scrollPosY-Out.h_tmp, BLE_GREENYELLOW, BLE_TRANSPARENT, ALIGN_CENTER );
+      //pos += Out.println();
+      pos += Out.println();
+      pos += Out.println();
       tft_drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, (Out.width/2 - 14), Out.scrollPosY - pos + 8, 28,  28);
       Out.drawScrollableRoundRect( (Out.width/2 - boxWidth/2), Out.scrollPosY-pos, boxWidth, pos, 8, BLE_GREENYELLOW );
 
       for (int i = 0; i < 5; i++) {
-        Out.println(SPACE);
+        Out.println();
       }
+
       giveMuxSemaphore();
       delay(2000);
       takeMuxSemaphore();
@@ -420,7 +453,7 @@ class UIUtils {
           tft_drawJpg(moai_jpeg, moai_jpeg_len, alignoffset,   HEADERSTATS_ICONS_Y + HEADER_LINEHEIGHT, 8, 8); // disk icon
           alignoffset +=10;
         } else {
-          
+          // whatev's
         }
         alignTextAt( status, alignoffset, HEADERSTATS_ICONS_Y + HEADER_LINEHEIGHT, BLE_YELLOW, HEADER_BGCOLOR, ALIGN_FREE );
         statuspos = Out.x1_tmp + Out.w_tmp;
@@ -431,12 +464,14 @@ class UIUtils {
       alignTextAt( heapStr,    HEADERSTATS_X, HEADERSTATS_ICONS_Y,      BLE_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
       alignTextAt( entriesStr, HEADERSTATS_X, HEADERSTATS_ICONS_Y + HEADER_LINEHEIGHT, BLE_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
 
-      if( !appIconVisible || statuspos > ICON_APP_X ) { // only draw if text has overlapped
+      if( !appIconWasRendered || statuspos > ICON_APP_X ) { // only draw if text has overlapped
         tft_drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, ICON_APP_X, ICON_APP_Y, 28,  28); // app icon
-        appIconVisible = true;
+        appIconWasRendered = true;
       }
-
-      tft_drawJpg(earth_jpeg, earth_jpeg_len, HEADERSTATS_ICONS_X, HEADERSTATS_ICONS_Y + HEADER_LINEHEIGHT, 8, 8); // entries icon
+      if( !earthIconWasRendered ) {
+        tft_drawJpg(earth_jpeg, earth_jpeg_len, HEADERSTATS_ICONS_X, HEADERSTATS_ICONS_Y + HEADER_LINEHEIGHT, 8, 8); // entries icon
+        earthIconWasRendered = true;
+      }
 
       if( foundFileServer ) {
         if( !foundFileServerIconWasRendered ) {
@@ -675,9 +710,7 @@ class UIUtils {
     static void taskHeapGraph( void * pvParameters ) { // always running
       mux = xSemaphoreCreateMutex();
       xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 4096, NULL, 4, NULL, 0); /* last = Task Core */
-      //#if HAS_EXTERNAL_RTC
       xTaskCreatePinnedToCore(clockSync, "clockSync", 2048, NULL, 4, NULL, 1); // RTC wants to run on core 1 or it fails
-      //#endif
       vTaskDelete(NULL);
     }
 
@@ -1044,8 +1077,12 @@ class UIUtils {
 
   private:
 
-    static void alignTextAt(const char* text, uint16_t x, uint16_t y, int16_t color = BLE_YELLOW, int16_t bgcolor = BGCOLOR, byte textAlign = ALIGN_FREE) {
-      tft.setTextColor(color, bgcolor);
+    static void alignTextAt(const char* text, uint16_t x, uint16_t y, int16_t color = BLE_YELLOW, int16_t bgcolor = BLE_TRANSPARENT, byte textAlign = ALIGN_FREE) {
+      if( bgcolor != BLE_TRANSPARENT ) {
+        tft.setTextColor( color, bgcolor );
+      } else {
+        tft.setTextColor( color, color ); // force transparency
+      }
       tft_getTextBounds(text, x, y, &Out.x1_tmp, &Out.y1_tmp, &Out.w_tmp, &Out.h_tmp);
       switch (textAlign) {
         case ALIGN_FREE:
@@ -1061,8 +1098,9 @@ class UIUtils {
           tft.setCursor(Out.width / 2 - Out.w_tmp / 2, y);
           break;
       }
-      tft.print(text);
+      tft.drawString( text, tft.getCursorX(), tft.getCursorY() );
     }
+
 
     // draws a RSSI Bar for the BLECard
     void drawRSSI(int16_t x, int16_t y, int16_t rssi, uint16_t bgcolor) {

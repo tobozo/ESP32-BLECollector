@@ -34,12 +34,14 @@ extern const int AMIGABALL_YPOS;
 
 struct AmigaBallConfig {
   long Framelength = 25;
-  byte Wires = 0; // 0 = no wireframes
+  byte Wires       = 0; // 0 = no wireframes
   uint16_t BGColor = tft_color565(0x22, 0x22, 0x44);
-  uint16_t YPos = AMIGABALL_YPOS;
-  uint16_t XPos = 0;
-  uint16_t Width = scrollpanel_width();
-  uint16_t Height = 132;
+  uint16_t YPos    = AMIGABALL_YPOS;
+  uint16_t XPos    = 0;
+  uint16_t Width   = scrollpanel_width();
+  uint16_t Height  = 132;
+  uint16_t Red     = tft_color565(0xf8, 0x00, 0x00);
+  uint16_t White   = tft_color565(0xff, 0xff, 0xff);
 
 } amigaBallConfig;
 
@@ -99,6 +101,8 @@ class AmigaRulez {
     float Scale;
     float YPosAmplitude;
     uint16_t BGColor;
+    uint16_t Red;
+    uint16_t White;
     float lastPositionX;
     float lastPositionY;
     float positionX;
@@ -111,6 +115,8 @@ class AmigaRulez {
       YPos   = amigaBallConfig.YPos;
       Width  = amigaBallConfig.Width;
       Height = amigaBallConfig.Height;
+      Red    = amigaBallConfig.Red;
+      White  = amigaBallConfig.White;
       setupValues();
       tft.fillRect( XPos, YPos, Width, Height, BGColor );
     }
@@ -194,7 +200,7 @@ class AmigaRulez {
     void fillTiles(bool alter) {
       for( int j=0; j<8; j++ ) {
         for( int i=0; i<9; i++) {
-          uint16_t color = alter ? BLE_RED : BLE_WHITE;
+          uint16_t color = alter ? Red : White;
           tft.fillTriangle(points[i][j].x,     points[i][j].y,     points[i+1][j].x, points[i+1][j].y, points[i+1][j+1].x, points[i+1][j+1].y, color);
           tft.fillTriangle(points[i+1][j+1].x, points[i+1][j+1].y, points[i][j+1].x, points[i][j+1].y, points[i][j].x,     points[i][j].y, color);
           alter = !alter;

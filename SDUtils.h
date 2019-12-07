@@ -22,7 +22,7 @@ bool SDSetup() {
   }
   if( attempts != 100 ) {
     AmigaBall.animate( 1 );
-    tft.fillRect( (tft.width()-30)/2, 100, 30, 30, BGCOLOR );
+    //tft.fillRect( (tft.width()-30)/2, 100, 30, 30, Out.BgColor );
   }
   return sd_mounted;
 }
@@ -65,8 +65,3 @@ static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char
   }
   Serial.printf("\nTotal space used: %d Bytes\n\n", totalSize);
 }
-
-
-#ifdef NEEDS_SDUPDATER
-  #include "SDUpdater.h" // multi roms system
-#endif

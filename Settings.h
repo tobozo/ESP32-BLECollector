@@ -28,33 +28,27 @@
   -----------------------------------------------------------------------------
 
   RTC Profiles: 
-    1 - "Hobo": No TinyRTC module in your build, only uptime will be displayed
-    2 - "Rogue": TinyRTC module adjusted after flashing, no WiFi, no NTP Sync
-    3 - "Chronomaniac": TinyRTC module adjusts itself via NTP (separate binary)
-   
-    Only profile 3 - "Chronomaniac" requires to compile this module in two 
-    different modes, see "#define SKETCH_MODE"
+    1 - "Hobo": No TinyRTC module in your build, only uptime will be displayed until another BLECollector broadcasts time
+    2 - "Rogue": TinyRTC module adjusted after flashing, will broadcast time for other BLECollectors
+    3 - "Chronomaniac": TinyRTC module adjusts itself via NTP (separate binary), will broadcast time for other BLECollectors
  
 */
 // don't edit those
-//#define HOBO 1 // No TinyRTC module in your build, can use BLETimeServer otherwise only uptime will be displayed
-#define HOBO         1 // wtf
-#define ROGUE        2 // TinyRTC module adjusted after flashing, no WiFi NTP Sync, can use BLETimeServer
-#define CHRONOMANIAC 3 // TinyRTC module adjusts itself via BLE or NTP by sd-loading a separate binary
-#define NTP_MENU     4 // use this to produce the NTPMenu.bin, only if you have a RTC module !!
+//#define HOBO 1 
+#define HOBO         1 // No TinyRTC module in your build, will use BLE TimeClient otherwise only uptime will be displayed
+#define ROGUE        2 // TinyRTC module adjusted via flashing or BLE TimeClient
+#define CHRONOMANIAC 3 // TinyRTC module adjusted via flashing, BLE TimeClient or GPS
 #define TIME_UPDATE_NONE 0 // update from nowhere, only using uptime as timestamps
 #define TIME_UPDATE_BLE  1 // update from BLE Time Server (see the /tools directory of this project)
 #define TIME_UPDATE_NTP  2 // update from NTP Time Server (requires WiFi and a separate build)
 #define TIME_UPDATE_GPS  3 // update from GPS external module, see below for HardwareSerial pin settings
-#define SKETCH_MODE_BUILD_DEFAULT     1 // build the BLE Collector
-#define SKETCH_MODE_BUILD_NTP_UPDATER 2 // soon deprecated // build the NTP Updater for external RTC
 
-// edit these values to fit your mode (can be #undef from display.h)
+
+// edit these values to fit your mode (can be #undef from Display.ESP32Chimeracore.h)
 #define HAS_EXTERNAL_RTC   false // uses I2C, search this file for RTC_SDA or RTC_SCL to change pins
-#define HAS_GPS            false // uses hardware serial
+#define HAS_GPS            false // uses hardware serial, search this file for GPS_RX and GPS_TX to change pins
 #define TIME_UPDATE_SOURCE TIME_UPDATE_NONE // TIME_UPDATE_GPS // soon deprecated, will be implicit
-#define SKETCH_MODE        SKETCH_MODE_BUILD_DEFAULT // this will be deprecated soon
-//#define SKETCH_MODE        SKETCH_MODE_BUILD_NTP_UPDATER // this will be deprecated soon
+
 
 byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define MIN_SCAN_DURATION 10 // seconds min
@@ -67,7 +61,6 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 
 // don't edit anything below this
 
-#define NTP_MENU_NAME "NTPMenu" // to deprecate
 #define BLE_MENU_NAME "BLEMenu"
 
 #if defined( ARDUINO_M5Stack_Core_ESP32 )
@@ -87,25 +80,18 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #endif
 
 
-#if 1 // SKETCH_MODE==SKETCH_MODE_BUILD_DEFAULT
-  #define BUILD_TYPE BLE_MENU_NAME
-  #if HAS_EXTERNAL_RTC
-   #if TIME_UPDATE_SOURCE==TIME_UPDATE_NTP
-     #define RTC_PROFILE "CHRONOMANIAC"
-     //#define NEEDS_SDUPDATER // this will be deprecated soon
-   #else
-     #define RTC_PROFILE "ROGUE"
-   #endif
-  #else
-    #define RTC_PROFILE "HOBO"
-  #endif
+
+#define BUILD_TYPE BLE_MENU_NAME
+#if HAS_EXTERNAL_RTC
+ #if TIME_UPDATE_SOURCE==TIME_UPDATE_NTP
+   #define RTC_PROFILE "CHRONOMANIAC"
+ #else
+   #define RTC_PROFILE "ROGUE"
+ #endif
 #else
-  #define BUILD_TYPE NTP_MENU_NAME // deprecate soon
-  #define RTC_PROFILE "NTP_MENU" // deprecate soon
-  //#define NEEDS_SDUPDATER true // this will be deprecated soon
-  //#define WIFI_SSID "my-router-ssid"
-  //#define WIFI_PASSWD "my-router-passwd
+  #define RTC_PROFILE "HOBO"
 #endif
+
 
 #define MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN 4
 #define MAX_BLECARDS_WITHOUT_TIMESTAMPS_ON_SCREEN 5
@@ -114,7 +100,6 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define MAX_DEVICES_PER_SCAN MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN // also max displayed devices on the screen, affects initial scan duration
 
 #define MENU_FILENAME "/" BUILD_TYPE ".bin"
-#define NTP_MENU_FILENAME "/" NTP_MENU_NAME ".bin"
 #define BLE_MENU_FILENAME "/" BLE_MENU_NAME ".bin"
 
 #define BUILD_NEEDLE PLATFORM_NAME " BLE Scanner Compiled On " // this 'signature' string must be unique in the whole source tree
@@ -156,23 +141,15 @@ Preferences preferences;
   #define GPS_TX 35 // io pin number
 #endif
 
-#if SKETCH_MODE==SKETCH_MODE_BUILD_NTP_UPDATER
-  #include "certificates.h"
-  #include <WiFi.h>
-  #include <HTTPClient.h>
-  #include <NtpClientLib.h> // https://github.com/gmag11/NtpClient
-#else
-  // don't load BLE stack and SQLite3 when compiling the NTP Utility
-  #include <BLEDevice.h>
-  #include <BLEUtils.h>
-  #include <BLEScan.h>
-  #include <BLEAdvertisedDevice.h>
+// don't load BLE stack and SQLite3 when compiling the NTP Utility
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEScan.h>
+#include <BLEAdvertisedDevice.h>
 
-  #include <stdio.h>
-  #include <stdlib.h>
-  #include <sqlite3.h> // https://github.com/siara-cc/esp32_arduino_sqlite3_lib
-#endif
-
+#include <stdio.h>
+#include <stdlib.h>
+#include <sqlite3.h> // https://github.com/siara-cc/esp32_arduino_sqlite3_lib
 
 // used to disable brownout detector
 #include "soc/soc.h"
