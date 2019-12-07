@@ -261,7 +261,8 @@ class TimeServerCallbacks : public BLEServerCallbacks {
       BLEDevice::getAdvertising()->stop();
     }
     void onDisconnect(BLEServer *pServer) {
-      TimeServerSignalSent = true;
+      BLEDevice::startAdvertising();
+      //TimeServerSignalSent = true;
     }
 };
 
@@ -291,9 +292,8 @@ static void stopTimeServer() {
 static void TimeServerTaskNotify( void * param ) {
   TickType_t lastWaketime;
   lastWaketime = xTaskGetTickCount();
-  DateTime LocalTime = DateTime(year(), month(), day(), hour(), minute(), second());
-  DateTime UTCTime   = LocalTime.unixtime() - timeZone * 3600;
   bt_time_t _time;
+  DateTime LocalTime, UTCTime;
   //struct timeval tv;
   //struct tm* _t;
   while ( !TimeServerSignalSent ) {
@@ -305,6 +305,8 @@ static void TimeServerTaskNotify( void * param ) {
     // ... nah, fuck this
     // gettimeofday(&tv, nullptr);
     // _t = localtime(&(tv.tv_sec));
+    LocalTime = DateTime(year(), month(), day(), hour(), minute(), second());
+    UTCTime   = LocalTime.unixtime() - timeZone * 3600;
     _time.year     = UTCTime.year();   // 1900 + _t->tm_year;
     _time.month    = UTCTime.month();  // _t->tm_mon + 1;
     _time.wday     = 0;        // _t->tm_wday == 0 ? 7 : _t->tm_wday;
@@ -362,13 +364,13 @@ static void TimeServerTask( void * param ) {
   
   TimeServerSignalSent = false;
 
-  xTaskCreate( TimeServerTaskNotify, "TimeServerTaskNotify", 2048, NULL, 6, NULL );
+  xTaskCreate( TimeServerTaskNotify, "TimeServerTaskNotify", 2560, NULL, 6, NULL );
 
   while ( timeServerIsRunning ) {
     if( TimeServerSignalSent ) {
       break;
     } else {
-      vTaskDelay(10);
+      vTaskDelay(100);
     }
   }
   stopTimeServer();
