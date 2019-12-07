@@ -31,15 +31,7 @@
 
 #define TICKS_TO_DELAY 1000
 
-#if SKETCH_MODE==SKETCH_MODE_BUILD_NTP_UPDATER
-class BLEScanUtils {
-  public:
-    void init() {
-      UI.init();
-    };
-    void scan() { };
-};
-#else
+
 
 
 const char* processTemplateLong = "%s%d%s%d";
@@ -251,8 +243,8 @@ class BLEScanUtils {
       }
       WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
       getPrefs();
-      startScanCB();
       startSerialTask();
+      startScanCB();
       UI.begin();
     }
 
@@ -267,11 +259,12 @@ class BLEScanUtils {
         log_w("Waiting for BLE File Client to stop ...");
         vTaskDelay(1000);
       }
-
+      /*
       while ( timeServerIsRunning ) {
         log_w("Waiting for BLE Time Server to stop ...");
         vTaskDelay(1000);
       }
+      */
 
       if ( timeClientisRunning ) {
         log_w("Waiting for BLE Time Client to stop ...");
@@ -304,10 +297,15 @@ class BLEScanUtils {
       }
     }
     static void restartCB( void * param = NULL ) {
-      DBneedsReplication = true;
-      DB.needsRestart = true;
+      //DBneedsReplication = true;
+      //DB.needsRestart = true;
       stopScanCB();
-      DB.maintain();
+      xTaskCreatePinnedToCore( doRestart, "doRestart", 8192, param, 5, NULL, 1 ); // last = Task Core
+    }
+    static void doRestart( void * param = NULL ) {
+      //DB.maintain();
+      DB.updateDBFromCache( BLEDevRAMCache, false, false );
+      ESP.restart();
     }
 
     static void setFileSharingServerOn( void * param ) {
@@ -397,15 +395,17 @@ class BLEScanUtils {
     static void setTimeServerOn( void * param ) {
       if( !timeServerStarted ) {
         timeServerStarted = true;
-        xTaskCreatePinnedToCore( startTimeServer, "startTimeServer", 2048, param, 0, NULL, 1 ); // last = Task Core
+        xTaskCreatePinnedToCore( startTimeServer, "startTimeServer", 2560, param, 0, NULL, 1 ); // last = Task Core
       }
     }
 
     static void startTimeServer( void * param ) {
-      bool scanWasRunning = scanTaskRunning;
-      if ( scanTaskRunning ) stopScanCB();
+      //bool scanWasRunning = false; // scanTaskRunning;
+      //if ( scanTaskRunning ) stopScanCB();
       timeServerIsRunning = true;
-      xTaskCreatePinnedToCore(TimeServerTask, "TimeServerTask", 12000, NULL, 1, NULL, 0); /* last = Task Core */
+      xTaskCreatePinnedToCore(TimeServerTask, "TimeServerTask", 2560, NULL, 1, NULL, 0); /* last = Task Core */
+      log_w("TimeServerTask started");
+      /*
       if ( scanWasRunning ) {
         while ( timeServerIsRunning ) {
           vTaskDelay( 1000 );
@@ -415,20 +415,10 @@ class BLEScanUtils {
         startScanCB();
       } else {
         log_w("TimeServerTask started with nothing to resume");
-      }
+      }*/
       vTaskDelete( NULL );
     }
 
-#ifdef NEEDS_SDUPDATER
-    static void updateCB( void * param = NULL ) {
-      stopScanCB();
-      xTaskCreatePinnedToCore(loadNTPMenu, "loadNTPMenu", 16000, NULL, 5, NULL, 1); /* last = Task Core */
-    }
-    static void loadNTPMenu( void * param = NULL ) {
-      rollBackOrUpdateFromFS( BLE_FS, NTP_MENU_FILENAME );
-      ESP.restart();
-    }
-#endif
     static void resetCB( void * param = NULL ) {
       DB.needsReset = true;
       Serial.println("DB Scheduled for reset");
@@ -571,12 +561,13 @@ class BLEScanUtils {
 #if HAS_GPS
         { "gpstime",      setGPSTime,     "sync time from GPS" },
 #endif
-#ifdef NEEDS_SDUPDATER
+/*
         { "update",       updateCB,       "Update time and DB files (requires pre-flashed NTPMenu.bin on the SD)" },
-#endif
+*/
         { "resetDB",      resetCB,        "Hard Reset DB + forced restart" },
         { "pruneDB",      pruneCB,        "Soft Reset DB without restarting (hopefully)" },
       };
+
       SerialCommands = Commands;
       Csize = (sizeof(Commands) / sizeof(Commands[0]));
 
@@ -599,9 +590,14 @@ class BLEScanUtils {
 
       if (resetReason != 12) { // HW Reset
         runCommand( (char*)"help" );
-        runCommand( (char*)"toggle" );
+        //runCommand( (char*)"toggle" );
         //runCommand( (char*)"ls" );
       }
+      if( TimeIsSet ) {
+        // auto share time if available
+        runCommand( (char*)"bleclock" );
+      }
+
 #if HAS_GPS
       GPSInit();
 #endif
@@ -629,6 +625,7 @@ class BLEScanUtils {
         }
 #if HAS_GPS
         GPSRead();
+        //GPSPlusPlusRead();
 #endif
         delay(1);
       }
@@ -1038,6 +1035,6 @@ class BLEScanUtils {
 };
 
 
-#endif
+
 
 BLEScanUtils BLECollector;
