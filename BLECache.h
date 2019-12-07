@@ -114,9 +114,7 @@ struct BlueToothDevice {
   uint16_t appearance = 0; // BLE Icon
   int rssi            = 0; // RSSI
   int manufid         = -1;// manufacturer data (or ID)
-  #if SKETCH_MODE==SKETCH_MODE_BUILD_DEFAULT
   esp_ble_addr_type_t addr_type;
-  #endif
   char* name      = NULL;// device name
   char* address   = NULL;// device mac address
   char* ouiname   = NULL;// oui vendor name (from mac address, see oui.h)
@@ -150,7 +148,7 @@ static void copy(char* dest, const char* source, byte maxlen) {
 }
 
 
-#if SKETCH_MODE==SKETCH_MODE_BUILD_DEFAULT
+
 
 class BlueToothDeviceHelper {
   public:
@@ -246,9 +244,7 @@ class BlueToothDeviceHelper {
       if(overwrite) set( DestItem, "is_anonymous", SourceItem->is_anonymous );
       if(overwrite) set( DestItem, "hits",         SourceItem->hits );
       if(overwrite) set( DestItem, "rssi",         SourceItem->rssi );
-      #if SKETCH_MODE==SKETCH_MODE_BUILD_DEFAULT
       if(overwrite) set( DestItem, "addr_type",    SourceItem->addr_type );
-      #endif
       if(overwrite || DestItem->appearance==0)            set( DestItem, "appearance", SourceItem->appearance );
       if(overwrite || DestItem->manufid==-1)              set( DestItem, "manufid",    SourceItem->manufid );
       if(overwrite || isEmpty(DestItem->name))            set( DestItem, "name",       SourceItem->name );
@@ -372,5 +368,3 @@ class BlueToothDeviceHelper {
 
 
 BlueToothDeviceHelper BLEDevHelper;
-
-#endif 
