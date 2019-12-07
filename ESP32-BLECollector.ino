@@ -31,20 +31,19 @@
     - [mandatory] ESP32 (PSRam optional but recommended)
     - [mandatory] SD Card breakout (or bundled in Wrover-Kit, M5Stack, LoLinD32 Pro)
     - [mandatory] Micro SD (FAT32 formatted, max 32GB)
-    - [mandatory] 'mac-oui-light.db' and 'ble-oui.db' files copied on the Micro SD Card root
-    - [mandatory] ILI9341 320x240 TFT (or bundled in Wrover-Kit, M5Stack, LoLinD32 Pro)
-    - [optional] I2C RTC Module (see "#define RTC_PROFILE" in settings.h)
+    - [mandatory] ST7789/ILI9341 320x240 TFT (or bundled in Wrover-Kit, Odroid-Go, M5Stack, LoLinD32 Pro)
+    - [mandatory] 'mac-oui-light.db' and 'ble-oui.db' files copied on the Micro SD Card root (optional if you have another running BLECollector)
+    - [optional] I2C RTC Module (see "#define HAS_EXTERNAL_RTC" in settings.h or display config)
+    - [optional] Serial GPS Module (see "#define HAS_GPS" in settings.h or display config)
 
   Arduino IDE Settings:
     - Partition Scheme : Minimal SPIFFS (Large APPS with OTA)
 
   Optional I2C RTC Module requirements:
-    - Insert the SD Card
-    - Set "#define RTC_PROFILE NTP_MENU" in Settings.h
-    - Set your WIFI_SSID and WIFI_PASSWD in Settings.h
-    - Flash the sketch, wait for time synch and SD Card replication (will save itself as "NTPMenu.bin")
-    - Set "#define RTC_PROFILE CHRONOMANIAC" in settings.h
-    - Flash the sketch, wait for SD Card replication (will save itself as "BLEMenu.bin")
+    - Flash the sketch to setup time in RTC
+
+  Optional I2C+GPS:
+    - Flash the sketch, wait for a GPS fix, then issue the "gpstime" command
 
 */
 

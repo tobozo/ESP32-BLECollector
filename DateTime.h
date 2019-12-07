@@ -30,7 +30,7 @@
 
 */
 
-#include <sys/time.h> // needed by BLETimeServer
+//#include <sys/time.h> // needed by BLETimeServer
 #include <TimeLib.h> // https://github.com/PaulStoffregen/Time
 
 

@@ -37,8 +37,8 @@ static bool isInScroll() {
 
 class ScrollableOutput {
   public:
-    uint16_t height = scrollpanel_height();//ILI9341_HEIGHT (=320)
-    uint16_t width  = scrollpanel_width();//ILI9341_WIDTH (=240)
+    uint16_t height = scrollpanel_height();
+    uint16_t width  = scrollpanel_width();
     // scroll control variables
     uint16_t scrollTopFixedArea = 0;
     uint16_t scrollBottomFixedArea = 0;
@@ -49,6 +49,9 @@ class ScrollableOutput {
     int scrollPosY = -1;
     int scrollPosX = -1;
     bool serialEcho = true;
+    //uint16_t BgColor;
+    RGBColor BGColorStart;
+    RGBColor BGColorEnd;
 
     int println() {
       return println(" ");
@@ -66,7 +69,10 @@ class ScrollableOutput {
       return scroll(str);
     }
 
-    void setupScrollArea(uint16_t TFA, uint16_t BFA, bool clear = false) {
+    void setupScrollArea(uint16_t TFA, uint16_t BFA, RGBColor colorstart, RGBColor colorend, bool clear = false) {
+      BGColorStart = colorstart;
+      BGColorEnd = colorend;
+      
       tft.setCursor(0, TFA);
       tft_setupScrollArea(TFA, BFA); // driver needs patching for that, see https://github.com/espressif/WROVER_KIT_LCD/pull/3/files
       scrollPosY = TFA;
@@ -76,7 +82,8 @@ class ScrollableOutput {
       yArea = height - scrollTopFixedArea - scrollBottomFixedArea;
       log_d("*** NEW Scroll Setup: Top=%d Bottom=%d YArea=%d", TFA, BFA, yArea);
       if (clear) {
-        tft.fillRect(0, TFA, width, yArea, BLE_BLACK);
+        tft_fillGradientHRect( 0, TFA, width/2, yArea, BGColorStart, BGColorEnd );
+        tft_fillGradientHRect( width/2, TFA, width/2, yArea, BGColorEnd, BGColorStart );
       }
     }
 
@@ -93,12 +100,16 @@ class ScrollableOutput {
     }
 
     // draw rounded corners boxes inside the scroll view, with scroll limit overlap support
-    void drawScrollableRoundRect(uint16_t x, uint16_t y, uint16_t _width, uint16_t _height, uint16_t radius, uint16_t color) {
+    void drawScrollableRoundRect(uint16_t x, uint16_t y, uint16_t _width, uint16_t _height, uint16_t radius, uint16_t bordercolor, bool fill = false ) {
       int yStart = translate(y, 0); // get the scrollview-translated y position
       if ( yStart >= scrollTopFixedArea && (yStart+_height)<(height-scrollBottomFixedArea) ) { 
         // no scroll loop point overlap, just render the translated box using the native method
         log_d("Rendering native x:%d, y:%d, width:%d, height:%d, radius:%d", x, y, _width, _height, radius);
-        tft.drawRoundRect(x, yStart, _width, _height, radius, color);
+        if( fill ) {
+          tft.fillRoundRect(x, yStart, _width, _height, radius, bordercolor);
+        } else {
+          tft.drawRoundRect(x, yStart, _width, _height, radius, bordercolor);
+        }
       } else {
         // box overlaps the scroll limit, split it in two chunks!
         int yEnd = translate(y, _height);
@@ -112,23 +123,23 @@ class ScrollableOutput {
         log_d("Rendering split x:%d, y:%d, width:%d, height:%d, radius:%d", x, y, _width, _height, radius);
         log_v("                yStart:%d, yEnd:%d, upperBlockHeight:%d, lowerBlockHeight:%d", yStart, yEnd, upperBlockHeight, lowerBlockHeight);
 
-        tft.drawFastHLine(leftHLinePosX, yStart, hLineWidth, color); // upper hline
-        tft.drawFastHLine(leftHLinePosX, yEnd-1, hLineWidth, color); // lower hline
+        tft.drawFastHLine(leftHLinePosX, yStart, hLineWidth, bordercolor); // upper hline
+        tft.drawFastHLine(leftHLinePosX, yEnd-1, hLineWidth, bordercolor); // lower hline
         if (upperBlockHeight > radius) {
           // don't bother rendering the corners if there isn't enough height left
-          tft.drawFastVLine(leftVlinePosX,  yStart + radius, upperBlockHeight - radius, color); // upper left vline
-          tft.drawFastVLine(rightVlinePosX, yStart + radius, upperBlockHeight - radius, color); // upper right vline
+          tft.drawFastVLine(leftVlinePosX,  yStart + radius, upperBlockHeight - radius, bordercolor); // upper left vline
+          tft.drawFastVLine(rightVlinePosX, yStart + radius, upperBlockHeight - radius, bordercolor); // upper right vline
         }
         if (lowerBlockHeight > radius) {
           // don't bother rendering the corners if there isn't enough height left
-          tft.drawFastVLine(leftVlinePosX,  yEnd - lowerBlockHeight, lowerBlockHeight - radius, color); // lower left vline
-          tft.drawFastVLine(rightVlinePosX, yEnd - lowerBlockHeight, lowerBlockHeight - radius, color); // lower right vline
+          tft.drawFastVLine(leftVlinePosX,  yEnd - lowerBlockHeight, lowerBlockHeight - radius, bordercolor); // lower left vline
+          tft.drawFastVLine(rightVlinePosX, yEnd - lowerBlockHeight, lowerBlockHeight - radius, bordercolor); // lower right vline
         }
         tft.startWrite();
-        tft.drawCircleHelper(leftHLinePosX,  yStart + radius, radius, 1, color); // upper left
-        tft.drawCircleHelper(rightHlinePosX, yStart + radius, radius, 2, color); // upper right
-        tft.drawCircleHelper(rightHlinePosX, yEnd - radius-1, radius, 4, color); // lower right
-        tft.drawCircleHelper(leftHLinePosX,  yEnd - radius-1, radius, 8, color); // lower left
+        tft.drawCircleHelper(leftHLinePosX,  yStart + radius, radius, 1, bordercolor); // upper left
+        tft.drawCircleHelper(rightHlinePosX, yStart + radius, radius, 2, bordercolor); // upper right
+        tft.drawCircleHelper(rightHlinePosX, yEnd - radius-1, radius, 4, bordercolor); // lower right
+        tft.drawCircleHelper(leftHLinePosX,  yEnd - radius-1, radius, 8, bordercolor); // lower left
         tft.endWrite();
       }
     }
@@ -146,16 +157,18 @@ class ScrollableOutput {
         scrollPosY = (scrollPosY % (height - scrollBottomFixedArea)) + scrollTopFixedArea;
       }
       tft_getTextBounds(str, scrollPosX, scrollPosY, &x1_tmp, &y1_tmp, &w_tmp, &h_tmp);
-  
-      if (scrollPosX == 0) {
-        tft.fillRect(0, scrollPosY, width, h_tmp, BGCOLOR);
-      } else { // fill the horizontal gap
-        tft.fillRect(0, scrollPosY, w_tmp, h_tmp, BGCOLOR);
-      }
+
+      tft_fillGradientHRect( 0, scrollPosY, width/2, h_tmp, BGColorStart, BGColorEnd );
+      tft_fillGradientHRect( width/2, scrollPosY, width/2, h_tmp, BGColorEnd, BGColorStart );
       tft.setCursor(scrollPosX, scrollPosY);
       scroll_slow(h_tmp, 5); // Scroll lines, 5ms per line
-      tft.print(str);
-      scrollPosY = tft.getCursorY();
+      //tft.print(str);
+      if( strcmp(str, " \n")!=0 ) {
+        tft.drawString( str, tft.getCursorX(), tft.getCursorY());
+      }
+      
+      scrollPosY = tft.getCursorY() + h_tmp;
+      tft.setCursor(0, scrollPosY);
       isScrolling = false;
       return h_tmp;
     }
