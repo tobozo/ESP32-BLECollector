@@ -53,7 +53,7 @@ static const int AMIGABALL_YPOS = 50;
   #define HAS_EXTERNAL_RTC true // will use RTC_SDA and RTC_SCL from settings.h
   #define HAS_GPS true // will use GPS_RX and GPS_TX from settings.h
   #define hasHID() (bool)false // disable buttons
-  #define SD_begin() (bool)true // SD_MMC is auto started
+  #define SD_begin /*(bool)true*/BLE_FS.begin // SD_MMC is auto started
   #define tft_initOrientation() tft.setRotation(0) // default orientation for hardware scroll
   #define scrollpanel_height() tft.height() // invert these if scroll fails
   #define scrollpanel_width() tft.width() // invert these if scroll fails

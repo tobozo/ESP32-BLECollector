@@ -876,7 +876,7 @@ class BLEScanUtils {
 
 
     static void onBeforeScan() {
-      UI.headerStats("  Scan in progress");
+      UI.headerStats("Scan in progress");
       UI.startBlink();
       processedDevicesCount = 0;
       devicesCount = 0;
