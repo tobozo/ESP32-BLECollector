@@ -35,7 +35,7 @@
 static const uint16_t BLE_WHITE       = 0xFFFF;
 static const uint16_t BLE_BLACK       = 0x0000;
 static const uint16_t BLE_GREEN       = 0x07E0;
-static const uint16_t BLE_YELLOW      = 0xFFE0;
+static const uint16_t BLE_YELLOW      = tft_color565(0xff, 0xff, 0x00); // 0xFFE0;
 static const uint16_t BLE_GREENYELLOW = 0xAFE5;
 static const uint16_t BLE_CYAN        = 0x07FF;
 static const uint16_t BLE_ORANGE      = 0xFD20;
@@ -81,6 +81,7 @@ int16_t HEADERSTATS_ICONS_X;
 int16_t HEADERSTATS_ICONS_Y;
 int16_t PROGRESSBAR_Y;
 int16_t HEADER_LINEHEIGHT;
+int16_t LEFT_MARGIN;
 int16_t HHMM_POSX;
 int16_t HHMM_POSY;
 int16_t UPTIME_POSX;
@@ -108,8 +109,15 @@ int16_t ICON_BLE_Y = 7;
 int16_t ICON_DB_X = 116;
 int16_t ICON_DB_Y = 7;
 int16_t ICON_R = 4;
+int16_t macAddressColorsScaleX;
+int16_t macAddressColorsScaleY;
+int16_t macAddressColorsPosX;
+int16_t macAddressColorsSizeX;
+int16_t macAddressColorsSizeY;
+int32_t macAddressColorsSize;
 char SESS_SPACER[2] = "";
 char DEV_SPACER[2] = "";
+
 
 
 // heap management (used by graph)
@@ -143,7 +151,7 @@ const char* newDevicesCountTpl = "Scans:%4s";
 const char* heapTpl = "Heap: %6d";
 const char* entriesTpl = "Entries:%4s";
 const char* addressTpl = "  %s";
-const char* dbmTpl = "%d dBm    ";
+const char* dbmTpl = "%ddBm    ";
 const char* ouiTpl = "      %s";
 const char* appearanceTpl = "  Appearance: %d";
 const char* manufTpl = "      %s";
@@ -168,46 +176,72 @@ static char appearanceStr[48] = {'\0'};
 static char manufStr[38] = {'\0'};
 
 char *macAddressToColorStr = (char*)calloc(MAC_LEN+1, sizeof(char*));
-byte macBytesToBMP[8];
-uint16_t macBytesToColors[128];
 static uint16_t imgBuffer[320]; // one scan line used for screen capture
 
-uint16_t macAddressToColor( const char *address ) {
-  memcpy( macAddressToColorStr, address, MAC_LEN+1);
-  byte curs = 0, tokenpos = 0, val, i, j, macpos, msb, lsb;
-  char *token;
-  char *ptr;
-  uint16_t color = 0;
-  token = strtok(macAddressToColorStr, ":");
-  while(token != NULL) {
-    val = strtol(token, &ptr, 16);
-    switch( tokenpos )  {
-      case 0: msb = val; break;
-      case 1: lsb = val; break;
-      default: 
-        macpos = tokenpos-2;
-        macBytesToBMP[macpos] = val; 
-        macBytesToBMP[7-macpos]= val;
-      break;
+
+// github avatar style mac address visual code generation \o/
+// builds a 8x8 vertically symetrical matrix based on the
+// bytes in the mac address, two first bytes are used to
+// allocate a color, the four last bytes are drawn with
+// that color
+struct MacAddressColors {
+  byte MACBytes[8]; // 8x8
+  uint16_t color;
+  byte scaleX, scaleY;
+  size_t size;
+  size_t choplevel = 0;
+  MacAddressColors( const char* address, byte _scaleX, byte _scaleY ) {
+    scaleX = _scaleX;
+    scaleY = _scaleY;
+    size = 8 * 8 * scaleX * scaleY;
+    memcpy( macAddressToColorStr, address, MAC_LEN+1);
+    byte tokenpos = 0, val, i, j, macpos, msb, lsb;
+    char *token;
+    char *ptr;
+    token = strtok(macAddressToColorStr, ":");
+    while(token != NULL) {
+      val = strtol(token, &ptr, 16);
+      switch( tokenpos )  {
+        case 0: msb = val; break;
+        case 1: lsb = val; break;
+        default:
+          macpos = tokenpos-2;
+          MACBytes[macpos] = val;
+          MACBytes[7-macpos]= val;
+        break;
+      }
+      tokenpos++;
+      token = strtok(NULL, ":");
     }
-    tokenpos++;
-    token = strtok(NULL, ":");
+    color = (msb*256) + lsb;
   }
-  color = (msb*256) + lsb;
-  curs = 0;
-  for(i=0;i<8;i++) {
-    for(j=0;j<8;j++) {
-      if( bitRead( macBytesToBMP[j], i ) == 1 ) {
-        macBytesToColors[curs++] =  color;
-        macBytesToColors[curs++] =  color;
-      } else {
-        macBytesToColors[curs++] =  BLE_WHITE;
-        macBytesToColors[curs++] =  BLE_WHITE;
+  void chopDraw( int32_t posx, int32_t posy, uint16_t height ) {
+    if( height%scaleY != 0 || height > scaleY * 8 ) { // not a multiple !!
+      log_e("Bad height request, height %d must be a multiple of scaleY %d and inferior to sizeY %d", height, scaleY, scaleY*8 );
+      return;
+    }
+    byte amount = height / scaleY;
+    if( choplevel + amount > 8 || amount <= 0 ) { // out of range
+      log_e("Bad height request ( i=%d; i<%d; i++)", choplevel, choplevel+amount );
+      return;
+    }
+    tft.startWrite();
+    tft.setAddrWindow( posx, posy, scaleX * 8, height );
+    for( byte i = choplevel; i < choplevel + amount; i++ ) {
+      for( byte sy = 0; sy < scaleY; sy++ ) {
+        for( byte j = 0; j < 8; j++ ) {
+          if( bitRead( MACBytes[j], i ) == 1 ) {
+            tft.pushColor( color, scaleX );
+          } else {
+            tft.pushColor( BLE_WHITE, scaleX );
+          }
+        }
       }
     }
+    tft.endWrite();
+    choplevel += amount;
   }
-  return color;
-}
+};
 
 
 static char *formatUnit( int64_t number ) {
@@ -296,11 +330,17 @@ class UIUtils {
 
       tft.fillRect(0, 0, Out.width, HEADER_HEIGHT, HEADER_BGCOLOR);
       tft.fillRect(0, FOOTER_BOTTOMPOS - FOOTER_HEIGHT, Out.width, FOOTER_HEIGHT, FOOTER_BGCOLOR);
+
+      tft.fillRect(0, FOOTER_BOTTOMPOS - (FOOTER_HEIGHT - 2), Out.width, 1, BLE_DARKGREY);
+
       tft.fillRect(0, PROGRESSBAR_Y, Out.width, 2, BLE_GREENYELLOW);
 
       AmigaBall.init();
 
-      alignTextAt( "BLE Collector", 6, 4, BLE_YELLOW, HEADER_BGCOLOR, ALIGN_FREE );
+      //alignTextAt( "BLE Collector", 6, 4, BLE_YELLOW, HEADER_BGCOLOR, ALIGN_FREE );
+      tft_drawJpg( BLECollector_Title_jpg, BLECollector_Title_jpg_len, 2, 3, 82,  8);
+
+      
       if (resetReason == 12) { // SW Reset
         headerStats("Rebooted");
       } else {
@@ -441,19 +481,20 @@ class UIUtils {
       *heapStr = {'\0'};
       *entriesStr = {'\0'};
       if ( !isEmpty( status ) ) {
-        byte alignoffset = 5;
+        byte alignoffset = LEFT_MARGIN;
         tft.fillRect(0, HEADERSTATS_ICONS_Y + HEADER_LINEHEIGHT, ICON_APP_X, 8, HEADER_BGCOLOR); // clear whole message status area
         if (strstr(status, "Inserted")) {
-          tft_drawJpg(disk_jpeg, disk_jpeg_len, alignoffset,   HEADERSTATS_ICONS_Y + HEADER_LINEHEIGHT, 8, 8); // disk icon
+          tft_drawJpg(disk_jpeg, disk_jpeg_len, alignoffset,   HEADERSTATS_ICONS_Y + HEADER_LINEHEIGHT, 8, 8 ); // disk icon
           alignoffset +=10;
         } else if (strstr(status, "Cache")) {
-          tft_drawJpg(ghost_jpeg, ghost_jpeg_len, alignoffset, HEADERSTATS_ICONS_Y + HEADER_LINEHEIGHT, 8, 8); // disk icon
+          tft_drawJpg(ghost_jpeg, ghost_jpeg_len, alignoffset, HEADERSTATS_ICONS_Y + HEADER_LINEHEIGHT, 8, 8 ); // ghost icon
           alignoffset +=10;
         } else if (strstr(status, "DB")) {
-          tft_drawJpg(moai_jpeg, moai_jpeg_len, alignoffset,   HEADERSTATS_ICONS_Y + HEADER_LINEHEIGHT, 8, 8); // disk icon
+          tft_drawJpg(moai_jpeg, moai_jpeg_len, alignoffset,   HEADERSTATS_ICONS_Y + HEADER_LINEHEIGHT, 8, 8 ); // moai icon
           alignoffset +=10;
-        } else {
-          // whatev's
+        } else if (strstr(status, "Scan")) {
+          tft_drawJpg( zzz_jpeg, zzz_jpeg_len, alignoffset,    HEADERSTATS_ICONS_Y + HEADER_LINEHEIGHT, 8,  8 ); // sleep icon
+          alignoffset +=10;
         }
         alignTextAt( status, alignoffset, HEADERSTATS_ICONS_Y + HEADER_LINEHEIGHT, BLE_YELLOW, HEADER_BGCOLOR, ALIGN_FREE );
         statuspos = Out.x1_tmp + Out.w_tmp;
@@ -537,6 +578,7 @@ class UIUtils {
       percentBox( PERCENTBOX_X, PERCENTBOX_Y - 2*(PERCENTBOX_SIZE+2)/*296*/, PERCENTBOX_SIZE, PERCENTBOX_SIZE, VendorCacheUsed, BLE_ORANGE, BLE_BLACK);
       percentBox( PERCENTBOX_X, PERCENTBOX_Y - 1*(PERCENTBOX_SIZE+2)/*308*/, PERCENTBOX_SIZE, PERCENTBOX_SIZE, OuiCacheUsed, BLE_GREENYELLOW, BLE_BLACK);
       if( filterVendors ) {
+        // TODO: landscape this
         tft_drawJpg( filter_jpeg, filter_jpeg_len, 152, FOOTER_BOTTOMPOS - 12/*308*/, 10,  8);
       } else {
         tft.fillRect( 152, FOOTER_BOTTOMPOS - 12/*308*/, 10,  8, FOOTER_BGCOLOR );
@@ -591,7 +633,6 @@ class UIUtils {
 
 
     static void startBlink() { // runs one and detaches
-      tft_drawJpg( zzz_jpeg, zzz_jpeg_len, 5, 18, 8,  8 );
       blinkit = true;
       blinknow = millis();
       scanTime = SCAN_DURATION * 1000;
@@ -869,6 +910,12 @@ class UIUtils {
       uint16_t blockHeight = 0;
       uint16_t hop;
       uint16_t initialPosY = Out.scrollPosY;
+      MacAddressColors AvatarizedMAC( BleCard->address, macAddressColorsScaleX, macAddressColorsScaleY );
+
+      *addressStr = {'\0'};
+      sprintf( addressStr, addressTpl, BleCard->address );
+      *dbmStr = {'\0'};
+      sprintf( dbmStr, dbmTpl, BleCard->rssi );
       
       if( BleCard->in_db ) {
         if( BleCard->is_anonymous ) {
@@ -889,20 +936,12 @@ class UIUtils {
       hop = Out.println( SPACE );
       blockHeight += hop;
       
-      *addressStr = {'\0'};
-      sprintf( addressStr, addressTpl, BleCard->address );
+
       hop = Out.println( addressStr );
       blockHeight += hop;
 
-      //if ( !isEmpty( BleCard->ouiname ) && strcmp( BleCard->ouiname, "[random]" )!=0 ) {
-        uint16_t macColor = macAddressToColor( (const char*) BleCard->address );
-        tft_drawBitmap( 150, Out.scrollPosY - hop, 16, 8, macBytesToColors );
-        //maclastbytes
-        //tft.setTextColor( macColor, BLE_WHITE /*BLECardTheme.bgColor */);
-      //}
 
-      *dbmStr = {'\0'};
-      sprintf( dbmStr, dbmTpl, BleCard->rssi );
+
       alignTextAt( dbmStr, 0, Out.scrollPosY - hop, BLECardTheme.textColor, BLECardTheme.bgColor, ALIGN_RIGHT );
       tft.setCursor( 0, Out.scrollPosY );
       drawRSSI( Out.width - 18, Out.scrollPosY - hop - 1, BleCard->rssi, BLECardTheme.textColor );
@@ -926,6 +965,7 @@ class UIUtils {
           tft_drawJpg( disk_jpeg, disk_jpeg_len, 118, Out.scrollPosY - hop, 8,  8);
         break;
       }
+
 
       if( TimeIsSet ) {
         if ( BleCard->hits > 1 ) {
@@ -983,18 +1023,41 @@ class UIUtils {
         } else {
           tft_drawJpg( nic16_jpeg, nic16_jpeg_len, 10, Out.scrollPosY - hop, 13, 8 );
         }
-        
+      }
+
+      bool jumpNext = true;
+      if( macAddressColorsSizeY <= Out.h_tmp ) {
+        AvatarizedMAC.chopDraw( macAddressColorsPosX, Out.scrollPosY - hop, macAddressColorsSizeY );
+      } else {
+        // chop-chop!
+        int16_t sizeY = macAddressColorsSizeY;
+        while( sizeY >= Out.h_tmp ) {
+          sizeY -= Out.h_tmp;
+          AvatarizedMAC.chopDraw( macAddressColorsPosX, Out.scrollPosY - hop, Out.h_tmp );
+          if( sizeY >= Out.h_tmp ) {
+            blockHeight += Out.println(SPACE);
+          }
+        }
+        jumpNext = false;
       }
       
       if ( BleCard->appearance != 0 ) {
-        blockHeight += Out.println(SPACE);
+        if( jumpNext ) {
+          blockHeight += Out.println(SPACE);
+        } else {
+          jumpNext = true;
+        }
         *appearanceStr = {'\0'};
         sprintf( appearanceStr, appearanceTpl, BleCard->appearance );
         hop = Out.println( appearanceStr );
         blockHeight += hop;
       }
       if ( !isEmpty( BleCard->manufname ) ) {
-        blockHeight += Out.println(SPACE);
+        if( jumpNext ) {
+          blockHeight += Out.println(SPACE);
+        } else {
+          jumpNext = true;
+        }
         *manufStr = {'\0'};
         sprintf( manufStr, manufTpl, BleCard->manufname );
         hop = Out.println( manufStr );
@@ -1014,7 +1077,11 @@ class UIUtils {
       if ( !isEmpty( BleCard->name ) ) {
         *nameStr = {'\0'};
         sprintf(nameStr, nameTpl, BleCard->name);
-        blockHeight += Out.println(SPACE);
+        if( jumpNext ) {
+          blockHeight += Out.println(SPACE);
+        } else {
+          jumpNext = true;
+        }
         hop = Out.println( nameStr );
         blockHeight += hop;
         tft_drawJpg( name_jpeg, name_jpeg_len, 12, Out.scrollPosY - hop, 7,  8);
@@ -1177,6 +1244,7 @@ class UIUtils {
         HEADER_HEIGHT = 40; // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
         FOOTER_HEIGHT = 16; // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
         SCROLL_HEIGHT = ( Out.height - ( HEADER_HEIGHT + FOOTER_HEIGHT ));
+        LEFT_MARGIN = 2;
         FOOTER_BOTTOMPOS    = Out.height;
         HEADERSTATS_X       = Out.width - 80;
         GRAPH_LINE_WIDTH    = HEAPMAP_BUFFLEN - 1;
@@ -1199,20 +1267,28 @@ class UIUtils {
         uptimeIconWasRendered = true; // never render
         COPYLEFT_POSX = 250;
         COPYLEFT_POSY = FOOTER_BOTTOMPOS - 10;
-        CDEV_C_POSX = 4;
+        CDEV_C_POSX = LEFT_MARGIN;
         CDEV_C_POSY = FOOTER_BOTTOMPOS - 10;
-        SESS_C_POSX = 60;
+        SESS_C_POSX = 58;
         SESS_C_POSY = FOOTER_BOTTOMPOS - 10;
-        NDEV_C_POSX = 116;
+        NDEV_C_POSX = 114;
         NDEV_C_POSY = FOOTER_BOTTOMPOS - 10;
         sprintf(SESS_SPACER, "%s", "");
         sprintf(DEV_SPACER, "%s", "");
+        macAddressColorsScaleX = 2;
+        macAddressColorsScaleY = 1;
+        macAddressColorsSizeX  = 8 * macAddressColorsScaleX;
+        macAddressColorsSizeY  = 8 * macAddressColorsScaleY;
+        macAddressColorsSize   = macAddressColorsSizeX * macAddressColorsSizeY;
+        macAddressColorsPosX   = Out.width - ( macAddressColorsSizeX + 5 );
+
       break;
       case TFT_PORTRAIT:
         log_w("Using UI in portrait mode");
-        HEADER_HEIGHT = 40; // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
-        FOOTER_HEIGHT = 40; // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
+        HEADER_HEIGHT = 35; // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
+        FOOTER_HEIGHT = 45; // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
         SCROLL_HEIGHT = ( Out.height - ( HEADER_HEIGHT + FOOTER_HEIGHT ));
+        LEFT_MARGIN = 2;
         FOOTER_BOTTOMPOS  = Out.height;
         HEADERSTATS_X     = Out.width-112;
         GRAPH_LINE_WIDTH  = HEAPMAP_BUFFLEN - 1;
@@ -1227,21 +1303,26 @@ class UIUtils {
         HEADER_LINEHEIGHT = 14;
         PROGRESSBAR_Y = 30;
         HHMM_POSX = 97;
-        HHMM_POSY = FOOTER_BOTTOMPOS - 32;
+        HHMM_POSY = FOOTER_BOTTOMPOS - 28;
         GPSICON_POSX = HHMM_POSX + 31;
         GPSICON_POSY = HHMM_POSY - 2;
         UPTIME_POSX = 97;
-        UPTIME_POSY = FOOTER_BOTTOMPOS - 22;
+        UPTIME_POSY = FOOTER_BOTTOMPOS - 18;
         COPYLEFT_POSX = 77;
-        COPYLEFT_POSY = FOOTER_BOTTOMPOS - 12;
-        CDEV_C_POSX = 4;
-        CDEV_C_POSY = FOOTER_BOTTOMPOS - 32;
-        SESS_C_POSX = 4;
-        SESS_C_POSY = FOOTER_BOTTOMPOS - 22;
-        NDEV_C_POSX = 4;
-        NDEV_C_POSY = FOOTER_BOTTOMPOS - 12;
+        COPYLEFT_POSY = FOOTER_BOTTOMPOS - 8;
+        CDEV_C_POSX = LEFT_MARGIN;
+        CDEV_C_POSY = FOOTER_BOTTOMPOS - 28;
+        SESS_C_POSX = LEFT_MARGIN;
+        SESS_C_POSY = FOOTER_BOTTOMPOS - 18;
+        NDEV_C_POSX = LEFT_MARGIN;
+        NDEV_C_POSY = FOOTER_BOTTOMPOS - 8;
         sprintf(SESS_SPACER, "%s", " ");
         sprintf(DEV_SPACER, "%s", " ");
+        macAddressColorsScaleX = 4;
+        macAddressColorsScaleY = 2;
+        macAddressColorsSizeX  = 8 * macAddressColorsScaleX;
+        macAddressColorsSizeY  = 8 * macAddressColorsScaleY;
+        macAddressColorsPosX   = Out.width - ( macAddressColorsSizeX + 6 );
       break;
       case TFT_SQUARE:
       default:
