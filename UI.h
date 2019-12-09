@@ -327,20 +327,23 @@ class UIUtils {
         // clear heap map
         for (uint16_t i = 0; i < HEAPMAP_BUFFLEN; i++) heapmap[i] = 0;
       }
-
+      // fill header
       tft.fillRect(0, 0, Out.width, HEADER_HEIGHT, HEADER_BGCOLOR);
+      // fill footer
       tft.fillRect(0, FOOTER_BOTTOMPOS - FOOTER_HEIGHT, Out.width, FOOTER_HEIGHT, FOOTER_BGCOLOR);
-
-      tft.fillRect(0, FOOTER_BOTTOMPOS - (FOOTER_HEIGHT - 2), Out.width, 1, BLE_DARKGREY);
-
+      // fill progressbar
       tft.fillRect(0, PROGRESSBAR_Y, Out.width, 2, BLE_GREENYELLOW);
+      // fill bottom decoration
+      if( FOOTER_HEIGHT > 16 ) { // landscape mode does not need this decoration
+        tft.fillRect(0, FOOTER_BOTTOMPOS - (FOOTER_HEIGHT - 2), Out.width, 1, BLE_DARKGREY);
+      }
 
       AmigaBall.init();
 
       //alignTextAt( "BLE Collector", 6, 4, BLE_YELLOW, HEADER_BGCOLOR, ALIGN_FREE );
       tft_drawJpg( BLECollector_Title_jpg, BLECollector_Title_jpg_len, 2, 3, 82,  8);
 
-      
+
       if (resetReason == 12) { // SW Reset
         headerStats("Rebooted");
       } else {
@@ -668,10 +671,11 @@ class UIUtils {
     }
 
     static void PrintProgressBar(uint16_t width) {
-      if( width == Out.width || width == 0 ) { // clear
-        tft.fillRect(0, PROGRESSBAR_Y, width, 2, BLE_DARKGREY);
+      if( width > Out.width || width == 0 ) { // clear
+        tft.fillRect(0, PROGRESSBAR_Y, Out.width, 2, BLE_DARKGREY);
       } else {
-        tft.fillRect(0, PROGRESSBAR_Y, width, 2, BLUETOOTH_COLOR);
+        tft.fillRect(0,     PROGRESSBAR_Y, width,           2, BLUETOOTH_COLOR);
+        tft.fillRect(width, PROGRESSBAR_Y, Out.width-width, 2, BLE_DARKGREY);
       }
     }
 
@@ -1241,46 +1245,46 @@ class UIUtils {
     switch( getDisplayMode() ) {
       case TFT_LANDSCAPE:
         log_w("Using UI in landscape mode (w:%d, h:%d)", Out.width, Out.height);
-        HEADER_HEIGHT = 40; // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
-        FOOTER_HEIGHT = 16; // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
+        HEADER_HEIGHT = 35; // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
+        FOOTER_HEIGHT = 13; // Important: resulting SCROLL_HEIGHT must be a multiple of font height, default font height is 8px
         SCROLL_HEIGHT = ( Out.height - ( HEADER_HEIGHT + FOOTER_HEIGHT ));
         LEFT_MARGIN = 2;
         FOOTER_BOTTOMPOS    = Out.height;
         HEADERSTATS_X       = Out.width - 80;
         GRAPH_LINE_WIDTH    = HEAPMAP_BUFFLEN - 1;
-        GRAPH_LINE_HEIGHT   = 30;
+        GRAPH_LINE_HEIGHT   = 29;
         GRAPH_X             = Out.width - (150);
         GRAPH_Y             = 0; // FOOTER_BOTTOMPOS - 37;// 283
         PERCENTBOX_X        = (GRAPH_X - 12); // percentbox is 10px wide + 2px margin and 2px border
-        PERCENTBOX_Y        = 32;
+        PERCENTBOX_Y        = GRAPH_LINE_HEIGHT+2;
         PERCENTBOX_SIZE     = 8;
         HEADERSTATS_ICONS_X = Out.width - (80 + 6);
         HEADERSTATS_ICONS_Y = 4;
         HEADER_LINEHEIGHT   = 16;
-        PROGRESSBAR_Y       = 34;
-        HHMM_POSX = 182;
-        HHMM_POSY = FOOTER_BOTTOMPOS - 10;
+        PROGRESSBAR_Y       = 32;
+        HHMM_POSX = 178;
+        HHMM_POSY = FOOTER_BOTTOMPOS - 8;
         GPSICON_POSX = HHMM_POSX + 31;
         GPSICON_POSY = HHMM_POSY - 2;
         UPTIME_POSX = 218;
-        UPTIME_POSY = FOOTER_BOTTOMPOS - 10;
+        UPTIME_POSY = FOOTER_BOTTOMPOS - 8;
         uptimeIconWasRendered = true; // never render
         COPYLEFT_POSX = 250;
-        COPYLEFT_POSY = FOOTER_BOTTOMPOS - 10;
+        COPYLEFT_POSY = FOOTER_BOTTOMPOS - 8;
         CDEV_C_POSX = LEFT_MARGIN;
-        CDEV_C_POSY = FOOTER_BOTTOMPOS - 10;
+        CDEV_C_POSY = FOOTER_BOTTOMPOS - 8;
         SESS_C_POSX = 58;
-        SESS_C_POSY = FOOTER_BOTTOMPOS - 10;
+        SESS_C_POSY = FOOTER_BOTTOMPOS - 8;
         NDEV_C_POSX = 114;
-        NDEV_C_POSY = FOOTER_BOTTOMPOS - 10;
+        NDEV_C_POSY = FOOTER_BOTTOMPOS - 8;
         sprintf(SESS_SPACER, "%s", "");
         sprintf(DEV_SPACER, "%s", "");
-        macAddressColorsScaleX = 2;
-        macAddressColorsScaleY = 1;
+        macAddressColorsScaleX = 4;
+        macAddressColorsScaleY = 2;
         macAddressColorsSizeX  = 8 * macAddressColorsScaleX;
         macAddressColorsSizeY  = 8 * macAddressColorsScaleY;
         macAddressColorsSize   = macAddressColorsSizeX * macAddressColorsSizeY;
-        macAddressColorsPosX   = Out.width - ( macAddressColorsSizeX + 5 );
+        macAddressColorsPosX   = Out.width - ( macAddressColorsSizeX + 6 );
 
       break;
       case TFT_PORTRAIT:

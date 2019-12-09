@@ -1,7 +1,8 @@
 
-#include "Free_Fonts.h"
+
 #include <M5Stack.h> // https://github.com/tobozo/ESP32-Chimera-Core
 #include <M5StackUpdater.h> // https://github.com/tobozo/M5Stack-SD-Updater
+
 
 #if defined( ARDUINO_M5Stack_Core_ESP32 ) || defined( ARDUINO_M5STACK_FIRE ) || defined( ARDUINO_ODROID_ESP32 ) || defined ( ARDUINO_ESP32_DEV )
   #define CHIMERA_CORE

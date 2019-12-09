@@ -30,7 +30,7 @@
 
 */
 
-//#include <sys/time.h> // needed by BLETimeServer
+#include <sys/time.h> // needed by BLETimeServer
 #include <TimeLib.h> // https://github.com/PaulStoffregen/Time
 
 
@@ -46,7 +46,7 @@ static char hhmmString[13] = "--:--";
 const char* hhmmssStringTpl = "%02d:%02d:%02d";
 static char hhmmssString[13] = "--:--:--"; 
 const char* UpTimeStringTpl = "%02d:%02d";
-const char* UpTimeStringTplDays = "  %2d %s  ";
+const char* UpTimeStringTplDays = "%2d %s";
 static char UpTimeString[32] = "--:--";
 const char* YYYYMMDD_HHMMSS_Tpl = "%04d-%02d-%02d %02d:%02d:%02d";
 static char YYYYMMDD_HHMMSS_Str[32] = "YYYY-MM-DD HH:MM:SS";

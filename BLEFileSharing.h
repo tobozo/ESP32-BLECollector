@@ -44,13 +44,20 @@ static BLEUUID FileSharingRouteUUID(   "f59f6622-1540-0003-8d71-362b9e155667" );
 static BLEUUID timeServiceUUID(        (uint16_t)0x1805 ); // gatt "Current Time Service", "org.bluetooth.service.current_time"
 static BLEUUID timeCharacteristicUUID( (uint16_t)0x2a2b ); // gatt "Current Time", "org.bluetooth.characteristic.current_time"
 
-BLEServer*         BLESharingServer;
-BLEClient*         BLESharingClient;
+BLEServer*         TimeSharingServer;
+BLEServer*         FileSharingServer;
 
-BLEService*        BLESharingService;
+BLEClient*         TimeSharingClient;
+BLEClient*         FileSharingClient;
+
+BLEService*        TimeSharingService;
+BLEService*        FileSharingService;
+
 BLERemoteService*  BLESharingRemoteService;
+BLERemoteService*  TimeSharingRemoteService;
 
-BLEAdvertising*    BLESharingAdvertising;
+BLEAdvertising*    FileSharingAdvertising;
+BLEAdvertising*    TimeSharingAdvertising;
 
 BLECharacteristic* FileSharingWriteChar;
 BLECharacteristic* FileSharingRouteChar;
@@ -82,6 +89,7 @@ typedef struct {
 } bt_time_t;
 
 bt_time_t BLERemoteTime;
+bt_time_t BLELocalTime;
 
 static File   FileReceiver;
 static int    binary_file_length = 0;
@@ -103,8 +111,12 @@ static bool timeClientisStarted = false;
 static bool fileSharingEnabled = false;
 static bool fileDownloadingEnabled = false;
 
-const char *sizeMarker = "size:";
+const char* sizeMarker = "size:";
+const char* dateTimeMarker = "dateTime:";
 const char* closeMessage = "close";
+const char* restartMessage = "restart";
+
+
 
 // helper
 char *substr(char *src, int pos, int len) {
@@ -127,10 +139,19 @@ char *substr(char *src, int pos, int len) {
 static void setBLETime() {
   DateTime UTCTime   = DateTime(BLERemoteTime.year, BLERemoteTime.month, BLERemoteTime.day, BLERemoteTime.hour, BLERemoteTime.minutes, BLERemoteTime.seconds);
   DateTime LocalTime = UTCTime.unixtime() + BLERemoteTime.tz * 3600;
-  
+
   dumpTime("UTC:", UTCTime);
   dumpTime("Local:", LocalTime);
+
   setTime( LocalTime.unixtime() );
+
+  timeval epoch = {LocalTime.unixtime(), 0};
+  const timeval *tv = &epoch;
+  settimeofday(tv, NULL);
+
+  struct tm now;
+  getLocalTime(&now,0);
+
   Serial.printf("[Heap: %06d] Time has been set to: %04d-%02d-%02d %02d:%02d:%02d\n",
    freeheap,
    LocalTime.year(),
@@ -180,21 +201,22 @@ TimeClientCallbacks *TimeClientCallback;
 
 
 static void stopTimeClient() {
-  if ( BLESharingClient != NULL ) {
-    if ( BLESharingClient->isConnected() ) {
-      BLESharingClient->disconnect();
+  if ( TimeSharingClient != NULL ) {
+    if ( TimeSharingClient->isConnected() ) {
+      TimeSharingClient->disconnect();
     }
-    //delete BLESharingClient; BLESharingClient = NULL;
+    //delete TimeSharingClient; TimeSharingClient = NULL;
   }
   /*
     if( TimeRemoteChar != NULL )     { delete TimeRemoteChar; TimeRemoteChar = NULL; }
 
-    if( BLESharingRemoteService != NULL ) { delete BLESharingRemoteService; BLESharingRemoteService = NULL; }
+    if( TimeSharingRemoteService != NULL ) { delete TimeSharingRemoteService; TimeSharingRemoteService = NULL; }
   */
+  /*
   if ( TimeClientCallback != NULL ) {
     delete TimeClientCallback;
     TimeClientCallback = NULL;
-  }
+  }*/
   foundTimeServer = false;
   timeClientisRunning = false;
 }
@@ -202,29 +224,29 @@ static void stopTimeClient() {
 
 static void TimeClientTask( void * param ) {
 
-  if ( BLESharingClient == NULL ) {
-    BLESharingClient = BLEDevice::createClient();
+  if ( TimeSharingClient == NULL ) {
+    TimeSharingClient = BLEDevice::createClient();
   }
   if ( TimeClientCallback == NULL ) {
     TimeClientCallback = new TimeClientCallbacks();
   }
-  BLESharingClient->setClientCallbacks( TimeClientCallback );
+  TimeSharingClient->setClientCallbacks( TimeClientCallback );
 
   HasBTTime = false;
   log_w("[Heap: %06d] Will connect to address %s", freeheap, timeServerBLEAddress.c_str());
-  if ( !BLESharingClient->connect( timeServerBLEAddress, timeServerClientType ) ) {
+  if ( !TimeSharingClient->connect( timeServerBLEAddress, timeServerClientType ) ) {
     log_e("[Heap: %06d] Failed to connect to address %s", freeheap, timeServerBLEAddress.c_str());
     stopTimeClient();
     vTaskDelete( NULL ); return;
   }
   log_w("[Heap: %06d] Connected to address %s", freeheap, timeServerBLEAddress.c_str());
-  BLESharingRemoteService = BLESharingClient->getService( timeServiceUUID );
-  if (BLESharingRemoteService == nullptr) {
+  TimeSharingRemoteService = TimeSharingClient->getService( timeServiceUUID );
+  if (TimeSharingRemoteService == nullptr) {
     log_e("Failed to find our service UUID: %s", timeServiceUUID.toString().c_str());
     stopTimeClient();
     vTaskDelete( NULL ); return;
   }
-  TimeRemoteChar = BLESharingRemoteService->getCharacteristic( timeCharacteristicUUID );
+  TimeRemoteChar = TimeSharingRemoteService->getCharacteristic( timeCharacteristicUUID );
   if (TimeRemoteChar == nullptr) {
     log_e("Failed to find our characteristic timeCharacteristicUUID: %s, disconnecting", timeCharacteristicUUID.toString().c_str());
     stopTimeClient();
@@ -235,7 +257,7 @@ static void TimeClientTask( void * param ) {
   TickType_t last_wake_time;
   last_wake_time = xTaskGetTickCount();
 
-  while (BLESharingClient->isConnected()) {
+  while (TimeSharingClient->isConnected()) {
     vTaskDelayUntil(&last_wake_time, TICKS_TO_DELAY / portTICK_PERIOD_MS);
     // TODO: max wait time before force exit
     if ( HasBTTime ) {
@@ -270,53 +292,59 @@ TimeServerCallbacks *TimeServerCallback;
 
 
 static void stopTimeServer() {
-  BLESharingAdvertising->stop();
-  BLESharingService->stop();
-  log_w("BLESharingServer->removeService( BLESharingService )");
-  BLESharingServer->removeService( BLESharingService );
+  TimeSharingAdvertising->stop();
+  TimeSharingService->stop();
+  log_w("TimeSharingServer->removeService( TimeSharingService )");
+  TimeSharingServer->removeService( TimeSharingService );
   log_w("delete BLESharing2902Descriptor");
   delete BLESharing2902Descriptor; BLESharing2902Descriptor = NULL;
   log_w("delete TimeServerCallback");
   delete TimeServerCallback; TimeServerCallback = NULL;
   log_w("delete TimeServerChar");
   delete TimeServerChar; TimeServerChar = NULL;
-  log_w("delete BLESharingServer");
-  delete BLESharingServer; BLESharingServer = NULL;
-  log_w("delete BLESharingService");
-  delete BLESharingService; BLESharingService = NULL;
+  log_w("delete TimeSharingServer");
+  delete TimeSharingServer; TimeSharingServer = NULL;
+  log_w("delete TimeSharingService");
+  delete TimeSharingService; TimeSharingService = NULL;
   timeServerIsRunning = false;
   log_w("Stopped time server");
 }
 
 
-static void TimeServerTaskNotify( void * param ) {
-  TickType_t lastWaketime;
-  lastWaketime = xTaskGetTickCount();
-  bt_time_t _time;
+uint8_t* getBLETime() {
   DateTime LocalTime, UTCTime;
   //struct timeval tv;
   //struct tm* _t;
+  // because it's not enough maintaining those:
+  //   1) internal rtc clock
+  //   2) external rtc clock
+  //   3) external gps clock
+  // let's use the ESP32 recommended example and throw an extra snpm clock ?
+  // ... nah, fuck this
+  // gettimeofday(&tv, nullptr);
+  // _t = localtime(&(tv.tv_sec));
+  LocalTime = DateTime(year(), month(), day(), hour(), minute(), second());
+  UTCTime   = LocalTime.unixtime() - timeZone * 3600;
+  BLELocalTime.year     = UTCTime.year();   // 1900 + _t->tm_year;
+  BLELocalTime.month    = UTCTime.month();  // _t->tm_mon + 1;
+  BLELocalTime.wday     = 0;        // _t->tm_wday == 0 ? 7 : _t->tm_wday;
+  BLELocalTime.day      = UTCTime.day();    // _t->tm_mday;
+  BLELocalTime.hour     = UTCTime.hour();   // _t->tm_hour;
+  BLELocalTime.minutes  = UTCTime.minute(); // _t->tm_min;
+  BLELocalTime.seconds  = UTCTime.second(); // _t->tm_sec;
+  BLELocalTime.fraction = 0;        // tv.tv_usec * 256 / 1000000;
+  BLELocalTime.tz       = timeZone; // wat
+  return (uint8_t*)&BLELocalTime;
+}
+
+
+
+
+static void TimeServerTaskNotify( void * param ) {
+  TickType_t lastWaketime;
+  lastWaketime = xTaskGetTickCount();
   while ( !TimeServerSignalSent ) {
-    // because it's not enough maintaining those:
-    //   1) internal rtc clock
-    //   2) external rtc clock
-    //   3) external gps clock
-    // let's use the ESP32 recommended example and throw an extra snpm clock ?
-    // ... nah, fuck this
-    // gettimeofday(&tv, nullptr);
-    // _t = localtime(&(tv.tv_sec));
-    LocalTime = DateTime(year(), month(), day(), hour(), minute(), second());
-    UTCTime   = LocalTime.unixtime() - timeZone * 3600;
-    _time.year     = UTCTime.year();   // 1900 + _t->tm_year;
-    _time.month    = UTCTime.month();  // _t->tm_mon + 1;
-    _time.wday     = 0;        // _t->tm_wday == 0 ? 7 : _t->tm_wday;
-    _time.day      = UTCTime.day();    // _t->tm_mday;
-    _time.hour     = UTCTime.hour();   // _t->tm_hour;
-    _time.minutes  = UTCTime.minute(); // _t->tm_min;
-    _time.seconds  = UTCTime.second(); // _t->tm_sec;
-    _time.fraction = 0;        // tv.tv_usec * 256 / 1000000;
-    _time.tz       = timeZone; // wat
-    TimeServerChar->setValue((uint8_t*)&_time, sizeof(bt_time_t));
+    TimeServerChar->setValue( getBLETime(), sizeof(bt_time_t));
     TimeServerChar->notify();
     // send notification with date/time exactly every TICKS_TO_DELAY ms
     vTaskDelayUntil(&lastWaketime, TICKS_TO_DELAY / portTICK_PERIOD_MS);
@@ -335,16 +363,16 @@ static void TimeServerTask( void * param ) {
 
   TimeServerCallback = new TimeServerCallbacks();
 
-  if ( BLESharingAdvertising == NULL ) {
-    BLESharingAdvertising = BLEDevice::getAdvertising();
+  if ( TimeSharingAdvertising == NULL ) {
+    TimeSharingAdvertising = BLEDevice::getAdvertising();
   }
-  BLESharingServer = BLEDevice::createServer();
+  TimeSharingServer = BLEDevice::createServer();
 
-  BLESharingServer->setCallbacks( TimeServerCallback );
+  TimeSharingServer->setCallbacks( TimeServerCallback );
   
-  BLESharingService = BLESharingServer->createService( timeServiceUUID );
+  TimeSharingService = TimeSharingServer->createService( timeServiceUUID );
 
-  TimeServerChar = BLESharingService->createCharacteristic(
+  TimeServerChar = TimeSharingService->createCharacteristic(
     timeCharacteristicUUID,
     BLECharacteristic::PROPERTY_NOTIFY   |
     BLECharacteristic::PROPERTY_READ
@@ -353,11 +381,11 @@ static void TimeServerTask( void * param ) {
   BLESharing2902Descriptor->setNotifications( true );
   TimeServerChar->addDescriptor( BLESharing2902Descriptor );
 
-  BLESharingService->start();
+  TimeSharingService->start();
 
-  BLESharingAdvertising->addServiceUUID( timeServiceUUID );
-  BLESharingAdvertising->setMinInterval( 0x100 );
-  BLESharingAdvertising->setMaxInterval( 0x200 );
+  TimeSharingAdvertising->addServiceUUID( timeServiceUUID );
+  TimeSharingAdvertising->setMinInterval( 0x100 );
+  TimeSharingAdvertising->setMaxInterval( 0x200 );
   log_w("Starting advertising");
   BLEDevice::startAdvertising();
   log_w("TimeServer Advertising started");
@@ -385,10 +413,18 @@ static void TimeServerTask( void * param ) {
   BLE File Receiver Methods
 ******************************************************/
 
+
+byte receivedFiles = 0;
+
+
 void FileSharingReceiveFile( const char* filename ) {
   FileReceiverReceivedSize = 0;
   FileReceiverProgress = 0;
   FileReceiver = BLE_FS.open( filename, FILE_WRITE );
+  // receivedFiles
+  if( FileReceiverExpectedSize == FileReceiver.size() ) {
+    log_w("Files are identical, transferring is useless");
+  }
   if ( !FileReceiver ) {
     log_e("Failed to create %s", filename);
   }
@@ -435,11 +471,7 @@ class FileSharingWriteCallbacks : public BLECharacteristicCallbacks {
         log_e("Ignored %d bytes", len);
       }
       if ( FileReceiverProgress != progress ) {
-        takeMuxSemaphore();
-        UI.PrintProgressBar( (Out.width * progress) / 100 );
-        giveMuxSemaphore();
         FileReceiverProgress = progress;
-        vTaskDelay(10);
       }
     }
 };
@@ -449,15 +481,25 @@ class FileSharingRouteCallbacks : public BLECharacteristicCallbacks {
     void onWrite( BLECharacteristic* RouterAgent ) {
       char routing[512] = {0};
       memcpy( &routing, RouterAgent->getData(), RouterAgent->getDataLength() );
-      log_v("Received copy routing query: %s", routing);
+      log_w("Received copy routing query: %s", routing);
       if ( strstr(routing, sizeMarker) ) { // messages starting with "size:"
         if ( strlen( routing ) > strlen( sizeMarker ) ) {
           char* lenStr = substr( routing, strlen(sizeMarker), strlen(routing) - strlen(sizeMarker) );
           FileReceiverExpectedSize = atoi( lenStr );
-          log_v( "Assigned size_t %d", FileReceiverExpectedSize );
+          log_w( "Assigned size_t %d", FileReceiverExpectedSize );
+        }
+      } else if( strstr(routing, dateTimeMarker ) ) {
+        log_w("Received dateTimeMarker");
+        if ( strlen( routing ) > strlen( dateTimeMarker ) ) {
+          char* lenStr = substr( routing, strlen(dateTimeMarker), strlen(routing) - strlen(dateTimeMarker) );
+          log_w("Received time");
+          memcpy( &BLERemoteTime, lenStr, strlen( lenStr ) );
+          setBLETime();
         }
       } else if ( strcmp( routing, closeMessage ) == 0 ) { // file end
         FileSharingCloseFile();
+      } else if ( strcmp( routing, restartMessage ) == 0 ) { // transfert finished
+        ESP.restart();
       } else { // filenames
         if ( strcmp( routing, "/" BLE_VENDOR_NAMES_DB_FILE ) == 0 ) {
           FileSharingReceiveFile( "/" BLE_VENDOR_NAMES_DB_FILE );
@@ -465,9 +507,6 @@ class FileSharingRouteCallbacks : public BLECharacteristicCallbacks {
         if ( strcmp( routing, "/" MAC_OUI_NAMES_DB_FILE ) == 0 ) {
           FileSharingReceiveFile( "/" MAC_OUI_NAMES_DB_FILE);
         }
-        takeMuxSemaphore();
-        UI.PrintProgressBar( 0 );
-        giveMuxSemaphore();
       }
       takeMuxSemaphore();
       Out.println( routing );
@@ -510,6 +549,10 @@ FileSharingRouteCallbacks *FileSharingRouteCallback;
 FileSharingWriteCallbacks *FileSharingWriteCallback;
 
 void stopFileSharingServer() {
+  FileSharingAdvertising->stop();
+  FileSharingService->stop();
+  FileSharingServer->removeService( FileSharingService );
+  /*
   if ( FileSharingCallback != NULL )      {
     delete( FileSharingCallback);
     FileSharingCallback      = NULL;
@@ -521,22 +564,24 @@ void stopFileSharingServer() {
   if ( FileSharingWriteCallback != NULL ) {
     delete( FileSharingWriteCallback);
     FileSharingWriteCallback = NULL;
-  }
+  }*/
+  /*
   if ( BLESharing2902Descriptor != NULL ) {
     delete( BLESharing2902Descriptor);
     BLESharing2902Descriptor = NULL;
-  }
+  }*/
   fileSharingServerTaskIsRunning = false;
   fileSharingServerTaskShouldStop = false;
   fileDownloadingEnabled = false;
+  receivedFiles = 0;
 }
 
 // server as a slave service: wait for an upload signal
 static void FileSharingServerTask(void* p) {
 
   BLEDevice::setMTU(517);
-  if ( BLESharingAdvertising == NULL ) {
-    BLESharingAdvertising = BLEDevice::getAdvertising();
+  if ( FileSharingAdvertising == NULL ) {
+    FileSharingAdvertising = BLEDevice::getAdvertising();
   }
   if ( FileSharingCallback == NULL ) {
     FileSharingCallback = new FileSharingCallbacks();
@@ -550,17 +595,17 @@ static void FileSharingServerTask(void* p) {
   if ( BLESharing2902Descriptor == NULL ) {
     BLESharing2902Descriptor = new BLE2902();
   }
-  if ( BLESharingServer == NULL ) {
-    BLESharingServer = BLEDevice::createServer();
+  if ( FileSharingServer == NULL ) {
+    FileSharingServer = BLEDevice::createServer();
   }
-  BLESharingServer->setCallbacks( FileSharingCallback );
-  BLESharingService = BLESharingServer->createService( FileSharingServiceUUID );
+  FileSharingServer->setCallbacks( FileSharingCallback );
+  FileSharingService = FileSharingServer->createService( FileSharingServiceUUID );
 
-  FileSharingWriteChar = BLESharingService->createCharacteristic(
+  FileSharingWriteChar = FileSharingService->createCharacteristic(
     FileSharingWriteUUID,
     BLECharacteristic::PROPERTY_WRITE_NR
   );
-  FileSharingRouteChar = BLESharingService->createCharacteristic(
+  FileSharingRouteChar = FileSharingService->createCharacteristic(
     FileSharingRouteUUID,
     BLECharacteristic::PROPERTY_NOTIFY |
     BLECharacteristic::PROPERTY_READ   |
@@ -573,11 +618,11 @@ static void FileSharingServerTask(void* p) {
   BLESharing2902Descriptor->setNotifications(true);
   FileSharingRouteChar->addDescriptor( BLESharing2902Descriptor );
 
-  BLESharingService->start();
+  FileSharingService->start();
 
-  BLESharingAdvertising->addServiceUUID( FileSharingServiceUUID );
-  BLESharingAdvertising->setMinInterval(0x100);
-  BLESharingAdvertising->setMaxInterval(0x200);
+  FileSharingAdvertising->addServiceUUID( FileSharingServiceUUID );
+  FileSharingAdvertising->setMinInterval(0x100);
+  FileSharingAdvertising->setMaxInterval(0x200);
 
   BLEDevice::startAdvertising();
 
@@ -589,11 +634,17 @@ static void FileSharingServerTask(void* p) {
   Out.println();
   giveMuxSemaphore();
 
+  size_t progress = 0;
+
   while (1) {
+    if ( FileReceiverProgress != progress ) {
+      takeMuxSemaphore();
+      UI.PrintProgressBar( (Out.width * FileReceiverProgress) / 100 );
+      giveMuxSemaphore();
+      progress = FileReceiverProgress;
+      //vTaskDelay(10);
+    }
     if ( fileSharingServerTaskShouldStop ) { // stop signal from outside the task
-      BLESharingAdvertising->stop();
-      BLESharingService->stop();
-      BLESharingServer->removeService( BLESharingService );
       stopFileSharingServer();
       vTaskDelete( NULL );
     } else {
@@ -630,6 +681,12 @@ void FileSharingSendFile( const char* filename ) {
   sprintf( myTotalSize, "%s%d", sizeMarker, totalsize );
   FileSharingRouterRemoteChar->writeValue((uint8_t*)myTotalSize, strlen(myTotalSize), false);
 
+  // send local datetime as a binary string
+  char myDateTimeMarker[strlen(dateTimeMarker)+sizeof(bt_time_t)+1];
+  const char* dateTimeAsChar = (const char*)getBLETime();
+  sprintf( myDateTimeMarker, "%s%s", dateTimeMarker, dateTimeAsChar );
+  FileSharingRouterRemoteChar->writeValue( myDateTimeMarker, strlen(dateTimeMarker)+sizeof(bt_time_t)+1 );
+
   #define BLE_FILECOPY_BUFFSIZE 512
   uint8_t buff[BLE_FILECOPY_BUFFSIZE];
   uint32_t len = fileToTransfert.read( buff, BLE_FILECOPY_BUFFSIZE );
@@ -661,8 +718,7 @@ void FileSharingSendFile( const char* filename ) {
     vTaskDelay(10);
   }
   takeMuxSemaphore();
-  UI.PrintProgressBar( Out.width );
-
+  UI.PrintProgressBar( 0 );
   giveMuxSemaphore();
 
   UI.headerStats("[OK]");
@@ -697,9 +753,9 @@ FileSharingClientCallbacks* FileSharingClientCallback;
 
 
 void stopFileSharingClient() {
-  if ( BLESharingClient != NULL ) {
-    if ( BLESharingClient->isConnected() ) {
-      BLESharingClient->disconnect();
+  if ( FileSharingClient != NULL ) {
+    if ( FileSharingClient->isConnected() ) {
+      FileSharingClient->disconnect();
     }
   }
   if ( FileSharingClientCallback != NULL ) {
@@ -719,15 +775,15 @@ static void FileSharingClientTask( void * param ) {
 
   BLEDevice::setMTU(517);
 
-  if ( BLESharingClient == NULL ) {
-    BLESharingClient  = BLEDevice::createClient();
+  if ( FileSharingClient == NULL ) {
+    FileSharingClient  = BLEDevice::createClient();
   }
 
-  BLESharingClient->setClientCallbacks( FileSharingClientCallback );
+  FileSharingClient->setClientCallbacks( FileSharingClientCallback );
 
   //HasBTTime = false;
   log_v("[Heap: %06d] Will connect to address %s", freeheap, fileServerBLEAddress.c_str());
-  if ( !BLESharingClient->connect( fileServerBLEAddress, fileServerClientType ) ) {
+  if ( !FileSharingClient->connect( fileServerBLEAddress, fileServerClientType ) ) {
     log_e("[Heap: %06d] Failed to connect to address %s", freeheap, fileServerBLEAddress.c_str());
     UI.headerStats("Connect failed :-(");
     stopFileSharingClient();
@@ -735,10 +791,10 @@ static void FileSharingClientTask( void * param ) {
     return;
   }
   log_w("[Heap: %06d] Connected to address %s", freeheap, fileServerBLEAddress.c_str());
-  BLESharingRemoteService = BLESharingClient->getService( FileSharingServiceUUID );
+  BLESharingRemoteService = FileSharingClient->getService( FileSharingServiceUUID );
   if (BLESharingRemoteService == nullptr) {
     log_e("Failed to find our FileSharingServiceUUID: %s", FileSharingServiceUUID.toString().c_str());
-    BLESharingClient->disconnect();
+    FileSharingClient->disconnect();
     UI.headerStats("Bounding failed :-(");
     stopFileSharingClient();
     vTaskDelete( NULL );
@@ -747,7 +803,7 @@ static void FileSharingClientTask( void * param ) {
   FileSharingReadRemoteChar = BLESharingRemoteService->getCharacteristic( FileSharingWriteUUID );
   if (FileSharingReadRemoteChar == nullptr) {
     log_e("Failed to find our characteristic FileSharingWriteUUID: %s, disconnecting", FileSharingWriteUUID.toString().c_str());
-    BLESharingClient->disconnect();
+    FileSharingClient->disconnect();
     UI.headerStats("Bad char. :-(");
     stopFileSharingClient();
     vTaskDelete( NULL );
@@ -757,7 +813,7 @@ static void FileSharingClientTask( void * param ) {
   FileSharingRouterRemoteChar = BLESharingRemoteService->getCharacteristic( FileSharingRouteUUID );
   if (FileSharingRouterRemoteChar == nullptr) {
     log_e("Failed to find our characteristic FileSharingRouteUUID: %s, disconnecting", FileSharingRouteUUID.toString().c_str());
-    BLESharingClient->disconnect();
+    FileSharingClient->disconnect();
     UI.headerStats("Bad char. :-(");
     stopFileSharingClient();
     vTaskDelete( NULL );
@@ -790,6 +846,11 @@ static void FileSharingClientTask( void * param ) {
     if ( !fileSharingSendFileError && FileSharingRouterRemoteChar->writeValue((uint8_t*)closeMessage, strlen(closeMessage), true) ) {
       log_v("Successfully sent bytes from %s file", MACFileToSend );
       UI.headerStats("Copy complete :-)");
+      if ( FileSharingRouterRemoteChar->writeValue((uint8_t*)restartMessage, strlen(restartMessage), true) ) {
+        log_v( "Successfully restarted remote ESP");
+      } else {
+        log_w( "Failed restarting remote ESP" );
+      }
     } else {
       log_e("COPY ERROR FOR %s file", MACFileToSend );
       UI.headerStats("Copy error :-(");
