@@ -274,7 +274,7 @@ class BLEScanUtils {
       BLEDevice::setMTU(100);
       if ( !scanTaskRunning ) {
         log_d("Starting scan" );
-        xTaskCreatePinnedToCore( scanTask, "scanTask", 10000, NULL, 5, NULL, 1 ); /* last = Task Core */
+        xTaskCreatePinnedToCore( scanTask, "scanTask", 6144, NULL, 5, NULL, 1 ); /* last = Task Core */
         while ( scanTaskStopped ) {
           log_d("Waiting for scan to start...");
           vTaskDelay(1000);
@@ -311,7 +311,7 @@ class BLEScanUtils {
     static void setFileSharingServerOn( void * param ) {
       if ( ! fileDownloadingEnabled ) {
         fileDownloadingEnabled = true;
-        xTaskCreatePinnedToCore( startFileSharingServer, "startFileSharingServer", 2048, param, 0, NULL, 1 ); // last = Task Core
+        xTaskCreatePinnedToCore( startFileSharingServer, "startFileSharingServer", 2048, param, 0, NULL, 0 ); // last = Task Core
       }
     }
 
@@ -324,7 +324,7 @@ class BLEScanUtils {
       }
       if ( scanTaskRunning ) stopScanCB();
       fileSharingServerTaskIsRunning = true;
-      xTaskCreatePinnedToCore( FileSharingServerTask, "FileSharingServerTask", 12000, NULL, 5, NULL, 1 );
+      xTaskCreatePinnedToCore( FileSharingServerTask, "FileSharingServerTask", 12000, NULL, 5, NULL, 0 );
       if ( scanWasRunning ) {
         while ( fileSharingServerTaskIsRunning ) {
           vTaskDelay( 1000 );
@@ -347,7 +347,7 @@ class BLEScanUtils {
       fileSharingClientStarted = true;
       if ( scanTaskRunning ) stopScanCB();
       fileSharingClientTaskIsRunning = true;
-      xTaskCreatePinnedToCore( FileSharingClientTask, "FileSharingClientTask", 12000, param, 0, NULL, 1 ); // last = Task Core
+      xTaskCreatePinnedToCore( FileSharingClientTask, "FileSharingClientTask", 12000, param, 5, NULL, 0 ); // last = Task Core
       if ( scanWasRunning ) {
         while ( fileSharingClientTaskIsRunning ) {
           vTaskDelay( 1000 );
@@ -364,7 +364,7 @@ class BLEScanUtils {
     static void setTimeClientOn( void * param ) {
       if( !timeClientisStarted ) {
         timeClientisStarted = true;
-        xTaskCreatePinnedToCore( startTimeClient, "startTimeClient", 2048, param, 0, NULL, 1 ); // last = Task Core
+        xTaskCreatePinnedToCore( startTimeClient, "startTimeClient", 2048, param, 0, NULL, 0 ); // last = Task Core
       } else {
         log_w("startTimeClient already called, time is also about patience");
       }
@@ -377,7 +377,7 @@ class BLEScanUtils {
         vTaskDelay( 100 );
       }
       if ( scanTaskRunning ) stopScanCB();
-      xTaskCreatePinnedToCore(TimeClientTask, "TimeClientTask", 12000, NULL, 1, NULL, 0); /* last = Task Core */
+      xTaskCreatePinnedToCore( TimeClientTask, "TimeClientTask", 2048, NULL, 5, NULL, 0 ); // TimeClient task prefers core 0
       if ( scanWasRunning ) {
         while ( timeClientisRunning ) {
           vTaskDelay( 1000 );
@@ -395,27 +395,15 @@ class BLEScanUtils {
     static void setTimeServerOn( void * param ) {
       if( !timeServerStarted ) {
         timeServerStarted = true;
-        xTaskCreatePinnedToCore( startTimeServer, "startTimeServer", 2560, param, 0, NULL, 1 ); // last = Task Core
+        xTaskCreatePinnedToCore( startTimeServer, "startTimeServer", 2048, param, 0, NULL, 0 ); // last = Task Core
       }
     }
 
     static void startTimeServer( void * param ) {
-      //bool scanWasRunning = false; // scanTaskRunning;
-      //if ( scanTaskRunning ) stopScanCB();
+      // timeServer runs forever
       timeServerIsRunning = true;
-      xTaskCreatePinnedToCore(TimeServerTask, "TimeServerTask", 2560, NULL, 1, NULL, 0); /* last = Task Core */
+      xTaskCreatePinnedToCore( TimeServerTask, "TimeServerTask", 2048, NULL, 1, NULL, 1 ); // TimeServerTask prefers core 1
       log_w("TimeServerTask started");
-      /*
-      if ( scanWasRunning ) {
-        while ( timeServerIsRunning ) {
-          vTaskDelay( 1000 );
-        }
-        log_w("Resuming operations after TimeServerTask");
-        timeServerStarted = false;
-        startScanCB();
-      } else {
-        log_w("TimeServerTask started with nothing to resume");
-      }*/
       vTaskDelete( NULL );
     }
 
@@ -486,6 +474,7 @@ class BLEScanUtils {
     static void screenShowCB( void * param = NULL ) {
       xTaskCreate(screenShowTask, "screenShowTask", 16000, param, 2, NULL);
     }
+
     static void screenShowTask( void * param = NULL ) {
       UI.screenShow( param );
       vTaskDelete(NULL);
@@ -499,11 +488,19 @@ class BLEScanUtils {
       vTaskDelete(NULL);
     }
     static void listDirCB( void * param = NULL ) {
-      xTaskCreatePinnedToCore(listDirTask, "listDirTask", 5000, NULL, 2, NULL, 1); /* last = Task Core */
+      xTaskCreatePinnedToCore(listDirTask, "listDirTask", 5000, param, 2, NULL, 1); /* last = Task Core */
     }
     static void listDirTask( void * param = NULL ) {
       isQuerying = true;
-      listDir(BLE_FS, "/", 0, DB.BLEMacsDbFSPath);
+      if( param != NULL ) {
+        if(! BLE_FS.exists( (const char*)param ) ) {
+          Serial.printf("Directory %s does not exist");
+        } else {
+          listDir(BLE_FS, (const char*)param, 0, DB.BLEMacsDbFSPath);
+        }
+      } else {
+        listDir(BLE_FS, "/", 0, DB.BLEMacsDbFSPath);
+      }
       isQuerying = false;
       vTaskDelete( NULL );
     }
@@ -558,9 +555,9 @@ class BLEScanUtils {
         { "screenshow",   screenShowCB,           "Show a screenshot" },
         { "toggle",       toggleCB,               "toggle a bool value" },
         { "uptime",       uptimeCB,               "force a specific uptime" },
-#if HAS_GPS
-        { "gpstime",      setGPSTime,     "sync time from GPS" },
-#endif
+        #if HAS_GPS
+          { "gpstime",      setGPSTime,     "sync time from GPS" },
+        #endif
 /*
         { "update",       updateCB,       "Update time and DB files (requires pre-flashed NTPMenu.bin on the SD)" },
 */
@@ -598,9 +595,9 @@ class BLEScanUtils {
         runCommand( (char*)"bleclock" );
       }
 
-#if HAS_GPS
-      GPSInit();
-#endif
+      #if HAS_GPS
+        GPSInit();
+      #endif
 
       static byte idx = 0;
       char lf = '\n';
@@ -623,10 +620,9 @@ class BLEScanUtils {
           }
           delay(1);
         }
-#if HAS_GPS
-        GPSRead();
-        //GPSPlusPlusRead();
-#endif
+        #if HAS_GPS
+          GPSRead();
+        #endif
         delay(1);
       }
     }
@@ -910,14 +906,17 @@ class BLEScanUtils {
       }
 
       if ( foundTimeServer && (!TimeIsSet || ForceBleTime) ) {
-        UI.headerStats("BLE Time sync ...");
-        log_w("Launching BLE TimeClient Task");
-        xTaskCreatePinnedToCore(startTimeClient, "startTimeClient", 2048, NULL, 0, NULL, 0); /* last = Task Core */
-        while( scanTaskRunning ) {
-          vTaskDelay( 10 );
+        if( ! timeClientisStarted ) {
+          if( timeServerBLEAddress != "" ) {
+            UI.headerStats("BLE Time sync ...");
+            log_w("Launching BLE TimeClient Task");
+            xTaskCreatePinnedToCore(startTimeClient, "startTimeClient", 2048, NULL, 0, NULL, 0); /* last = Task Core */
+            while( scanTaskRunning ) {
+              vTaskDelay( 10 );
+            }
+            return;
+          }
         }
-        return;
-        
       }
 
       UI.headerStats("Showing results ...");

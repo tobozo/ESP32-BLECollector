@@ -96,7 +96,7 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN 4
 #define MAX_BLECARDS_WITHOUT_TIMESTAMPS_ON_SCREEN 5
 #define BLEDEVCACHE_PSRAM_SIZE 1024 // use PSram to cache BLECards
-#define BLEDEVCACHE_HEAP_SIZE 16 // use some heap to cache BLECards. min = 5, max = 64, higher value = smaller uptime
+#define BLEDEVCACHE_HEAP_SIZE 12 // use some heap to cache BLECards. min = 5, max = 64, higher value = less SD/SD_MMC sollicitation
 #define MAX_DEVICES_PER_SCAN MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN // also max displayed devices on the screen, affects initial scan duration
 
 #define MENU_FILENAME "/" BUILD_TYPE ".bin"

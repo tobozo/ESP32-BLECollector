@@ -45,21 +45,30 @@ static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char
   }
 
   File file = root.openNextFile();
-  Serial.println("    NAME                             |     SIZE");
-  Serial.println("-----------------------------------------------------");
+  Serial.println("    NAME                             |                    |     SIZE");
+  Serial.println("-------------------------------------------------------------------------");
   unsigned long totalSize = 0;
   while(file){
+    
+    time_t lastWrite = file.getLastWrite();
+    struct tm * tmstruct = localtime(&lastWrite);
+    char fileDate[64] = "1980-01-01 00:07:20";
+    sprintf(fileDate, "%04d-%02d-%02d %02d:%02d:%02d",(tmstruct->tm_year)+1900,( tmstruct->tm_mon)+1, tmstruct->tm_mday,tmstruct->tm_hour , tmstruct->tm_min, tmstruct->tm_sec);
+    if( (tmstruct->tm_year)+1900 < 2000 ) {
+      // time is not set
+    }
+    
     if(!file.isDirectory()) {
       const char* fileName = file.name();
       unsigned long fileSize = file.size();
       if( needle!=NULL && strcmp( fileName, needle ) == 0 ) {
-        Serial.printf("*   %-32s | %8d Bytes\n", fileName, fileSize);
+        Serial.printf( "*   %-32s | %20s | %8d Bytes\n", fileName, fileDate, fileSize );
       } else {
-        Serial.printf("    %-32s | %8d Bytes\n", fileName, fileSize);
+        Serial.printf( "    %-32s | %20s | %8d Bytes\n", fileName, fileDate, fileSize );
       }
       totalSize += fileSize;
     } else {
-      Serial.printf("    %-32s | DIRECTORY\n", file.name());
+      Serial.printf( "    %-32s | %20s | DIRECTORY\n", file.name(), fileDate );
     }
     file = root.openNextFile();
   }
