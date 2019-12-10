@@ -1,23 +1,24 @@
 # ESP32-BLECollector
 
-Like a BLE Scanner but with persistence.
+A BLE Scanner with persistence.
 
   ![ESP32 BLECollector running on Wrover-Kit](https://raw.githubusercontent.com/tobozo/ESP32-BLECollector/master/screenshots/capture3.png) ![ESP32 BLECollector running on M5Stack](https://raw.githubusercontent.com/tobozo/ESP32-BLECollector/unstable/screenshots/BLECollector-M5Stack.jpeg)
   
 [Demo video](https://youtu.be/w5V80PobVWs)
 ------------
 
-All BLE data found by the [BLE Scanner](https://github.com/wakwak-koba/ESP32_BLE_Arduino) is collected into a [sqlite3](https://github.com/siara-cc/esp32_arduino_sqlite3_lib) format on the SD Card.
+BLECollector is just a passive BLE scanner with a fancy UI.
+All BLE data found by the BLE Scanner is collected into a [sqlite3](https://github.com/siara-cc/esp32_arduino_sqlite3_lib) format on the SD Card.
 
 Public Mac addresses are compared against [OUI list](https://code.wireshark.org/review/gitweb?p=wireshark.git;a=blob_plain;f=manuf), while Vendor names are compared against [BLE Device list](https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers).
 
-Two databases are provided in a db format ([mac-oui-light.db](https://github.com/tobozo/ESP32-BLECollector/blob/master/SD/mac-oui-light.db) and [ble-oui.db](https://github.com/tobozo/ESP32-BLECollector/blob/master/SD/ble-oui.db)).
+Those two database files are provided in a db format ([mac-oui-light.db](https://github.com/tobozo/ESP32-BLECollector/blob/master/SD/mac-oui-light.db) and [ble-oui.db](https://github.com/tobozo/ESP32-BLECollector/blob/master/SD/ble-oui.db)).
 
-The `blemacs.db` file is created on first run.
-When a BLE device is found, it is populated with matching oui/vendor name (if any) and eventually inserted in the `blemasc.db` file.
+On first run, a default `blemacs.db` file is created, this is where BLE data will be stored.
+When a BLE device is found by the scanner, it is populated with the matching oui/vendor name (if any) and eventually inserted in the `blemasc.db` file.
 
 
-/!\ Use the "No OTA (Large Apps)" or "Minimal SPIFFS (Large APPS with OTA)" partition scheme to compile this sketch.
+/!\ This sketch is big! Use the "No OTA (Large Apps)" or "Minimal SPIFFS (Large APPS with OTA)" partition scheme to compile it.
 The memory cost of using sqlite and BLE libraries is quite high.
 As a result you can't use sqlite with SPIFFS, only the SD Card.
 
@@ -49,33 +50,44 @@ RTC available Profiles:
   - **Rogue**: TinyRTC module adjusted after flashing (build DateTime), no WiFi, no NTP Sync
   - **Chronomaniac**: TinyRTC module adjusts itself via NTP (separate binary, requires WiFi)
 
-Optional I2C RTC Module requirements (/!\ **Chronomaniac** profile only):
--------------------------------------
-  - Wite your TinyRTC to SDA/SCL (edit `Wire.begin()` in [Timeutils.h](https://github.com/tobozo/ESP32-BLECollector/blob/master/TimeUtils.h#L173) if necessary)
+Optional I2C RTC Module requirements
+------------------------------------
+  - Wire your TinyRTC to SDA/SCL (edit `Wire.begin()` in [Timeutils.h](https://github.com/tobozo/ESP32-BLECollector/blob/master/TimeUtils.h#L173) if necessary)
   - Insert the SD Card
-  - Set `#define RTC_PROFILE CHRONOMANIAC` in [Settings.h](https://github.com/tobozo/ESP32-BLECollector/blob/master/Settings.h)
+  - Set `#define HAS_EXTERNAL_RTC true` in [Settings.h](https://github.com/tobozo/ESP32-BLECollector/blob/master/Settings.h)
   - Flash the ESP with partition scheme `Minimal SPIFFS (Large APPS with OTA)`
-  - Wait for the binary to mirror itself onto the SD Card as '/BLEMenu.bin'
-  - Set your `WIFI_SSID` and `WIFI_PASSWD` in [Settings.h](https://github.com/tobozo/ESP32-BLECollector/blob/master/Settings.h)
-  - Set `#define RTC_PROFILE NTP_MENU` in [Settings.h](https://github.com/tobozo/ESP32-BLECollector/blob/master/Settings.h)
-  - Flash the ESP using partition scheme `Minimal SPIFFS (Large APPS with OTA)` 
-  - Wait the binary to mirror itself onto the SD Card as 'NTPMenu.bin'
-  - A NTP sync should occur, the BLECollector menu will reload  and start scanning if successful
+  
+Optional Serial GPS Module requirements
+---------------------------------------
+  - Wire your GPS module to TX1/RX1 (edit `GPS_RX` and `GPS_TX` in GPS.h
+  - Set `#define HAS_GPS true` in [Settings.h](https://github.com/tobozo/ESP32-BLECollector/blob/master/Settings.h)
+  - Flash the ESP with partition scheme `Minimal SPIFFS (Large APPS with OTA)`
+  - Wait for the GPS to find a fix
+  - issue the command `gpstime` in the serial console
+
+Time Sharing
+------------
+  - Once the time is set using RTC and/or GPS, the BLECollector will start the TimeSharing service and advertise a DateTime characteristic for other BLECollectors to sync with.
+  - Builds with no RTC/GPS will try to identify this service during their scan duty cycle and subscribe for notifications.
+  
+File Sharing (still experimental)
+------------
+  - This feature is currently limited to sharing the two necessary .db files, if at least one of those files is missing or corrupted at boot, the BLECollector will start a BLE File server and wait for another BLECollector to send those files.
+  - Sending files is still a manual operation, just issue the `blesend` command when another BLECollector is ready to receive the files.
+  - Possible outcomes of this feature: sharing/propagating the collected data (e.g. whitelists/blacklists)
 
 Contributions are welcome :-)
 
 
 Known issues / Roadmap
 ----------------------
-Because sqlite3 and BLE library already use a fair amount of RAM, there isn't much room left for additional tools such as Web Server, db parser, NTP sync or data logging over network.
+Because sqlite3 and BLE library already use a fair amount of RAM, there isn't much room left for additional tools such as Web Server, db parser, or NTP sync, so WiFi features are kept out of the scope of this project.
 
-The NTP sync problem is now solved by sd-loading a NTP app, and storing the time on an external RTC module.
-So the next big question is about adding controls :thinking:.
+As a compensation, the M5Stack-SD-Updater is built-in and will allow hot-loading of any other .bin (default is menu.bin) located on the SD Card, making it easy to separate functional concerns into different apps.
 
 Some ideas I'll try to implement in the upcoming changes:
 
-- Implement [GATT services](https://www.bluetooth.com/specifications/gatt/services)
-- Use the RTC to add timestamps (and/or) GPS Coords to entries for better pruning [as suggested by /u/playaspect](https://www.reddit.com/r/esp8266/comments/9s594c/esp32blecollector_ble_scanner_data_persistence_on/e8nipr6/?context=3)
+- Add GPS Coords to entries for better pruning [as suggested by /u/playaspect](https://www.reddit.com/r/esp8266/comments/9s594c/esp32blecollector_ble_scanner_data_persistence_on/e8nipr6/?context=3)
 - Have the data easily exported without removing the sd card (wifi, ble, serial)
 - Auto downloading/refreshing sqlite databases
 
