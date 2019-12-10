@@ -3,8 +3,8 @@
 A BLE Scanner with persistence.
 
   ![ESP32 BLECollector running on Wrover-Kit](https://raw.githubusercontent.com/tobozo/ESP32-BLECollector/master/screenshots/capture3.png) ![ESP32 BLECollector running on M5Stack](https://raw.githubusercontent.com/tobozo/ESP32-BLECollector/unstable/screenshots/BLECollector-M5Stack.jpeg)
-  
-[Demo video](https://youtu.be/w5V80PobVWs)
+
+🎬 [Demo video](https://youtu.be/w5V80PobVWs)
 ------------
 
 BLECollector is just a passive BLE scanner with a fancy UI.
@@ -17,38 +17,37 @@ Those two database files are provided in a db format ([mac-oui-light.db](https:/
 On first run, a default `blemacs.db` file is created, this is where BLE data will be stored.
 When a BLE device is found by the scanner, it is populated with the matching oui/vendor name (if any) and eventually inserted in the `blemasc.db` file.
 
-
-/!\ This sketch is big! Use the "No OTA (Large Apps)" or "Minimal SPIFFS (Large APPS with OTA)" partition scheme to compile it.
+⚠️ This sketch is big! Use the "No OTA (Large Apps)" or "Minimal SPIFFS (Large APPS with OTA)" partition scheme to compile it.
 The memory cost of using sqlite and BLE libraries is quite high.
-As a result you can't use sqlite with SPIFFS, only the SD Card.
+
+⚠️ Builds using ESP32-Wrover can eventually choose the 3.6MB SPIFFS partition scheme, and have the BLECollector working without the SD Card. Experimental support only since SPIFFS tends to get slower and buggy when the partition becomes full.
+
 
 Hardware requirements
 ---------------------
-  - [mandatory] ESP32 (with or without PSRam)
-  - [mandatory] SD Card breakout (or bundled in Wrover-Kit, M5Stack, LoLinD32 Pro)
-  - [mandatory] TFT Library [patched](https://github.com/espressif/WROVER_KIT_LCD/pull/3/files) to support vertical scroll definition
-  - [mandatory] BLE Library by @chegewara [patched](https://github.com/tobozo/ESP32-BLECollector/files/2614534/ESP32_ble_library.zip)
-  - [mandatory] Micro SD (FAT32 formatted, **max 32GB**)
+  - [mandatory] ESP32 or ESP32-WROVER (WROVER is recommended)
+  - [mandatory] SD Card (breakout or bundled in Wrover-Kit, M5Stack, Odroid-Go, LoLinD32 Pro)
+  - [mandatory] Micro SD (FAT32 formatted, **max 4GB**)
   - [mandatory] [mac-oui-light.db](https://github.com/tobozo/ESP32-BLECollector/blob/master/SD/mac-oui-light.db) and [ble-oui.db](https://github.com/tobozo/ESP32-BLECollector/blob/master/SD/ble-oui.db) files copied on the Micro SD Card root
-  - [mandatory] ILI9341 320x240 TFT (or bundled in Wrover-Kit, M5Stack, Odroid-Go, LoLinD32 Pro)
-  - [optional] I2C RTC Module (see "#define RTC_PROFILE" in settings.h)
+  - [mandatory] ST7789/ILI9341 320x240 TFT (or bundled in Wrover-Kit, M5Stack, Odroid-Go, LoLinD32 Pro)
+  - [optional] (but recommended) I2C RTC Module (see "#define HAS_EXTERNAL_RTC" in Settings.h)
+  - [optional] Serial GPS Module (see "#define HAS_GPS" in Settings.h)
 
 Software requirements
 ---------------------
   - [mandatory] Arduino IDE
-  - [mandatory] https://github.com/wakwak-koba/arduino-esp32/tree/master/libraries/BLE
-  - [mandatory] https://github.com/tobozo/ESP32-Chimera-Core
+  - [mandatory] [BLE Library](https://github.com/wakwak-koba/arduino-esp32/tree/master/libraries/BLE) exposing a private method
+  - [mandatory] [ESP32-Chimera-Core](https://github.com/tobozo/ESP32-Chimera-Core) (a substitute to M5Stack Core)
   - [mandatory] https://github.com/tobozo/M5Stack-SD-Updater
   - [mandatory] https://github.com/PaulStoffregen/Time
   - [mandatory] https://github.com/siara-cc/esp32_arduino_sqlite3_lib
   - [optional] https://github.com/mikalhart/TinyGPSPlus
-  - [optional] https://github.com/gmag11/NtpClient
 
-RTC available Profiles: 
------------------------
-  - **Hobo**: Default profile, no TinyRTC module in your build, only uptime will be displayed
-  - **Rogue**: TinyRTC module adjusted after flashing (build DateTime), no WiFi, no NTP Sync
-  - **Chronomaniac**: TinyRTC module adjusts itself via NTP (separate binary, requires WiFi)
+Behaviours (auto-selected): 
+---------------------------
+  - **Hobo**: when no TinyRTC module exists in your build, only uptime will be displayed
+  - **Rogue**: TinyRTC module adjusted after flashing (build DateTime), shares time over BLE
+  - **Chronomaniac**: TinyRTC module adjusts itself via GPS, shares time over BLE
 
 Optional I2C RTC Module requirements
 ------------------------------------
