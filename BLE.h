@@ -47,10 +47,12 @@ static bool onScanDone = true;
 static bool scanTaskRunning = false;
 static bool scanTaskStopped = true;
 
+extern size_t devicesStatCount;
 
 static char* serialBuffer = NULL;
 static char* tempBuffer = NULL;
 #define SERIAL_BUFFER_SIZE 64
+
 
 unsigned long lastheap = 0;
 uint16_t lastscanduration = SCAN_DURATION;
@@ -77,15 +79,20 @@ enum AfterScanSteps {
 };
 
 
-
+// work in progress: MAC blacklist/whitelist
 const char MacList[3][MAC_LEN + 1] = {
   "aa:aa:aa:aa:aa:aa",
   "bb:bb:bb:bb:bb:bb",
   "cc:cc:cc:cc:cc:cc"
 };
 
+const BLEUUID ServicesList[2] = {
+  timeServiceUUID,
+  FileSharingServiceUUID
+};
 
-static bool isListed( const char* address ) {
+
+static bool AddressIsListed( const char* address ) {
   for ( byte i = 0; i < sizeof(MacList); i++ ) {
     if ( strcmp(address, MacList[i] ) == 0) {
       return true;
@@ -95,48 +102,56 @@ static bool isListed( const char* address ) {
 }
 
 
+static bool deviceHasPayload( BLEAdvertisedDevice advertisedDevice ) {
+  if ( !advertisedDevice.haveServiceUUID() ) return false;
+  if( advertisedDevice.isAdvertisingService( timeServiceUUID ) ) {
+    log_i( "Found Time Server %s : %s", advertisedDevice.getAddress().toString().c_str(), advertisedDevice.getServiceUUID().toString().c_str() );
+    timeServerBLEAddress = advertisedDevice.getAddress().toString();
+    timeServerClientType = advertisedDevice.getAddressType();
+    foundTimeServer = true;
+    if ( foundTimeServer && (!TimeIsSet || ForceBleTime) ) {
+      scan_cursor = 0;
+      processedDevicesCount = 0;
+      onScanDone = true;
+      //ForceBleTime = false;
+      advertisedDevice.getScan()->stop();
+      // log_e("[Heap: %06d] Found TimeServer !!", freeheap);
+      return true;
+    }
+  }
+  if( advertisedDevice.isAdvertisingService( FileSharingServiceUUID ) ) {
+    log_i( "Found File Server %s : %s", advertisedDevice.getAddress().toString().c_str(), advertisedDevice.getServiceUUID().toString().c_str() );
+    foundFileServer = true;
+    fileServerBLEAddress = advertisedDevice.getAddress().toString();
+    fileServerClientType = advertisedDevice.getAddressType();
+    if ( fileSharingEnabled ) {
+      log_w("Ready to connect to file server %s", fileServerBLEAddress.c_str());
+      scan_cursor = 0;
+      processedDevicesCount = 0;
+      onScanDone = true;
+      advertisedDevice.getScan()->stop();
+      return true;
+    }
+  }
+  #if BLACKLIST_MAC_DETECTOR_ENABLED
+    stdBLEAddress = advertisedDevice.getAddress().toString();
+    // iterate over the list
+    //
+  #endif
+  return false;
+}
+
+
 
 class FoundDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
 
-    void onResult(BLEAdvertisedDevice advertisedDevice) {
+    void onResult( BLEAdvertisedDevice advertisedDevice ) {
 
-      if (advertisedDevice.haveServiceUUID() && advertisedDevice.isAdvertisingService( timeServiceUUID )) {
-        log_i( "Found Time Server %s : %s", advertisedDevice.getAddress().toString().c_str(), advertisedDevice.getServiceUUID().toString().c_str() );
-        timeServerBLEAddress = advertisedDevice.getAddress().toString();
-        timeServerClientType = advertisedDevice.getAddressType();
-        foundTimeServer = true;
-        if ( foundTimeServer && (!TimeIsSet || ForceBleTime) ) {
-          scan_cursor = 0;
-          processedDevicesCount = 0;
-          onScanDone = true;
-          //ForceBleTime = false;
-          advertisedDevice.getScan()->stop();
-          // log_e("[Heap: %06d] Found TimeServer !!", freeheap);
-          return;
-        }
+      devicesStatCount++; // raw stats for heapgraph
+
+      if( deviceHasPayload( advertisedDevice ) ) {
+        return;
       }
-
-      if (advertisedDevice.haveServiceUUID() && advertisedDevice.isAdvertisingService( FileSharingServiceUUID ) ) {
-        log_i( "Found File Server %s : %s", advertisedDevice.getAddress().toString().c_str(), advertisedDevice.getServiceUUID().toString().c_str() );
-        foundFileServer = true;
-        if ( fileSharingEnabled ) {
-          fileServerBLEAddress = advertisedDevice.getAddress().toString();
-          fileServerClientType = advertisedDevice.getAddressType();
-          log_w("Ready to connect to %s", fileServerBLEAddress.c_str());
-          scan_cursor = 0;
-          processedDevicesCount = 0;
-          onScanDone = true;
-          advertisedDevice.getScan()->stop();
-          return;
-        }
-      }
-
-#if BLACKLIST_MAC_DETECTOR_ENABLED
-      stdBLEAddress = advertisedDevice.getAddress().toString();
-      // iterate over the list
-      //
-#endif
-
 
       if ( onScanDone  ) return;
 
@@ -148,7 +163,7 @@ class FoundDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
         //bool is_blacklisted = isBlackListed( BLEDevScanCache[scan_cursor]->address );
         if ( UI.filterVendors && is_random ) {
           //TODO: scan_cursor++
-          log_w( "Filtering %s", BLEDevScanCache[scan_cursor]->address );
+          log_i( "Filtering %s", BLEDevScanCache[scan_cursor]->address );
         } else {
           if ( DB.hasPsram ) {
             if ( !is_random ) {
@@ -224,7 +239,7 @@ class BLEScanUtils {
     void init() {
 
       BLEDevice::init( PLATFORM_NAME " BLE Collector");
-
+      getPrefs(); // load prefs from NVS
       UI.init(); // launch all UI tasks
       if ( ! DB.init() ) { // mount DB
         log_e("Error with .db files (not found or corrupted), starting BLE File Sharing");
@@ -242,7 +257,6 @@ class BLEScanUtils {
         return;
       }
       WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
-      getPrefs();
       startSerialTask();
       startScanCB();
       UI.begin();
@@ -297,14 +311,14 @@ class BLEScanUtils {
       }
     }
     static void restartCB( void * param = NULL ) {
-      //DBneedsReplication = true;
-      //DB.needsRestart = true;
       stopScanCB();
       xTaskCreatePinnedToCore( doRestart, "doRestart", 8192, param, 5, NULL, 1 ); // last = Task Core
     }
     static void doRestart( void * param = NULL ) {
-      //DB.maintain();
-      DB.updateDBFromCache( BLEDevRAMCache, false, false );
+      // "restart now" command skips db replication
+      if ( strcmp( "now", (const char*)param ) != 0 ) {
+        DB.updateDBFromCache( BLEDevRAMCache, false, false );
+      }
       ESP.restart();
     }
 
@@ -364,7 +378,7 @@ class BLEScanUtils {
     static void setTimeClientOn( void * param ) {
       if( !timeClientisStarted ) {
         timeClientisStarted = true;
-        xTaskCreatePinnedToCore( startTimeClient, "startTimeClient", 2048, param, 0, NULL, 0 ); // last = Task Core
+        xTaskCreatePinnedToCore( startTimeClient, "startTimeClient", 2560, param, 0, NULL, 0 ); // last = Task Core
       } else {
         log_w("startTimeClient already called, time is also about patience");
       }
@@ -384,6 +398,7 @@ class BLEScanUtils {
         }
         log_w("Resuming operations after TimeClientTask");
         timeClientisStarted = false;
+        //DB.maintain();
         startScanCB();
       } else {
         log_w("TimeClientTask started with nothing to resume");
@@ -440,18 +455,6 @@ class BLEScanUtils {
       Out.serialEcho = !Out.serialEcho;
       setPrefs();
       Serial.printf("Out.serialEcho = %s\n", Out.serialEcho ? "true" : "false" );
-    }
-    static void uptimeCB( void * param = NULL ) {
-      xTaskCreatePinnedToCore(uptimeTask, "uptimeTask", 5000, param, 2, NULL, 1); /* last = Task Core */
-    }
-    static void uptimeTask( void * param = NULL ) {
-      if ( param != NULL ) {
-        Serial.printf("Parsing %s\n", (const char*) param);
-        uint16_t parsedParam = String( (const char*) param ).toInt();
-        Serial.printf("Parsed %d\n", parsedParam);
-        forcedUptime = (unsigned long) parsedParam;
-      }
-      vTaskDelete( NULL );
     }
     static void rmFileCB( void * param = NULL ) {
       xTaskCreatePinnedToCore(rmFileTask, "rmFileTask", 5000, param, 2, NULL, 1); /* last = Task Core */
@@ -541,26 +544,27 @@ class BLEScanUtils {
         { "help",         nullCB,                 "Print this list" },
         { "start",        startScanCB,            "Start/resume scan" },
         { "stop",         stopScanCB,             "Stop scan" },
-        { "toggleFilter", toggleFilterCB,         "Toggle vendor filter (persistent)" },
-        { "toggleEcho",   toggleEchoCB,           "Toggle BLECards in serial console (persistent)" },
+        { "toggleFilter", toggleFilterCB,         "Toggle vendor filter on the TFT (persistent)" },
+        { "toggleEcho",   toggleEchoCB,           "Toggle BLECards in the Serial Console (persistent)" },
         { "dump",         startDumpCB,            "Dump returning BLE devices to the display and updates DB" },
-        { "ls",           listDirCB,              "Show the SD root dir Content" },
-        { "rm",           rmFileCB,               "Delete a file from the SD" },
-        { "restart",      restartCB,              "Restart BLECollector" },
-        { "bleclock",     setTimeServerOn,        "Broadcast time to another BLE Device" },
-        { "bletime",      setTimeClientOn,        "Get time from another BLE Device" },
+        { "ls",           listDirCB,              "Show [dir] Content on the SD" },
+        { "rm",           rmFileCB,               "Delete [file] from the SD" },
+        { "restart",      restartCB,              "Restart BLECollector ('restart now' to skip replication)" },
+        #if HAS_EXTERNAL_RTC
+          { "bleclock",     setTimeServerOn,        "Broadcast time to another BLE Device (implicit)" },
+          { "bletime",      setTimeClientOn,        "Get time from another BLE Device (explicit)" },
+        #else
+          { "bleclock",     setTimeServerOn,        "Broadcast time to another BLE Device (explicit)" },
+          { "bletime",      setTimeClientOn,        "Get time from another BLE Device (implicit)" },
+        #endif
         { "blereceive",   setFileSharingServerOn, "Update .db files from another BLE app"},
         { "blesend",      setFileSharingClientOn, "Share .db files with anothe BLE app" },
         { "screenshot",   screenShotCB,           "Make a screenshot and save it on the SD" },
-        { "screenshow",   screenShowCB,           "Show a screenshot" },
+        { "screenshow",   screenShowCB,           "Show screenshot" },
         { "toggle",       toggleCB,               "toggle a bool value" },
-        { "uptime",       uptimeCB,               "force a specific uptime" },
         #if HAS_GPS
           { "gpstime",      setGPSTime,     "sync time from GPS" },
         #endif
-/*
-        { "update",       updateCB,       "Update time and DB files (requires pre-flashed NTPMenu.bin on the SD)" },
-*/
         { "resetDB",      resetCB,        "Hard Reset DB + forced restart" },
         { "pruneDB",      pruneCB,        "Soft Reset DB without restarting (hopefully)" },
       };
@@ -690,7 +694,7 @@ class BLEScanUtils {
         pBLEScan->start(SCAN_DURATION);
         onAfterScan();
         UI.update(); // run after-scan display stuff
-        DB.maintain();
+        //DB.maintain();
         dumpStats("AfterScan:::");
         scan_rounds++;
       }
@@ -872,6 +876,7 @@ class BLEScanUtils {
 
 
     static void onBeforeScan() {
+      DB.maintain();
       UI.headerStats("Scan in progress");
       UI.startBlink();
       processedDevicesCount = 0;

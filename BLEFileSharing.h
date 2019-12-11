@@ -166,10 +166,10 @@ static void setBLETime() {
 #endif
   logTimeActivity(SOURCE_BLE, LocalTime.unixtime() );
   lastSyncDateTime = LocalTime;
+  timeHousekeeping();
   HasBTTime = true;
   DayChangeTrigger = true;
   TimeIsSet = true;
-  timeHousekeeping();
 }
 
 
@@ -223,7 +223,7 @@ static void stopTimeClient() {
 
 
 static void TimeClientTask( void * param ) {
-
+  timeClientisRunning = true;
   if ( TimeSharingClient == NULL ) {
     TimeSharingClient = BLEDevice::createClient();
   }

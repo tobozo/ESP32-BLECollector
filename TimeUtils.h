@@ -129,7 +129,7 @@ static void timeHousekeeping() {
     }
     current_hour = internalDateTime.hour();
   } else {
-    HourChangeTrigger = false;
+    //HourChangeTrigger = false;
   }
 
   if( current_day != internalDateTime.day() ) {
@@ -141,7 +141,7 @@ static void timeHousekeeping() {
     }
     current_day = internalDateTime.day();
   } else {
-    DayChangeTrigger = false;
+    //DayChangeTrigger = false;
   }
   
   // - get the time from the internal clock

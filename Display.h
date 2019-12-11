@@ -10,8 +10,6 @@
   #error "NO SUPPORTED BOARD DETECTED !!"
   #error "Please select the right board from the Arduino boards menu"
   #error "Supported boards are: ARDUINO_M5Stack_Core_ESP32, ARDUINO_M5STACK_FIRE, ARDUINO_ODROID_ESP32 or ARDUINO_ESP32_DEV"
-  // #define D32PRO // deprecated
-  // #define DDUINO32XS // deprecated
 #endif
 
 #define BLE_FS M5STACK_SD // inherited from ESP32-Chimera-Core
@@ -29,8 +27,16 @@
 #define SKIP_INTRO // don't play intro (tft spi access messes up SD/DB init)
 static const int AMIGABALL_YPOS = 50;
 
-// display profiles switcher
 
+// uncomment this block to use SPIFFS instead of SD
+// WARNING: can only work with big SPIFFS partition (minumum 2MB, ESP32-WROVER chips only)
+//#undef BLE_FS
+//#undef BLE_FS_TYPE
+//#define BLE_FS SPIFFS // inherited from ESP32-Chimera-Core
+//#define BLE_FS_TYPE "spiffs" // sd = fs::SD, sdcard = fs::SD_MMC
+
+
+// display profiles switcher
 #if defined( ARDUINO_M5Stack_Core_ESP32 ) || defined( ARDUINO_M5STACK_FIRE ) || defined( ARDUINO_ODROID_ESP32 )
 
   // custom M5Stack/Odroid-Go go TFT/SD/RTC/GPS settings here (see ARDUINO_ESP32_DEV profile for available settings)
@@ -119,7 +125,7 @@ void tft_setupScrollArea(uint16_t tfa, uint16_t bfa) {
   tft.writedata(scrollpanel_width()-tfa-bfa);
   tft.writedata(bfa >> 8);           // Bottom Fixed Area line count
   tft.writedata(bfa);
-  log_e("Init Scroll area with tfa/bfa %d/%d on w/h %d/%d", tfa, bfa, scrollpanel_width(), scrollpanel_height());
+  log_i("Init Scroll area with tfa/bfa %d/%d on w/h %d/%d", tfa, bfa, scrollpanel_width(), scrollpanel_height());
 }
 
 void tft_scrollTo(uint16_t vsp) {
@@ -128,30 +134,31 @@ void tft_scrollTo(uint16_t vsp) {
   tft.writedata(vsp);
 }
 
-TFT_eSprite sprite = TFT_eSprite( &tft );
+TFT_eSprite gradientSprite = TFT_eSprite( &tft );
+TFT_eSprite heapGraphSprite = TFT_eSprite( &tft );
 
 void tft_fillGradientHRect( uint16_t x, uint16_t y, uint16_t width, uint16_t height, RGBColor colorstart, RGBColor colorend ) {
-  sprite.setPsram( false ); // don't bother using psram for that
-  sprite.setSwapBytes( false );
-  sprite.createSprite( width, 1);
-  sprite.setColorDepth( 16 );
-  sprite.drawGradientHLine( 0, 0, width, colorstart, colorend );
+  gradientSprite.setPsram( false ); // don't bother using psram for that
+  gradientSprite.setSwapBytes( false );
+  gradientSprite.createSprite( width, 1);
+  gradientSprite.setColorDepth( 16 );
+  gradientSprite.drawGradientHLine( 0, 0, width, colorstart, colorend );
   for( uint16_t h = 0; h < height; h++ ) {
-    sprite.pushSprite( x, y+h );
+    gradientSprite.pushSprite( x, y+h );
   }
-  sprite.deleteSprite();
+  gradientSprite.deleteSprite();
 }
 
 void tft_fillGradientVRect( uint16_t x, uint16_t y, uint16_t width, uint16_t height, RGBColor colorstart, RGBColor colorend ) {
-  sprite.setPsram( false ); // don't bother using psram for that
-  sprite.setSwapBytes( false );
-  sprite.createSprite( 1, height);
-  sprite.setColorDepth( 16 );
-  sprite.drawGradientVLine( 0, 0, height, colorstart, colorend );
+  gradientSprite.setPsram( false ); // don't bother using psram for that
+  gradientSprite.setSwapBytes( false );
+  gradientSprite.createSprite( 1, height);
+  gradientSprite.setColorDepth( 16 );
+  gradientSprite.drawGradientVLine( 0, 0, height, colorstart, colorend );
   for( uint16_t w = 0; w < width; w++ ) {
-    sprite.pushSprite( x+w, y );
+    gradientSprite.pushSprite( x+w, y );
   }
-  sprite.deleteSprite();
+  gradientSprite.deleteSprite();
 }
 
 void tft_drawGradientHLine( uint32_t x, uint32_t y, uint32_t w, RGBColor colorstart, RGBColor colorend ) {
