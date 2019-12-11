@@ -1177,7 +1177,7 @@ class DBUtils {
             memset( colValue, 0, MAX_FIELD_LEN );
             if( argv[i] ) {
               memcpy( colValue, argv[i], strlen(argv[i]) );
-              log_e("got one result :%s", colValue);
+              log_i("got one result :%s", colValue);
             }
             //colValue = argv[i] ? argv[i] : "";
           }
