@@ -302,6 +302,9 @@ class UIUtils {
   public:
 
     bool filterVendors = false;
+    bool ScreenShotLoaded = false;
+    byte brightness = BASE_BRIGHTNESS; // multiple of 8 otherwise can't turn off ^^
+    byte brightnessIncrement = 8;
 
     struct BLECardStyle {
       uint16_t textColor = BLE_WHITE;
@@ -339,6 +342,7 @@ class UIUtils {
 
       tft_begin();
       tft_initOrientation(); //tft.setRotation( 0 ); // required to get smooth scrolling
+      tft_setBrightness( brightness );
       setUISizePos(); // set position/dimensions for widgets and other UI items
 
       RGBColor colorstart = { 0x44, 0x44, 0x88 };
@@ -608,7 +612,7 @@ class UIUtils {
         // TODO: landscape this
         tft_drawJpg( filter_jpeg, filter_jpeg_len, filterVendorsIconX, filterVendorsIconY, 10,  8);
       } else {
-        tft.fillRect( 152, footerBottomPosY - 12/*308*/, 10,  8, FOOTER_BGCOLOR );
+        tft.fillRect( filterVendorsIconX, filterVendorsIconY, 10,  8, FOOTER_BGCOLOR );
       }
       giveMuxSemaphore();
     }

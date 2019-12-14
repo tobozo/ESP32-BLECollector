@@ -422,6 +422,17 @@ class BLEScanUtils {
       vTaskDelete( NULL );
     }
 
+    static void setBrightnessCB( void * param = NULL ) {
+      if( param != NULL ) {
+        UI.brightness = atoi( (const char*) param );
+      }
+      takeMuxSemaphore();
+      tft_setBrightness( UI.brightness );
+      giveMuxSemaphore();
+      setPrefs();
+      log_w("Brightness is now at %d", UI.brightness);
+    }
+
     static void resetCB( void * param = NULL ) {
       DB.needsReset = true;
       Serial.println("DB Scheduled for reset");
@@ -439,7 +450,8 @@ class BLEScanUtils {
     }
     static void toggleFilterCB( void * param = NULL ) {
       UI.filterVendors = ! UI.filterVendors;
-      setPrefs();
+      UI.cacheStats(); // refresh icon
+      setPrefs(); // save prefs
       Serial.printf("UI.filterVendors = %s\n", UI.filterVendors ? "true" : "false" );
     }
     static void startDumpCB( void * param = NULL ) {
@@ -487,6 +499,11 @@ class BLEScanUtils {
       xTaskCreate(screenShotTask, "screenShotTask", 16000, NULL, 2, NULL);
     }
     static void screenShotTask( void * param = NULL ) {
+      if( !UI.ScreenShotLoaded ) {
+        M5.ScreenShot.init( &tft, BLE_FS );
+        M5.ScreenShot.begin();
+        UI.ScreenShotLoaded = true;
+      }
       UI.screenShot();
       vTaskDelete(NULL);
     }
@@ -541,32 +558,33 @@ class BLEScanUtils {
 
     static void serialTask( void * parameter ) {
       CommandTpl Commands[] = {
-        { "help",         nullCB,                 "Print this list" },
-        { "start",        startScanCB,            "Start/resume scan" },
-        { "stop",         stopScanCB,             "Stop scan" },
-        { "toggleFilter", toggleFilterCB,         "Toggle vendor filter on the TFT (persistent)" },
-        { "toggleEcho",   toggleEchoCB,           "Toggle BLECards in the Serial Console (persistent)" },
-        { "dump",         startDumpCB,            "Dump returning BLE devices to the display and updates DB" },
-        { "ls",           listDirCB,              "Show [dir] Content on the SD" },
-        { "rm",           rmFileCB,               "Delete [file] from the SD" },
-        { "restart",      restartCB,              "Restart BLECollector ('restart now' to skip replication)" },
+        { "help",          nullCB,                 "Print this list" },
+        { "start",         startScanCB,            "Start/resume scan" },
+        { "stop",          stopScanCB,             "Stop scan" },
+        { "toggleFilter",  toggleFilterCB,         "Toggle vendor filter on the TFT (persistent)" },
+        { "toggleEcho",    toggleEchoCB,           "Toggle BLECards in the Serial Console (persistent)" },
+        { "dump",          startDumpCB,            "Dump returning BLE devices to the display and updates DB" },
+        { "setBrightness", setBrightnessCB,        "Set brightness to [value] (0-255)" },
+        { "ls",            listDirCB,              "Show [dir] Content on the SD" },
+        { "rm",            rmFileCB,               "Delete [file] from the SD" },
+        { "restart",       restartCB,              "Restart BLECollector ('restart now' to skip replication)" },
         #if HAS_EXTERNAL_RTC
-          { "bleclock",     setTimeServerOn,        "Broadcast time to another BLE Device (implicit)" },
-          { "bletime",      setTimeClientOn,        "Get time from another BLE Device (explicit)" },
+          { "bleclock",      setTimeServerOn,        "Broadcast time to another BLE Device (implicit)" },
+          { "bletime",       setTimeClientOn,        "Get time from another BLE Device (explicit)" },
         #else
-          { "bleclock",     setTimeServerOn,        "Broadcast time to another BLE Device (explicit)" },
-          { "bletime",      setTimeClientOn,        "Get time from another BLE Device (implicit)" },
+          { "bleclock",      setTimeServerOn,        "Broadcast time to another BLE Device (explicit)" },
+          { "bletime",       setTimeClientOn,        "Get time from another BLE Device (implicit)" },
         #endif
-        { "blereceive",   setFileSharingServerOn, "Update .db files from another BLE app"},
-        { "blesend",      setFileSharingClientOn, "Share .db files with anothe BLE app" },
-        { "screenshot",   screenShotCB,           "Make a screenshot and save it on the SD" },
-        { "screenshow",   screenShowCB,           "Show screenshot" },
-        { "toggle",       toggleCB,               "toggle a bool value" },
+        { "blereceive",    setFileSharingServerOn, "Update .db files from another BLE app"},
+        { "blesend",       setFileSharingClientOn, "Share .db files with anothe BLE app" },
+        { "screenshot",    screenShotCB,           "Make a screenshot and save it on the SD" },
+        { "screenshow",    screenShowCB,           "Show screenshot" },
+        { "toggle",        toggleCB,               "toggle a bool value" },
         #if HAS_GPS
-          { "gpstime",      setGPSTime,     "sync time from GPS" },
+          { "gpstime",       setGPSTime,     "sync time from GPS" },
         #endif
-        { "resetDB",      resetCB,        "Hard Reset DB + forced restart" },
-        { "pruneDB",      pruneCB,        "Soft Reset DB without restarting (hopefully)" },
+        { "resetDB",       resetCB,        "Hard Reset DB + forced restart" },
+        { "pruneDB",       pruneCB,        "Soft Reset DB without restarting (hopefully)" },
       };
 
       SerialCommands = Commands;
@@ -622,12 +640,26 @@ class BLEScanUtils {
             runCommand( tempBuffer );
             idx = 0;
           }
-          delay(1);
+          vTaskDelay(1);
         }
         #if HAS_GPS
           GPSRead();
         #endif
-        delay(1);
+        if( hasHID() ) {
+          M5.update();
+          if( M5.BtnA.wasPressed() ) {
+            UI.brightness -= UI.brightnessIncrement;
+            setBrightnessCB();
+          }
+          if( M5.BtnB.wasPressed() ) {
+            UI.brightness += UI.brightnessIncrement;
+            setBrightnessCB();
+          }
+          if( M5.BtnC.wasPressed() ) {
+            toggleFilterCB();
+          }
+        }
+        vTaskDelay(1);
       }
     }
 
@@ -1007,14 +1039,17 @@ class BLEScanUtils {
 
     static void getPrefs() {
       preferences.begin("BLEPrefs", true);
-      Out.serialEcho = preferences.getBool("serialEcho", true);
+      Out.serialEcho   = preferences.getBool("serialEcho", true);
       UI.filterVendors = preferences.getBool("filterVendors", false);
+      UI.brightness    = preferences.getUChar("brightness", BASE_BRIGHTNESS);
+      log_w("Defrosted brightness: %d", UI.brightness );
       preferences.end();
     }
     static void setPrefs() {
       preferences.begin("BLEPrefs", false);
       preferences.putBool("serialEcho", Out.serialEcho);
       preferences.putBool("filterVendors", UI.filterVendors );
+      preferences.putUChar("brightness", UI.brightness );
       preferences.end();
     }
 
