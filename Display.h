@@ -26,7 +26,7 @@
 #define BLE_FS_TYPE "sd" // sd = fs::SD, sdcard = fs::SD_MMC
 #define SKIP_INTRO // don't play intro (tft spi access messes up SD/DB init)
 static const int AMIGABALL_YPOS = 50;
-
+#define BASE_BRIGHTNESS 32 // multiple of 8 otherwise can't turn off ^^
 
 // uncomment this block to use SPIFFS instead of SD
 // WARNING: can only work with big SPIFFS partition (minumum 2MB, ESP32-WROVER chips only)
@@ -56,6 +56,8 @@ static const int AMIGABALL_YPOS = 50;
   #undef GPS_RX
   #undef GPS_TX
   #undef BLE_FS_TYPE
+  #undef BASE_BRIGHTNESS
+  #define BASE_BRIGHTNESS 128
 
   #define HAS_EXTERNAL_RTC true // will use RTC_SDA and RTC_SCL from settings.h
   #define HAS_GPS true // will use GPS_RX and GPS_TX from settings.h
@@ -79,6 +81,7 @@ static const int AMIGABALL_YPOS = 50;
 
 #endif
 
+
 // TODO: make this SD-driver dependant rather than platform dependant
 static bool isInQuery() {
   return isQuerying; // M5Stack uses SPI SD, isolate SD accesses from TFT rendering
@@ -89,8 +92,6 @@ static bool isInQuery() {
 void tft_begin() {
   M5.begin( true, true, false, false, false ); // don't start Serial
   delay( 100 );
-  M5.ScreenShot.init( &tft, BLE_FS );
-  M5.ScreenShot.begin();
   if( hasHID() ) {
     // build has buttons => enable SD Updater at boot
     if(digitalRead(BUTTON_A_PIN) == 0) {
@@ -101,6 +102,9 @@ void tft_begin() {
   }
 }
 
+void tft_setBrightness( uint8_t brightness ) {
+  tft.setBrightness( brightness );
+}
 
 // emulating Adafruit's tft.getTextBounds()
 void tft_getTextBounds(const char *string, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h) {
