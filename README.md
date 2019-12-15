@@ -36,7 +36,7 @@ Hardware requirements
 Software requirements
 ---------------------
   - [mandatory] Arduino IDE
-  - [mandatory] [BLE Library](https://github.com/wakwak-koba/arduino-esp32/tree/master/libraries/BLE) exposing a private method
+  - [mandatory] [BLE Library](https://github.com/tobozo/ESP32-BLECollector/releases/download/1.2/BLE.zip) exposing a private method
   - [mandatory] [ESP32-Chimera-Core](https://github.com/tobozo/ESP32-Chimera-Core) (a substitute to M5Stack Core)
   - [mandatory] https://github.com/tobozo/M5Stack-SD-Updater
   - [mandatory] https://github.com/PaulStoffregen/Time
@@ -103,5 +103,4 @@ Credits/requirements:
 ---------------------
 
 - https://github.com/siara-cc/esp32_arduino_sqlite3_lib
-- https://github.com/wakwak-koba/arduino-esp32/tree/master/libraries/BLE (specifically patched for the current version)
-- thanks to https://github.com/chegewara for the help and inspiration
+- thanks to https://github.com/chegewara for maintaining the [BLE library](https://github.com/tobozo/ESP32-BLECollector/releases/download/1.2/BLE.zip)
