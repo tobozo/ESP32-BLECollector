@@ -13,6 +13,7 @@ static float GPSLng = 0.00;
 
 static void GPSInit() {
   GPS.begin(GPS_BAUDRATE, SERIAL_8N1, GPS_RX, GPS_TX);
+  GPS.flush();
   // todo: launch a task to check for GPS health
 }
 

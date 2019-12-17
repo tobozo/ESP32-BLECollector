@@ -141,7 +141,12 @@ Preferences preferences;
   #define GPS_TX 35 // io pin number
 #endif
 
-// don't load BLE stack and SQLite3 when compiling the NTP Utility
+// RF stack
+#ifdef WITH_WIFI
+  #include <WiFi.h>
+  char WiFi_SSID[32];
+  char WiFi_PASS[32];
+#endif
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEScan.h>

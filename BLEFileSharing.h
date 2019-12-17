@@ -145,7 +145,7 @@ static void setBLETime() {
 
   setTime( LocalTime.unixtime() );
 
-  timeval epoch = {LocalTime.unixtime(), 0};
+  timeval epoch = {(time_t)LocalTime.unixtime(), 0};
   const timeval *tv = &epoch;
   settimeofday(tv, NULL);
 

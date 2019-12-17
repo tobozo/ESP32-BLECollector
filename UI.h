@@ -119,9 +119,15 @@ int32_t macAddressColorsSize;
 char lastDevicesCountSpacer[5] = ""; // Last
 char seenDevicesCountSpacer[5] = ""; // Seen
 char scansCountSpacer[5] = ""; // Scans
+bool showScanStats;
 uint16_t filterVendorsIconX;
 uint16_t filterVendorsIconY;
-
+bool showHeap;
+bool showEntries;
+uint16_t heapStrX;
+uint16_t heapStrY;
+uint16_t entriesStrX;
+uint16_t entriesStrY;
 
 
 // heap management (used by graph)
@@ -530,11 +536,14 @@ class UIUtils {
         alignTextAt( status, alignoffset, headerStatsIconsY + headerLineHeight, BLE_YELLOW, HEADER_BGCOLOR, ALIGN_FREE );
         statuspos = Out.x1_tmp + Out.w_tmp;
       }
-
-      sprintf(heapStr, heapTpl, freeheap);
-      sprintf(entriesStr, entriesTpl, formatUnit(entries));
-      alignTextAt( heapStr,    headerStatsX, headerStatsIconsY,      BLE_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
-      alignTextAt( entriesStr, headerStatsX, headerStatsIconsY + headerLineHeight, BLE_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
+      if( showHeap ) {
+        sprintf(heapStr, heapTpl, freeheap);
+        alignTextAt( heapStr,    heapStrX,    heapStrY,    BLE_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
+      }
+      if( showEntries ) {
+        sprintf(entriesStr, entriesTpl, formatUnit(entries));
+        alignTextAt( entriesStr, entriesStrX, entriesStrY, BLE_GREENYELLOW, HEADER_BGCOLOR, ALIGN_RIGHT );
+      }
 
       if( !appIconWasRendered || statuspos > iconAppX ) { // only draw if text has overlapped
         tft_drawJpg( tbz_28x28_jpg, tbz_28x28_jpg_len, iconAppX, iconAppY, 28,  28); // app icon
@@ -586,17 +595,20 @@ class UIUtils {
           tft.fillRect( hhmmPosX + 31, hhmmPosY - 2, 10,  10, FOOTER_BGCOLOR );
         }
       #endif
-      *sessDevicesCountStr = {'\0'};
-      *devicesCountStr = {'\0'};
-      *newDevicesCountStr = {'\0'};
 
-      sprintf( devicesCountStr, lastDevicesCountTpl, lastDevicesCountSpacer, formatUnit(devicesCount) );
-      sprintf( sessDevicesCountStr, seenDevicesCountTpl, seenDevicesCountSpacer, formatUnit(sessDevicesCount) );
-      sprintf( newDevicesCountStr, scansCountTpl, scansCountSpacer, formatUnit(scan_rounds) );
+      if( showScanStats ) {
+        *sessDevicesCountStr = {'\0'};
+        *devicesCountStr = {'\0'};
+        *newDevicesCountStr = {'\0'};
 
-      alignTextAt( devicesCountStr,     cdevcPosX, cdevcPosY, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
-      alignTextAt( sessDevicesCountStr, sesscPosX, sesscPosY, BLE_YELLOW,      FOOTER_BGCOLOR, ALIGN_FREE );
-      alignTextAt( newDevicesCountStr,  ndevcPosX, ndevcPosY, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+        sprintf( devicesCountStr, lastDevicesCountTpl, lastDevicesCountSpacer, formatUnit(devicesCount) );
+        sprintf( sessDevicesCountStr, seenDevicesCountTpl, seenDevicesCountSpacer, formatUnit(sessDevicesCount) );
+        sprintf( newDevicesCountStr, scansCountTpl, scansCountSpacer, formatUnit(scan_rounds) );
+
+        alignTextAt( devicesCountStr,     cdevcPosX, cdevcPosY, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+        alignTextAt( sessDevicesCountStr, sesscPosX, sesscPosY, BLE_YELLOW,      FOOTER_BGCOLOR, ALIGN_FREE );
+        alignTextAt( newDevicesCountStr,  ndevcPosX, ndevcPosY, BLE_GREENYELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
+      }
 
       tft.setCursor(posX, posY);
       giveMuxSemaphore();
@@ -1414,6 +1426,13 @@ class UIUtils {
         macAddressColorsPosX   = Out.width - ( macAddressColorsSizeX + 6 );
         filterVendorsIconX = 164;
         filterVendorsIconY = footerBottomPosY - 9;
+        showScanStats = true;
+        showHeap = true;
+        showEntries = true;
+        heapStrX = headerStatsX;
+        heapStrY = headerStatsIconsY;
+        entriesStrX = headerStatsX;
+        entriesStrY = headerStatsIconsY + headerLineHeight;
       break;
       case TFT_PORTRAIT:
         log_w("Using UI in portrait mode");
@@ -1458,12 +1477,68 @@ class UIUtils {
         macAddressColorsPosX   = Out.width - ( macAddressColorsSizeX + 6 );
         filterVendorsIconX = 152;
         filterVendorsIconY = footerBottomPosY - 12;
+        showScanStats = true;
+        showHeap = true;
+        showEntries = true;
+        heapStrX = headerStatsX;
+        heapStrY = headerStatsIconsY;
+        entriesStrX = headerStatsX;
+        entriesStrY = headerStatsIconsY + headerLineHeight;
       break;
       case TFT_SQUARE:
       default:
-        log_e("Unsupported display mode");
-        //uh-oh
-      break;    
+        log_w("Using UI in square/squeezed mode (w:%d, h:%d)", Out.width, Out.height);
+        headerHeight = 35; // Important: resulting scrollHeight must be a multiple of font height, default font height is 8px
+        footerHeight = 13; // Important: resulting scrollHeight must be a multiple of font height, default font height is 8px
+        scrollHeight = ( Out.height - ( headerHeight + footerHeight ));
+        leftMargin = 2;
+        footerBottomPosY    = Out.height;
+        headerStatsX       = Out.width - 80;
+        graphLineWidth    = HEAPMAP_BUFFLEN - 1;
+        graphLineHeight   = 29;
+        graphX             = Out.width - (graphLineWidth);
+        graphY             = 0; // footerBottomPosY - 37;// 283
+        percentBoxX        = (graphX - 12); // percentbox is 10px wide + 2px margin and 2px border
+        percentBoxY        = graphLineHeight+2;
+        percentBoxSize     = 8;
+        headerStatsIconsX = Out.width - (80 + 6);
+        headerStatsIconsY = 4;
+        headerLineHeight   = 16;
+        progressBarY       = 32;
+        hhmmPosX = leftMargin;
+        hhmmPosY = footerBottomPosY - 8;
+        gpsIconPosX = hhmmPosX + 31;
+        gpsIconPosY = hhmmPosY - 2;
+        uptimePosX = 48;
+        uptimePosY = footerBottomPosY - 8;
+        uptimeIconWasRendered = true; // never render uptime icon
+        copyleftPosX = 90;
+        copyleftPosY = footerBottomPosY - 8;
+        cdevcPosX = leftMargin;
+        cdevcPosY = footerBottomPosY - 8;
+        sesscPosX = 42;
+        sesscPosY = footerBottomPosY - 8;
+        ndevcPosX = 100;
+        ndevcPosY = footerBottomPosY - 8;
+        sprintf(lastDevicesCountSpacer, "%s", "");
+        sprintf(seenDevicesCountSpacer, "%s", "");
+        sprintf(scansCountSpacer, "%s", "");
+        macAddressColorsScaleX = 4;
+        macAddressColorsScaleY = 2;
+        macAddressColorsSizeX  = 8 * macAddressColorsScaleX;
+        macAddressColorsSizeY  = 8 * macAddressColorsScaleY;
+        macAddressColorsSize   = macAddressColorsSizeX * macAddressColorsSizeY;
+        macAddressColorsPosX   = Out.width - ( macAddressColorsSizeX + 6 );
+        filterVendorsIconX = 164;
+        filterVendorsIconY = footerBottomPosY - 9;
+        showScanStats = false;
+        showHeap = false;
+        showEntries = true;
+        heapStrX = headerStatsX;
+        heapStrY = headerStatsIconsY;
+        entriesStrX = headerStatsX;
+        entriesStrY = footerBottomPosY - 8;
+      break;
     }
   }
 

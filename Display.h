@@ -1,10 +1,12 @@
 
 
+//#define DDUINO32_XS
+
 #include <M5Stack.h> // https://github.com/tobozo/ESP32-Chimera-Core
 #include <M5StackUpdater.h> // https://github.com/tobozo/M5Stack-SD-Updater
 
 
-#if defined( ARDUINO_M5Stack_Core_ESP32 ) || defined( ARDUINO_M5STACK_FIRE ) || defined( ARDUINO_ODROID_ESP32 ) || defined ( ARDUINO_ESP32_DEV )
+#if defined( ARDUINO_M5Stack_Core_ESP32 ) || defined( ARDUINO_M5STACK_FIRE ) || defined( ARDUINO_ODROID_ESP32 ) || defined ( ARDUINO_ESP32_DEV ) || defined( ARDUINO_DDUINO32_XS )
   #define CHIMERA_CORE
 #else
   #error "NO SUPPORTED BOARD DETECTED !!"
@@ -27,6 +29,7 @@
 #define SKIP_INTRO // don't play intro (tft spi access messes up SD/DB init)
 static const int AMIGABALL_YPOS = 50;
 #define BASE_BRIGHTNESS 32 // multiple of 8 otherwise can't turn off ^^
+#define SCROLL_OFFSET 0 // tardis definition (some ST7789 needs 320x vertical scrolling adressing but can be limited to 240x240)
 
 // uncomment this block to use SPIFFS instead of SD
 // WARNING: can only work with big SPIFFS partition (minumum 2MB, ESP32-WROVER chips only)
@@ -35,11 +38,36 @@ static const int AMIGABALL_YPOS = 50;
 //#define BLE_FS SPIFFS // inherited from ESP32-Chimera-Core
 //#define BLE_FS_TYPE "spiffs" // sd = fs::SD, sdcard = fs::SD_MMC
 
+// Experimental, requires an ESP32-Wrover, a huge partition scheme and no OTA
+#ifndef ARDUINO_M5Stack_Core_ESP32
+  //#define WITH_WIFI
+#endif
 
 // display profiles switcher
 #if defined( ARDUINO_M5Stack_Core_ESP32 ) || defined( ARDUINO_M5STACK_FIRE ) || defined( ARDUINO_ODROID_ESP32 )
 
   // custom M5Stack/Odroid-Go go TFT/SD/RTC/GPS settings here (see ARDUINO_ESP32_DEV profile for available settings)
+
+#elif defined( ARDUINO_DDUINO32_XS )
+  #undef hasHID
+  #undef SD_begin
+  #undef scrollpanel_height
+  #undef scrollpanel_width
+  #undef tft_initOrientation
+  #undef BLE_FS_TYPE
+  #undef SCROLL_OFFSET
+
+  #define hasHID() (bool)false // disable buttons
+  #define SD_begin /*(bool)true*/BLE_FS.begin // SD_MMC is auto started
+  #define tft_initOrientation() tft.setRotation(0) // default orientation for hardware scroll
+  #define scrollpanel_height() tft.width() // invert these if scroll fails
+  #define scrollpanel_width() tft.height() // invert these if scroll fails
+  #define BLE_FS_TYPE "sdcard" // sd = fs::SD, sdcard = fs::SD_MMC
+  #warning D-Duino32-XS detected !!
+  // ST7789 uses 320x hardware vscroll def, but this model is 240x240 !!
+  // https://www.rhydolabz.com/documents/33/ST7789.pdf
+  // restriction: The condition is TFA+VSA+BFA = 320, otherwise Scrolling mode is undefined.
+  #define SCROLL_OFFSET 320-240
 
 #elif defined ( ARDUINO_ESP32_DEV )
 
@@ -91,6 +119,10 @@ static bool isInQuery() {
 
 void tft_begin() {
   M5.begin( true, true, false, false, false ); // don't start Serial
+  #if HAS_EXTERNAL_RTC
+    Wire.begin(RTC_SDA, RTC_SCL);
+    M5.I2C.scan();
+  #endif
   delay( 100 );
   if( hasHID() ) {
     // build has buttons => enable SD Updater at boot
@@ -121,6 +153,19 @@ void tft_getTextBounds(const String &str, int16_t x, int16_t y, int16_t *x1, int
 }
 
 
+void tft_setupScrollArea(uint16_t tfa, uint16_t vsa, uint16_t bfa) {
+  bfa += SCROLL_OFFSET; // compensate for stubborn firmware
+  tft.writecommand(ILI9341_VSCRDEF); // Vertical scroll definition
+  tft.writedata(tfa >> 8);           // Top Fixed Area line count
+  tft.writedata(tfa);
+  tft.writedata(vsa >> 8);  // Vertical Scrolling Area line count
+  tft.writedata(vsa);
+  tft.writedata(bfa >> 8);           // Bottom Fixed Area line count
+  tft.writedata(bfa);
+  log_w("Init Scroll area with tfa/bfa %d/%d on w/h %d/%d", tfa, bfa, scrollpanel_width(), scrollpanel_height());
+}
+
+/*
 void tft_setupScrollArea(uint16_t tfa, uint16_t bfa) {
   tft.writecommand(ILI9341_VSCRDEF); // Vertical scroll definition
   tft.writedata(tfa >> 8);           // Top Fixed Area line count
@@ -129,8 +174,8 @@ void tft_setupScrollArea(uint16_t tfa, uint16_t bfa) {
   tft.writedata(scrollpanel_width()-tfa-bfa);
   tft.writedata(bfa >> 8);           // Bottom Fixed Area line count
   tft.writedata(bfa);
-  log_i("Init Scroll area with tfa/bfa %d/%d on w/h %d/%d", tfa, bfa, scrollpanel_width(), scrollpanel_height());
-}
+  log_w("Init Scroll area with tfa/bfa %d/%d on w/h %d/%d", tfa, bfa, scrollpanel_width(), scrollpanel_height());
+}*/
 
 void tft_scrollTo(uint16_t vsp) {
   tft.writecommand(ILI9341_VSCRSADD); // Vertical scrolling pointer

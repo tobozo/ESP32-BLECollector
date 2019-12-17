@@ -110,11 +110,11 @@ static bool deviceHasPayload( BLEAdvertisedDevice advertisedDevice ) {
     timeServerClientType = advertisedDevice.getAddressType();
     foundTimeServer = true;
     if ( foundTimeServer && (!TimeIsSet || ForceBleTime) ) {
-      scan_cursor = 0;
-      processedDevicesCount = 0;
-      onScanDone = true;
+      //scan_cursor = 0;
+      //processedDevicesCount = 0;
+      //onScanDone = true;
       //ForceBleTime = false;
-      advertisedDevice.getScan()->stop();
+      //advertisedDevice.getScan()->stop();
       // log_e("[Heap: %06d] Found TimeServer !!", freeheap);
       return true;
     }
@@ -126,10 +126,10 @@ static bool deviceHasPayload( BLEAdvertisedDevice advertisedDevice ) {
     fileServerClientType = advertisedDevice.getAddressType();
     if ( fileSharingEnabled ) {
       log_w("Ready to connect to file server %s", fileServerBLEAddress.c_str());
-      scan_cursor = 0;
-      processedDevicesCount = 0;
-      onScanDone = true;
-      advertisedDevice.getScan()->stop();
+      //scan_cursor = 0;
+      //processedDevicesCount = 0;
+      //onScanDone = true;
+      //advertisedDevice.getScan()->stop();
       return true;
     }
   }
@@ -149,9 +149,7 @@ class FoundDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
 
       devicesStatCount++; // raw stats for heapgraph
 
-      if( deviceHasPayload( advertisedDevice ) ) {
-        return;
-      }
+      bool scanShouldStop =  deviceHasPayload( advertisedDevice );
 
       if ( onScanDone  ) return;
 
@@ -173,9 +171,9 @@ class FoundDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
               DB.getVendor( BLEDevScanCache[scan_cursor]->manufid, BLEDevScanCache[scan_cursor]->manufname );
             }
             BLEDevScanCache[scan_cursor]->is_anonymous = BLEDevHelper.isAnonymous( BLEDevScanCache[scan_cursor] );
-            log_i(  "  stored and populated #%02d : %s", scan_cursor, advertisedDevice.toString().c_str());
+            log_i(  "  stored and populated #%02d : %s", scan_cursor, advertisedDevice.getName().c_str());
           } else {
-            log_i(  "  stored #%02d : %s", scan_cursor, advertisedDevice.toString().c_str());
+            log_i(  "  stored #%02d : %s", scan_cursor, advertisedDevice.getName().c_str());
           }
           scan_cursor++;
           processedDevicesCount++;
@@ -198,6 +196,9 @@ class FoundDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
         UI.BLEStateIconSetColor(BLE_GREEN);
       } else {
         UI.BLEStateIconSetColor(BLE_DARKGREEN);
+      }
+      if( scanShouldStop ) {
+        advertisedDevice.getScan()->stop();
       }
     }
 };
@@ -261,6 +262,47 @@ class BLEScanUtils {
       startScanCB();
       UI.begin();
     }
+    #ifdef WITH_WIFI
+    static void setWiFiSSID( void * param = NULL ) {
+      if( param == NULL ) return;
+      sprintf( WiFi_SSID, "%s", (const char*)param);
+    }
+    static void setWiFiPASS( void * param = NULL ) {
+      if( param == NULL ) return;
+      sprintf( WiFi_PASS, "%s", (const char*)param);
+    }
+    static void stopBLECB( void * param = NULL ) {
+      stopScanCB();
+      xTaskCreatePinnedToCore( stopBLE, "stopBLE", 8192, NULL, 5, NULL, 1 ); /* last = Task Core */
+    }
+
+    static void stopBLE( void * param = NULL ) {
+      Serial.println(F("Shutting BT Down ..."));
+      Serial.print("esp_bt_controller_disable");
+      esp_bt_controller_disable() ;
+      Serial.print("esp_bt_controller_deinit ");
+      esp_bt_controller_deinit();
+      Serial.print("BT Shutdown finished");
+      WiFi.mode(WIFI_STA);
+      Serial.println(WiFi.macAddress());
+      if( String( WiFi_SSID ) !="" && String( WiFi_PASS ) !="" ) {
+        WiFi.begin( WiFi_SSID, WiFi_PASS );
+      } else {
+        WiFi.begin();
+      }
+      while(WiFi.status() != WL_CONNECTED) {
+        log_e("Not connected");
+        delay(1000);
+      }
+      log_w("Connected!");
+      Serial.print("Connected to ");
+      Serial.println(WiFi_SSID);
+      Serial.print("IP address: ");
+      Serial.println(WiFi.localIP());
+      Serial.println("");
+      vTaskDelete( NULL );
+    }
+    #endif
 
     static void startScanCB( void * param = NULL ) {
 
@@ -391,7 +433,7 @@ class BLEScanUtils {
         vTaskDelay( 100 );
       }
       if ( scanTaskRunning ) stopScanCB();
-      xTaskCreatePinnedToCore( TimeClientTask, "TimeClientTask", 2048, NULL, 5, NULL, 0 ); // TimeClient task prefers core 0
+      xTaskCreatePinnedToCore( TimeClientTask, "TimeClientTask", 2560, NULL, 5, NULL, 0 ); // TimeClient task prefers core 0
       if ( scanWasRunning ) {
         while ( timeClientisRunning ) {
           vTaskDelay( 1000 );
@@ -553,7 +595,7 @@ class BLEScanUtils {
     static void startSerialTask() {
       serialBuffer = (char*)calloc( SERIAL_BUFFER_SIZE, sizeof(char) );
       tempBuffer   = (char*)calloc( SERIAL_BUFFER_SIZE, sizeof(char) );
-      xTaskCreatePinnedToCore(serialTask, "serialTask", 2048 + SERIAL_BUFFER_SIZE, NULL, 0, NULL, 0); /* last = Task Core */
+      xTaskCreatePinnedToCore(serialTask, "serialTask", 2048 + SERIAL_BUFFER_SIZE, NULL, 0, NULL, 1); /* last = Task Core */
     }
 
     static void serialTask( void * parameter ) {
@@ -585,6 +627,11 @@ class BLEScanUtils {
         #endif
         { "resetDB",       resetCB,        "Hard Reset DB + forced restart" },
         { "pruneDB",       pruneCB,        "Soft Reset DB without restarting (hopefully)" },
+        #ifdef WITH_WIFI
+          { "stopBLE",       stopBLECB,      "Stop BLE and start WiFi (experimental)" },
+          { "setWiFiSSID",   setWiFiSSID,    "Set WiFi SSID" },
+          { "setWiFiPASS",   setWiFiPASS,    "Set WiFi Password" },
+        #endif
       };
 
       SerialCommands = Commands;
@@ -625,6 +672,7 @@ class BLEScanUtils {
       char lf = '\n';
       char cr = '\r';
       char c;
+      unsigned long lastHidCheck = millis();
       while ( 1 ) {
         while (Serial.available() > 0) {
           c = Serial.read();
@@ -646,17 +694,20 @@ class BLEScanUtils {
           GPSRead();
         #endif
         if( hasHID() ) {
-          M5.update();
-          if( M5.BtnA.wasPressed() ) {
-            UI.brightness -= UI.brightnessIncrement;
-            setBrightnessCB();
-          }
-          if( M5.BtnB.wasPressed() ) {
-            UI.brightness += UI.brightnessIncrement;
-            setBrightnessCB();
-          }
-          if( M5.BtnC.wasPressed() ) {
-            toggleFilterCB();
+          if( lastHidCheck + 150 < millis() ) {
+            M5.update();
+            if( M5.BtnA.wasPressed() ) {
+              UI.brightness -= UI.brightnessIncrement;
+              setBrightnessCB();
+            }
+            if( M5.BtnB.wasPressed() ) {
+              UI.brightness += UI.brightnessIncrement;
+              setBrightnessCB();
+            }
+            if( M5.BtnC.wasPressed() ) {
+              toggleFilterCB();
+            }
+            lastHidCheck = millis();
           }
         }
         vTaskDelay(1);
