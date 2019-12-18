@@ -54,9 +54,21 @@ static void setGPSTime( void * param ) {
     DateTime LocalTime = UTCTime.unixtime() + timeZone*3600;
     #if HAS_EXTERNAL_RTC
       RTC.adjust( LocalTime );
+      Serial.printf("External clock adjusted to GPS Time (GMT%s%d): %04d-%02d-%02d %02d:%02d:%02d\n",
+        timeZone>0 ? "+" : "",
+        timeZone,
+        LocalTime.year(),
+        LocalTime.month(),
+        LocalTime.day(),
+        LocalTime.hour(),
+        LocalTime.minute(),
+        LocalTime.second()
+      );
     #endif
     setTime( LocalTime.unixtime() );
-    Serial.printf("Time adjusted to: %04d-%02d-%02d %02d:%02d:%02d\n",
+    Serial.printf("Internal clock adjusted to GPS Time (GMT%s%d): %04d-%02d-%02d %02d:%02d:%02d\n",
+      timeZone>0 ? "+" : "",
+      timeZone,
       LocalTime.year(),
       LocalTime.month(),
       LocalTime.day(),

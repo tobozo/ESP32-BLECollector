@@ -49,7 +49,7 @@ static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char
   Serial.println("-------------------------------------------------------------------------");
   unsigned long totalSize = 0;
   while(file){
-    
+
     time_t lastWrite = file.getLastWrite();
     struct tm * tmstruct = localtime(&lastWrite);
     char fileDate[64] = "1980-01-01 00:07:20";
@@ -57,7 +57,7 @@ static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char
     if( (tmstruct->tm_year)+1900 < 2000 ) {
       // time is not set
     }
-    
+
     if(!file.isDirectory()) {
       const char* fileName = file.name();
       unsigned long fileSize = file.size();

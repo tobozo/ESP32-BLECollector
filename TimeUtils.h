@@ -143,7 +143,7 @@ static void timeHousekeeping() {
   } else {
     //DayChangeTrigger = false;
   }
-  
+
   // - get the time from the internal clock
   // - compare with external clocks sources if applicable
   if( HourChangeTrigger || DayChangeTrigger ) {
@@ -153,15 +153,15 @@ static void timeHousekeeping() {
     }
   }
   sprintf(hhmmString, hhmmStringTpl, internalDateTime.hour(), internalDateTime.minute());
-    
+
   #if HAS_EXTERNAL_RTC
-  
+
     if( abs( seconds_since_boot - internalDateTime.unixtime() ) > 2 ) { // internal datetime is set
       // safe to assume internal RTC is running
       TimeIsSet = true;
     } 
     sprintf(hhmmssString, hhmmssStringTpl, hh, mm, ss);
-    
+
   #else // HAS_EXTERNAL_RTC=false
 
     sprintf(hhmmssString, hhmmssStringTpl, internalDateTime.hour(), internalDateTime.minute(), internalDateTime.second());

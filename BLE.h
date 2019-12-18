@@ -53,7 +53,6 @@ static char* serialBuffer = NULL;
 static char* tempBuffer = NULL;
 #define SERIAL_BUFFER_SIZE 64
 
-
 unsigned long lastheap = 0;
 uint16_t lastscanduration = SCAN_DURATION;
 char heapsign[5]; // unicode sign terminated
@@ -61,15 +60,10 @@ char scantimesign[5]; // unicode sign terminated
 BLEScanResults bleresults;
 BLEScan *pBLEScan;
 
-std::string stdBLEAddress;
-//std::string timeServerBLEAddress;
-//std::string fileServerBLEAddress;
-
-//esp_ble_addr_type_t timeServerClientType;
-//esp_ble_addr_type_t fileServerClientType;
 
 static uint16_t processedDevicesCount = 0;
 bool foundDeviceToggler = true;
+
 
 enum AfterScanSteps {
   POPULATE  = 0,
@@ -84,11 +78,6 @@ const char MacList[3][MAC_LEN + 1] = {
   "aa:aa:aa:aa:aa:aa",
   "bb:bb:bb:bb:bb:bb",
   "cc:cc:cc:cc:cc:cc"
-};
-
-const BLEUUID ServicesList[2] = {
-  timeServiceUUID,
-  FileSharingServiceUUID
 };
 
 
@@ -110,12 +99,6 @@ static bool deviceHasPayload( BLEAdvertisedDevice advertisedDevice ) {
     timeServerClientType = advertisedDevice.getAddressType();
     foundTimeServer = true;
     if ( foundTimeServer && (!TimeIsSet || ForceBleTime) ) {
-      //scan_cursor = 0;
-      //processedDevicesCount = 0;
-      //onScanDone = true;
-      //ForceBleTime = false;
-      //advertisedDevice.getScan()->stop();
-      // log_e("[Heap: %06d] Found TimeServer !!", freeheap);
       return true;
     }
   }
@@ -126,18 +109,9 @@ static bool deviceHasPayload( BLEAdvertisedDevice advertisedDevice ) {
     fileServerClientType = advertisedDevice.getAddressType();
     if ( fileSharingEnabled ) {
       log_w("Ready to connect to file server %s", fileServerBLEAddress.c_str());
-      //scan_cursor = 0;
-      //processedDevicesCount = 0;
-      //onScanDone = true;
-      //advertisedDevice.getScan()->stop();
       return true;
     }
   }
-  #if BLACKLIST_MAC_DETECTOR_ENABLED
-    stdBLEAddress = advertisedDevice.getAddress().toString();
-    // iterate over the list
-    //
-  #endif
   return false;
 }
 
@@ -204,7 +178,6 @@ class FoundDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
 };
 
 FoundDeviceCallbacks *FoundDeviceCallback;// = new FoundDeviceCallbacks(); // collect/store BLE data
-
 
 
 struct SerialCallback {
