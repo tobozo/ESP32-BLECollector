@@ -92,7 +92,7 @@ bt_time_t BLERemoteTime;
 bt_time_t BLELocalTime;
 
 static File   FileReceiver;
-static int    binary_file_length = 0;
+//static int    binary_file_length = 0;
 static size_t FileReceiverExpectedSize = 0;
 static size_t FileReceiverReceivedSize = 0;
 static size_t FileReceiverProgress = 0;
@@ -785,7 +785,7 @@ static void FileSharingRouterCallbacks( BLERemoteCharacteristic* RemoteChar, uin
       int pos = strpos(fileNameSize, ";", 0);
       char* fileNameStr = substr( fileNameSize, 0, pos );
       char* fileSizeStr = substr( fileNameSize, pos+1,  strlen(fileNameSize) - (pos+1) );
-      size_t fileSize = atoi( fileSizeStr );
+      //size_t fileSize = atoi( fileSizeStr );
       log_w( "remote file: %s (%s bytes)", fileNameStr, fileSizeStr );
       free( fileNameSize );
       free( fileNameStr );

@@ -85,7 +85,7 @@ static void setGPSTime( void * param ) {
     logTimeActivity(SOURCE_GPS, LocalTime.unixtime());
     lastSyncDateTime = LocalTime;
   } else {
-    Serial.printf("Can't set GPS Time (no signal since %d seconds)\n", NoGPSSignalSince/1000);
+    Serial.printf("Can't set GPS Time (no signal since %ld seconds)\n", NoGPSSignalSince/1000);
   }
 }
 

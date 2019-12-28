@@ -206,12 +206,12 @@ Preferences preferences;
 // statistical values
 static int devicesCount     = 0; // devices count per scan
 static int sessDevicesCount = 0; // total devices count per session
-static int newDevicesCount  = 0; // total devices count per session
+//static int newDevicesCount  = 0; // total devices count per session
 static int results          = 0; // total results during last query
 static unsigned int entries = 0; // total entries in database
 static byte prune_trigger   = 0; // incremented on every insertion, reset on prune()
-static byte prune_threshold = 10; // prune every x inertions
-static bool print_tabular   = true; // obsolete
+//static byte prune_threshold = 10; // prune every x inertions
+//static bool print_tabular   = true; // obsolete
 
 // load stack
 #include "Assets.h" // bitmaps

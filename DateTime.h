@@ -84,7 +84,7 @@ class DateTime {
     uint32_t unixtime() const; // 32-bit times as seconds since 1/1/1970
     static uint32_t tm2unixtime(tmElements_t tm); // conversion utility
   protected:
-    uint8_t yOff, m, d, hh, mm, ss;
+    uint8_t yOff=0, m=0, d=0, hh=0, mm=0, ss=0;
     tmElements_t tm;
 };
 
@@ -124,7 +124,7 @@ DateTime::DateTime (const char* date, const char* time) {
   yOff = DateTimeConv2d(date + 9) + 30; // 2000 offset to 1970 offset
   // Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec 
   switch (date[0]) {
-      case 'J': m = date[1] == 'a' ? 1 : m = date[2] == 'n' ? 6 : 7; break;
+      case 'J': m = (date[1] == 'a') ? 1 : (date[2] == 'n') ? 6 : 7; break;
       case 'F': m = 2; break;
       case 'A': m = date[2] == 'r' ? 4 : 8; break;
       case 'M': m = date[2] == 'r' ? 3 : 5; break;
@@ -132,6 +132,7 @@ DateTime::DateTime (const char* date, const char* time) {
       case 'O': m = 10; break;
       case 'N': m = 11; break;
       case 'D': m = 12; break;
+      default:  m = 0;
   }
   d = DateTimeConv2d(date + 4);
   hh = DateTimeConv2d(time);

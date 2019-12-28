@@ -29,7 +29,7 @@ static bool checkForTimeUpdate( DateTime &internalDateTime ) {
   } else { // just calculate the drift
     int64_t drift = abs( externalDateTime.unixtime() - internalDateTime.unixtime() );
     if(drift>0) {
-      Serial.printf("[Clocks drift] : %d seconds\n", drift);
+      Serial.printf("[Clocks drift] : %lld seconds\n", drift);
     }
     // - adjust internal RTC
     #if HAS_EXTERNAL_RTC // have external RTC, adjust internal RTC accordingly

@@ -214,6 +214,8 @@ void IconRender( IconWidget* widget, uint16_t posX, uint16_t posY, uint16_t widt
     case ICON_WIDGET_TEXT: // this widget uses absolute positioning
       textAlignPointer( widget->text, posX, posY, widget->color, bgcolor, widget->align );
     break;
+    default:
+    break;
   }
 }
 
@@ -230,6 +232,8 @@ void IconRender( IconShape *shape, uint16_t posX, uint16_t posY, uint16_t width,
     break;
     case ICON_SHAPE_TRIANGLE:
       fillTrianglePointer( offsetX+posX, offsetY+posY, offsetX+posX+width, offsetY+posY, (offsetX+posX+width/2), offsetY+posY+height-1, shape->color );
+    break;
+    default:
     break;
   }
 }
@@ -274,6 +278,8 @@ bool IconRender( Icon *icon, uint16_t offsetX, uint16_t offsetY ) {
     break;
     case ICON_TYPE_HYBRID:
       //todo: implement
+    break;
+    default:
     break;
   }
   giveMuxSemaphore();
@@ -331,7 +337,7 @@ Icon BLEActivityIcon = {
 
 // BLE role
 IconShape *Shape_ROLE_NONE          = new IconShape( ICON_SHAPE_SQUARE, BLE_DARKGREY );
-IconShape *Shape_ROLE_CLOCK_SHARING = new IconShape( ICON_SHAPE_SQUARE, BLE_ORANGE );
+IconShape *Shape_ROLE_CLOCK_SHARING = new IconShape( ICON_SHAPE_SQUARE, BLE_DARKORANGE );
 IconShape *Shape_ROLE_CLOCK_SEEKING = new IconShape( ICON_SHAPE_SQUARE, BLE_GREENYELLOW );
 IconShape *Shape_ROLE_FILE_SHARING  = new IconShape( ICON_SHAPE_SQUARE, BLE_ORANGE );
 IconShape *Shape_ROLE_FILE_SEEKING  = new IconShape( ICON_SHAPE_SQUARE, BLUETOOTH_COLOR );

@@ -540,7 +540,7 @@ class DBUtils {
 
     int open(DBName dbName, bool readonly=true) {
      isQuerying = true;
-     int rc;
+     int rc = 1;
       switch(dbName) {
         case BLE_COLLECTOR_DB: // will be created upon first boot
           rc = sqlite3_open( dbcollection[dbName].sqlitepath/*"/sdcard/blemacs.db"*/, &BLECollectorDB); 
@@ -635,8 +635,8 @@ class DBUtils {
       }
       close(BLE_VENDOR_NAMES_DB);
       for(byte i=0;i<8;i++) {
-        uint32_t rnd = random(0, VendorDBSize);
-        log_i("Testing random vendor mac #%d: %d / %s", rnd, VendorPsramCache[rnd]->devid[0], VendorPsramCache[rnd]->vendor );
+        //uint32_t rnd = random(0, VendorDBSize);
+        log_i("Testing random vendor mac #%d: %d / %s", random(0, VendorDBSize), VendorPsramCache[rnd]->devid[0], VendorPsramCache[rnd]->vendor );
       }
     }
 
@@ -656,8 +656,8 @@ class DBUtils {
       }
       close(MAC_OUI_NAMES_DB);
       for(byte i=0;i<8;i++) {
-        uint32_t rnd = random(0, OUIDBSize);
-        log_i("Testing random mac #%06X: %s / %s", rnd, OuiPsramCache[rnd]->mac, OuiPsramCache[rnd]->assignment );
+        //uint32_t rnd = random(0, OUIDBSize);
+        log_i("Testing random mac #%06X: %s / %s", random(0, OUIDBSize), OuiPsramCache[rnd]->mac, OuiPsramCache[rnd]->assignment );
       }
     }
 
@@ -789,7 +789,7 @@ class DBUtils {
 
 
     unsigned int getEntries(bool _display_results = false) {
-      int rc = open(BLE_COLLECTOR_DB);
+      open(BLE_COLLECTOR_DB);
       //log_w("open collector db response=%d", rc);
       if (_display_results) {
         DBExec( BLECollectorDB, allEntriesQuery );
@@ -832,7 +832,7 @@ class DBUtils {
     }
 
     void pruneDB() {
-      unsigned int before_pruning = getEntries();
+      //unsigned int before_pruning = getEntries();
       UI.headerStats("Pruning DB");
       open(BLE_COLLECTOR_DB, false);
       DBExec(BLECollectorDB, pruneTableQuery );
@@ -859,7 +859,7 @@ class DBUtils {
     }
 
     bool testOUI() {
-      int rc = open(MAC_OUI_NAMES_DB);
+      open(MAC_OUI_NAMES_DB);
       //log_w("open OUI DB responded with: %d", rc);
       DBExec( OUIVendorsDB, testOUIQuery );
       close(MAC_OUI_NAMES_DB);
@@ -968,9 +968,9 @@ class DBUtils {
       uint16_t colValueLen = 10; // sizeof("[unknown]")
       if ( !isEmpty(colValue) ) {
         colValueLen = strlen( colValue );
-        if(colValueLen > MAX_FIELD_LEN) {
-          colValue[MAX_FIELD_LEN] = '\0';
-          colValueLen = MAX_FIELD_LEN+1;
+        if(colValueLen >= MAX_FIELD_LEN) {
+          colValue[MAX_FIELD_LEN-1] = '\0';
+          colValueLen = MAX_FIELD_LEN;
         } else {
           colValue[colValueLen] = '\0';
           colValueLen++;
@@ -1063,9 +1063,9 @@ class DBUtils {
       uint16_t colValueLen = 10; // sizeof("[private]")
       if ( !isEmpty( colValue ) ) {
         colValueLen = strlen( colValue );
-        if(colValueLen > MAX_FIELD_LEN) {
-          colValue[MAX_FIELD_LEN] = '\0';
-          colValueLen = MAX_FIELD_LEN+1;
+        if(colValueLen >= MAX_FIELD_LEN) {
+          colValue[MAX_FIELD_LEN-1] = '\0';
+          colValueLen = MAX_FIELD_LEN;
         } else {
           colValue[colValueLen] = '\0';
           colValueLen++;

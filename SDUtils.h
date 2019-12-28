@@ -27,10 +27,11 @@ bool SDSetup() {
   return sd_mounted;
 }
 
+/*
 static void listDir() {
   // blah
 }
-
+*/
 static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char* needle=NULL){
   Serial.printf("\nListing directory: %s\n\n", dirname);
 
@@ -66,9 +67,9 @@ static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char
       const char* fileName = file.name();
       unsigned long fileSize = file.size();
       if( needle!=NULL && strcmp( fileName, needle ) == 0 ) {
-        Serial.printf( "*   %-32s | %20s | %8d Bytes\n", fileName, fileDate, fileSize );
+        Serial.printf( "*   %-32s | %20s | %8ld Bytes\n", fileName, fileDate, fileSize );
       } else {
-        Serial.printf( "    %-32s | %20s | %8d Bytes\n", fileName, fileDate, fileSize );
+        Serial.printf( "    %-32s | %20s | %8ld Bytes\n", fileName, fileDate, fileSize );
       }
       totalSize += fileSize;
     } else {
@@ -78,5 +79,5 @@ static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char
     file = root.openNextFile();
   }
 
-  Serial.printf("\nTotal space used: %d Bytes\n\n", totalSize);
+  Serial.printf("\nTotal space used: %ld Bytes\n\n", totalSize);
 }

@@ -217,10 +217,10 @@ uint16_t mincdpmpp = 0xffff;
 static bool blinkit = false; // task blinker state
 static bool blinktoggler = true;
 static bool appIconRendered = false;
-static bool earthIconRendered = false;
+//static bool earthIconRendered = false;
 static bool foundTimeServer = false;
 static bool foundFileServer = false;
-static bool gpsIconVisible = false;
+//static bool gpsIconVisible = false;
 static bool uptimeIconRendered = false;
 static bool foundFileServerIconRendered = true;
 //static bool timeStateIconRendered = false;
@@ -255,7 +255,7 @@ static char textWidgetStr[17] = { 0 };
 //static char devicesCountStr[16] = {'\0'};
 //static char newDevicesCountStr[16] = {'\0'};
 static char unitOutput[16] = {'\0'};
-static char screenshotFilenameStr[42] = {'\0'};
+//static char screenshotFilenameStr[42] = {'\0'};
 static char addressStr[24] = {'\0'};
 static char dbmStr[16] = {'\0'};
 static char hitsTimeStampStr[48] = {'\0'};
@@ -287,7 +287,7 @@ struct MacAddressColors {
     scaleY = _scaleY;
     size = 8 * 8 * scaleX * scaleY;
     memcpy( macAddressToColorStr, address, MAC_LEN+1);
-    uint8_t tokenpos = 0, val, i, j, macpos, msb, lsb;
+    uint8_t tokenpos = 0, val = 0, macpos = 0, msb = 0, lsb = 0;
     char *token;
     char *ptr;
     token = strtok(macAddressToColorStr, ":");
@@ -386,11 +386,11 @@ struct MacSwap {
 static char *formatUnit( int64_t number ) {
   *unitOutput = {'\0'};
   if( number > 999999 ) {
-    sprintf(unitOutput, "%dM", number/1000000);
+    sprintf(unitOutput, "%lldM", number/1000000);
   } else if( number > 999 ) {
-    sprintf(unitOutput, "%dK", number/1000);
+    sprintf(unitOutput, "%lldK", number/1000);
   } else {
-    sprintf(unitOutput, "%d", number);
+    sprintf(unitOutput, "%lld", number);
   }
   return unitOutput;
 }
@@ -596,7 +596,7 @@ class UIUtils {
 
     static void introUntilScroll( void * param ) {
       char randomAddressStr[18] = {0};
-      uint8_t randomAddress[6] = {0};
+      uint8_t randomAddress[6] = {0,0,0,0,0,0};
       uint16_t x;
       uint16_t y;
       size_t counter = 0;
@@ -610,9 +610,7 @@ class UIUtils {
                 randomAddress[2],
                 randomAddress[3],
                 randomAddress[4],
-                randomAddress[5],
-                randomAddress[6],
-                randomAddress[7]
+                randomAddress[5]
         );
         x = hallOfMacPosX + (counter%hallofMacCols) * hallOfMacItemWidth;
         y = hallOfMacPosY + ((counter/hallofMacCols)%hallofMacRows) * hallOfMacItemHeight;
@@ -844,7 +842,7 @@ class UIUtils {
       uint16_t y;
 
       while( index >= 0 ) {
-        if( BLEDevRAMCache[index]->address == "" || BLEDevRAMCache[index]->hits == 0 ) {
+        if( isEmpty( BLEDevRAMCache[index]->address ) || BLEDevRAMCache[index]->hits == 0 ) {
           index--;
           continue;
         }
@@ -1192,7 +1190,7 @@ class UIUtils {
       takeMuxSemaphore();
 
       //MacScrollView
-      uint16_t randomcolor = tft_color565( random(128, 255), random(128, 255), random(128, 255) );
+      //uint16_t randomcolor = tft_color565( random(128, 255), random(128, 255), random(128, 255) );
       uint16_t blockHeight = 0;
       uint16_t hop;
       uint16_t initialPosY = Out.scrollPosY;
@@ -1256,12 +1254,12 @@ class UIUtils {
           sprintf(hitsStr, "(%s hits)", formatUnit( BleCard->hits ) );
 
           if( BleCard->updated_at.unixtime() > 0 /* BleCard->created_at.year() > 1970 */) {
+            /*
             unsigned long age_in_seconds = abs( BleCard->created_at.unixtime() - BleCard->updated_at.unixtime() );
             unsigned long age_in_minutes = age_in_seconds / 60;
             unsigned long age_in_hours   = age_in_minutes / 60;
             unsigned long seconds_since_boot = (millis() / 1000)+1;
             float freq = ((float)BleCard->hits / (float)scan_rounds+1) * ((float)age_in_seconds / (float)seconds_since_boot+1);
-            /*
             Serial.printf(" C: %d, U:%d, (%d / %d) * (%d / %d) = ",
               BleCard->created_at.unixtime(),
               BleCard->updated_at.unixtime(),
@@ -1296,7 +1294,7 @@ class UIUtils {
         BLEUUID tmpID;
         tmpID.fromString(BleCard->uuid);
         const char* serviceStr = BLEDevHelper.gattServiceToString( tmpID );
-        if( serviceStr != "Unknown" ) {
+        if( strcmp( serviceStr, "Unknown" ) == 0 ) {
           blockHeight += Out.println( SPACE );
           *ouiStr = {'\0'};
           sprintf( ouiStr, ouiTpl, serviceStr );

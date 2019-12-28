@@ -72,7 +72,7 @@ enum AfterScanSteps {
   PROPAGATE = 3
 };
 
-
+/*
 // work in progress: MAC blacklist/whitelist
 const char MacList[3][MAC_LEN + 1] = {
   "aa:aa:aa:aa:aa:aa",
@@ -89,7 +89,7 @@ static bool AddressIsListed( const char* address ) {
   }
   return false;
 }
-
+*/
 
 static bool deviceHasPayload( BLEAdvertisedDevice advertisedDevice ) {
   if ( !advertisedDevice.haveServiceUUID() ) return false;
@@ -517,9 +517,9 @@ class BLEScanUtils {
       isQuerying = true;
       if ( param != NULL ) {
         if ( BLE_FS.remove( (const char*)param ) ) {
-          Serial.printf("File %s deleted\n", param);
+          Serial.printf("File %s deleted\n", (const char*)param );
         } else {
-          Serial.printf("File %s could not be deleted\n", param);
+          Serial.printf("File %s could not be deleted\n", (const char*)param );
         }
       } else {
         Serial.println("Nothing to delete");
@@ -561,7 +561,7 @@ class BLEScanUtils {
       if ( scanTaskRunning ) stopScanCB();
       if( param != NULL ) {
         if(! BLE_FS.exists( (const char*)param ) ) {
-          Serial.printf("Directory %s does not exist");
+          Serial.printf("Directory %s does not exist\n", (const char*)param );
         } else {
           listDir(BLE_FS, (const char*)param, 0, DB.BLEMacsDbFSPath);
         }
@@ -595,7 +595,7 @@ class BLEScanUtils {
 
     static void nullCB( void * param = NULL ) {
       if ( param != NULL ) {
-        Serial.printf("nullCB param: %s\n", param);
+        Serial.printf("nullCB param: %s\n", (const char*)param);
       }
       // zilch, niente, nada, que dalle, nothing
     }

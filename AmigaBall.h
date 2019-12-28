@@ -181,7 +181,7 @@ class AmigaRulez {
       }
     }
 
-    float scaleTranslate(float s, float tx, float ty) {
+    void scaleTranslate(float s, float tx, float ty) {
       for( int i=0; i<10; i++) {
         for( int j=0; j<9; j++ ) {
           float _x = points[i][j].x * s + tx;

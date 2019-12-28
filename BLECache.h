@@ -96,7 +96,7 @@ static byte lastPrintedMacIndex = 0; // index in the circular buffer
 static uint16_t notInCacheCount = 0; // scan-relative
 static uint16_t inCacheCount = 0; // scan-relative
 static int BLEDevCacheHit = 0; // cache relative
-static int SelfCacheHit = 0; // cache relative
+//static int SelfCacheHit = 0; // cache relative
 static int AnonymousCacheHit = 0; // cache relative
 static int scan_rounds = 0; // how many scans
 static uint16_t scan_cursor = 0; // what scan index is being processed
@@ -293,7 +293,7 @@ class BlueToothDeviceHelper {
       }
       if ( advertisedDevice.haveServiceUUID() ) {
         set(CacheItem, "uuid", advertisedDevice.getServiceUUID().toString().c_str());
-        const char* serviceStr = gattServiceToString( advertisedDevice.getServiceUUID() );
+        //const char* serviceStr = gattServiceToString( advertisedDevice.getServiceUUID() );
         //log_w("Gatt Service UUID to string %s = %s", advertisedDevice.getServiceUUID().toString().c_str(), gattServiceToString( advertisedDevice.getServiceUUID() ) );
         //uint16_t sUUID = (uint16_t)advertisedDevice.getServiceUUID().getNative();
         //Serial.printf("[%s] GATT ServiceUUID:     '%s'\n", CacheItem->address, advertisedDevice.getServiceUUID().toString().c_str() );
