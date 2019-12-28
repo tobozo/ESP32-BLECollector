@@ -141,6 +141,13 @@ int strpos(const char *hay, const char *needle, int offset) {
 #include <rom/rtc.h>
 #include <Preferences.h>
 Preferences preferences;
+// use the primitive because ESP.getFreeHeap() is inconsistent across SDK versions
+#define freeheap heap_caps_get_free_size(MALLOC_CAP_INTERNAL)
+#define freepsheap ESP.getFreePsram()
+#define resetReason (int)rtc_get_reset_reason(0)
+#define takeMuxSemaphore() if( mux ) { xSemaphoreTake(mux, portMAX_DELAY); log_v("Took Semaphore"); }
+#define giveMuxSemaphore() if( mux ) { xSemaphoreGive(mux); log_v("Gave Semaphore"); }
+
 #include "Display.h"
 #include "DateTime.h"
 
@@ -169,13 +176,16 @@ Preferences preferences;
   char WiFi_SSID[32];
   char WiFi_PASS[32];
 #endif
+
+// BLE stack
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEScan.h>
 #include <BLEAdvertisedDevice.h>
+#include <BLEClient.h>
+#include <BLE2902.h>
 
-#include <stdio.h>
-#include <stdlib.h>
+// SQLite stack
 #include <sqlite3.h> // https://github.com/siara-cc/esp32_arduino_sqlite3_lib
 
 // used to disable brownout detector
@@ -196,13 +206,6 @@ Preferences preferences;
  * 
  */
 
-// use the primitive because ESP.getFreeHeap() is inconsistent across SDK versions
-#define freeheap heap_caps_get_free_size(MALLOC_CAP_INTERNAL)
-#define freepsheap ESP.getFreePsram()
-#define resetReason (int)rtc_get_reset_reason(0)
-#define takeMuxSemaphore() if( mux ) { xSemaphoreTake(mux, portMAX_DELAY); log_v("Took Semaphore"); }
-#define giveMuxSemaphore() if( mux ) { xSemaphoreGive(mux); log_v("Gave Semaphore"); }
-
 // statistical values
 static int devicesCount     = 0; // devices count per scan
 static int sessDevicesCount = 0; // total devices count per session
@@ -210,13 +213,10 @@ static int sessDevicesCount = 0; // total devices count per session
 static int results          = 0; // total results during last query
 static unsigned int entries = 0; // total entries in database
 static byte prune_trigger   = 0; // incremented on every insertion, reset on prune()
-//static byte prune_threshold = 10; // prune every x inertions
-//static bool print_tabular   = true; // obsolete
+
+
 
 // load stack
-#include "Assets.h" // bitmaps
-#include "AmigaBall.h"
-#include "SDUtils.h"
 #include "BLECache.h" // data struct
 #include "ScrollPanel.h" // scrolly methods
 #include "TimeUtils.h"

@@ -80,6 +80,18 @@ static bool isEmpty(const char* str ) {
   return ( strcmp( str, "" ) == 0 );
 }
 
+static char *formatUnit( int64_t number ) {
+  *unitOutput = {'\0'};
+  if( number > 999999 ) {
+    sprintf(unitOutput, "%lldM", number/1000000);
+  } else if( number > 999 ) {
+    sprintf(unitOutput, "%lldK", number/1000);
+  } else {
+    sprintf(unitOutput, "%lld", number);
+  }
+  return unitOutput;
+}
+
 #define BLECARD_MAC_CACHE_SIZE 8 // "virtual" BLE Card circular cache size, keeps mac addresses to avoid duplicate rendering
                                  // the value is based on the max BLECards visible in the scroll area, don't set a too low value
 struct macScrollView {

@@ -551,22 +551,22 @@ class DBUtils {
         case BLE_VENDOR_NAMES_DB: // https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers
           rc = sqlite3_open( dbcollection[dbName].sqlitepath /*"/sdcard/ble-oui.db"*/, &BLEVendorsDB); 
         break;
-        default: log_e("Can't open null DB"); UI.DBStateIconSetStatus(-1); isQuerying = false; return rc;
+        default: log_e("Can't open null DB"); UI.SetDBStateIcon(-1); isQuerying = false; return rc;
       }
       if (rc) {
-        log_e("Can't open database %d", dbName);
+        log_e("Can't open database %s", dbcollection[dbName].sqlitepath);
         // SD Card removed ? File corruption ? OOM ?
         // isOOM = true;
-        UI.DBStateIconSetStatus(-1); // OOM or I/O error
+        UI.SetDBStateIcon(-1); // OOM or I/O error
         delay(1);
         isQuerying = false;
         return rc;
       } else {
-        log_v("Opened database %d successfully", dbName);
+        log_v("Opened database %s successfully", dbcollection[dbName].sqlitepath);
         if(readonly) {
-          UI.DBStateIconSetStatus(1); // R/O
+          UI.SetDBStateIcon(1); // R/O
         } else {
-          UI.DBStateIconSetStatus(2); // R+W
+          UI.SetDBStateIcon(2); // R+W
         }
         delay(1);
       }
@@ -575,7 +575,7 @@ class DBUtils {
 
     // close the (hopefully) previously opened DB
     void close(DBName dbName) {
-      UI.DBStateIconSetStatus(0);
+      UI.SetDBStateIcon(0);
       switch(dbName) {
         case BLE_COLLECTOR_DB:    sqlite3_close(BLECollectorDB); break;
         case MAC_OUI_NAMES_DB:    sqlite3_close(OUIVendorsDB); break;
@@ -790,7 +790,6 @@ class DBUtils {
 
     unsigned int getEntries(bool _display_results = false) {
       open(BLE_COLLECTOR_DB);
-      //log_w("open collector db response=%d", rc);
       if (_display_results) {
         DBExec( BLECollectorDB, allEntriesQuery );
       } else {
@@ -832,7 +831,6 @@ class DBUtils {
     }
 
     void pruneDB() {
-      //unsigned int before_pruning = getEntries();
       UI.headerStats("Pruning DB");
       open(BLE_COLLECTOR_DB, false);
       DBExec(BLECollectorDB, pruneTableQuery );
@@ -860,7 +858,6 @@ class DBUtils {
 
     bool testOUI() {
       open(MAC_OUI_NAMES_DB);
-      //log_w("open OUI DB responded with: %d", rc);
       DBExec( OUIVendorsDB, testOUIQuery );
       close(MAC_OUI_NAMES_DB);
       char *ouiname = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));

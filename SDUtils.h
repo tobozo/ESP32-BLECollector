@@ -12,26 +12,19 @@ bool SDSetup() {
       log_e("[SD] Mount Failed");
       //delay(max_wait);
       if(attempts%2==0) {
-        tft_drawJpg( disk00_jpg, disk00_jpg_len, (tft.width()-30)/2, 100, 30, 30);
+        IconRender( &SDLoaderIcon, ICON_STATUS_SET, (tft.width()-30)/2, 100 );
       } else {
-        tft_drawJpg( disk01_jpg, disk00_jpg_len, (tft.width()-30)/2, 100, 30, 30);
+        IconRender( &SDLoaderIcon, ICON_STATUS_UNSET, (tft.width()-30)/2, 100 );
       }
-      AmigaBall.animate( max_wait, false );
       attempts--;
     }
   }
   if( attempts != 100 ) {
-    AmigaBall.animate( 1 );
     //tft.fillRect( (tft.width()-30)/2, 100, 30, 30, Out.BgColor );
   }
   return sd_mounted;
 }
 
-/*
-static void listDir() {
-  // blah
-}
-*/
 static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char* needle=NULL){
   Serial.printf("\nListing directory: %s\n\n", dirname);
 

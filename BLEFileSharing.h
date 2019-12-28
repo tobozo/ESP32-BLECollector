@@ -29,12 +29,6 @@
 
 */
 
-#include "BLEDevice.h"
-#include "BLEAdvertisedDevice.h"
-#include "BLEClient.h"
-#include "BLEScan.h"
-#include "BLEUtils.h"
-#include "BLE2902.h"
 
 #define TICKS_TO_DELAY 1000
 

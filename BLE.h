@@ -356,7 +356,7 @@ class BLEScanUtils {
 
     static void startFileSharingServer( void * param = NULL) {
       bool scanWasRunning = scanTaskRunning;
-      IconStatus oldrole = BLERoleIcon.status;
+      int8_t oldrole = BLERoleIcon.status;
       if ( fileSharingServerTaskIsRunning ) {
         log_e("FileSharingClientTask already running!");
         vTaskDelete( NULL );
@@ -386,7 +386,7 @@ class BLEScanUtils {
 
     static void startFileSharingClient( void * param ) {
       bool scanWasRunning = scanTaskRunning;
-      IconStatus oldrole = BLERoleIcon.status;
+      int8_t oldrole = BLERoleIcon.status;
       fileSharingClientStarted = true;
       if ( scanTaskRunning ) stopScanCB();
       fileSharingClientTaskIsRunning = true;
@@ -417,7 +417,7 @@ class BLEScanUtils {
 
     static void startTimeClient( void * param ) {
       bool scanWasRunning = scanTaskRunning;
-      IconStatus oldrole = BLERoleIcon.status;
+      int8_t oldrole = BLERoleIcon.status;
       ForceBleTime = false;
       while ( ! foundTimeServer ) {
         vTaskDelay( 100 );
@@ -486,7 +486,7 @@ class BLEScanUtils {
 
     static void toggleFilterCB( void * param = NULL ) {
       UI.filterVendors = ! UI.filterVendors;
-      VendorFilterIcon.setStatus( UI.filterVendors ? ICON_STATUS_SET : ICON_STATUS_UNSET );
+      VendorFilterIcon.setStatus( UI.filterVendors ? ICON_STATUS_filter : ICON_STATUS_filter_unset );
       UI.cacheStats(); // refresh icon
       setPrefs(); // save prefs
       Serial.printf("UI.filterVendors = %s\n", UI.filterVendors ? "true" : "false" );
