@@ -38,10 +38,9 @@ static const int AMIGABALL_YPOS = 50;
 //#define BLE_FS SPIFFS // inherited from ESP32-Chimera-Core
 //#define BLE_FS_TYPE "spiffs" // sd = fs::SD, sdcard = fs::SD_MMC
 
-// Experimental, requires an ESP32-Wrover, a huge partition scheme and no OTA
-#ifndef ARDUINO_M5Stack_Core_ESP32
-  //#define WITH_WIFI
-#endif
+// Experimental, requires an ESP32-Wrover/Odroid-Go/M5Fire, a huge partition scheme and no OTA
+//#define WITH_WIFI
+
 
 // display profiles switcher
 #if defined( ARDUINO_M5Stack_Core_ESP32 ) || defined( ARDUINO_M5STACK_FIRE ) || defined( ARDUINO_ODROID_ESP32 )
@@ -152,6 +151,19 @@ void tft_getTextBounds(const String &str, int16_t x, int16_t y, int16_t *x1, int
   *h = tft.fontHeight( tft.textfont );  
 }
 
+void tft_fillCircle( uint16_t x, uint16_t y, uint16_t r, uint16_t color) {
+  tft.fillCircle(x, y, r, color);
+};
+void tft_drawCircle( uint16_t x, uint16_t y, uint16_t r, uint16_t color) {
+  tft.drawCircle(x, y, r, color);
+};
+void tft_fillRect( uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color) {
+  tft.fillRect(x, y, w, h, color);
+};
+void tft_fillTriangle( uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t color) {
+  tft.fillTriangle(x0, y0, x1, y1, x2, y2, color);
+}
+
 
 void tft_setupScrollArea(uint16_t tfa, uint16_t vsa, uint16_t bfa) {
   bfa += SCROLL_OFFSET; // compensate for stubborn firmware
@@ -165,17 +177,6 @@ void tft_setupScrollArea(uint16_t tfa, uint16_t vsa, uint16_t bfa) {
   log_w("Init Scroll area with tfa/bfa %d/%d on w/h %d/%d", tfa, bfa, scrollpanel_width(), scrollpanel_height());
 }
 
-/*
-void tft_setupScrollArea(uint16_t tfa, uint16_t bfa) {
-  tft.writecommand(ILI9341_VSCRDEF); // Vertical scroll definition
-  tft.writedata(tfa >> 8);           // Top Fixed Area line count
-  tft.writedata(tfa);
-  tft.writedata((scrollpanel_width()-tfa-bfa)>>8);  // Vertical Scrolling Area line count
-  tft.writedata(scrollpanel_width()-tfa-bfa);
-  tft.writedata(bfa >> 8);           // Bottom Fixed Area line count
-  tft.writedata(bfa);
-  log_w("Init Scroll area with tfa/bfa %d/%d on w/h %d/%d", tfa, bfa, scrollpanel_width(), scrollpanel_height());
-}*/
 
 void tft_scrollTo(uint16_t vsp) {
   tft.writecommand(ILI9341_VSCRSADD); // Vertical scrolling pointer
@@ -185,6 +186,7 @@ void tft_scrollTo(uint16_t vsp) {
 
 TFT_eSprite gradientSprite = TFT_eSprite( &tft );
 TFT_eSprite heapGraphSprite = TFT_eSprite( &tft );
+TFT_eSprite animSprite = TFT_eSprite( &tft );
 
 void tft_fillGradientHRect( uint16_t x, uint16_t y, uint16_t width, uint16_t height, RGBColor colorstart, RGBColor colorend ) {
   gradientSprite.setPsram( false ); // don't bother using psram for that

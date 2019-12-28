@@ -48,11 +48,15 @@ static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char
   Serial.println("    NAME                             |                    |     SIZE");
   Serial.println("-------------------------------------------------------------------------");
   unsigned long totalSize = 0;
-  while(file){
+  char fileDate[64] = "1980-01-01 00:07:20";
+  time_t lastWrite;
+  struct tm * tmstruct;
 
-    time_t lastWrite = file.getLastWrite();
-    struct tm * tmstruct = localtime(&lastWrite);
-    char fileDate[64] = "1980-01-01 00:07:20";
+  while( file ) {
+
+    lastWrite = file.getLastWrite();
+    tmstruct = localtime(&lastWrite);
+
     sprintf(fileDate, "%04d-%02d-%02d %02d:%02d:%02d",(tmstruct->tm_year)+1900,( tmstruct->tm_mon)+1, tmstruct->tm_mday,tmstruct->tm_hour , tmstruct->tm_min, tmstruct->tm_sec);
     if( (tmstruct->tm_year)+1900 < 2000 ) {
       // time is not set
@@ -70,7 +74,9 @@ static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char
     } else {
       Serial.printf( "    %-32s | %20s | DIRECTORY\n", file.name(), fileDate );
     }
+    file.close();
     file = root.openNextFile();
   }
+
   Serial.printf("\nTotal space used: %d Bytes\n\n", totalSize);
 }

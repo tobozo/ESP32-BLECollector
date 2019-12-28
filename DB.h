@@ -190,7 +190,7 @@ class DBUtils {
   public:
 
     char currentBLEAddress[MAC_LEN+1] = "00:00:00:00:00:00"; // used to proxy BLE search term to DB query
-   
+
     char* BLEMacsDbSQLitePath = NULL;//"/sdcard/blemacs.db";
     char* BLEMacsDbFSPath = NULL;// "/blemacs.db";
 
@@ -551,22 +551,22 @@ class DBUtils {
         case BLE_VENDOR_NAMES_DB: // https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers
           rc = sqlite3_open( dbcollection[dbName].sqlitepath /*"/sdcard/ble-oui.db"*/, &BLEVendorsDB); 
         break;
-        default: log_e("Can't open null DB"); UI.DBStateIconSetColor(-1); isQuerying = false; return rc;
+        default: log_e("Can't open null DB"); UI.DBStateIconSetStatus(-1); isQuerying = false; return rc;
       }
       if (rc) {
         log_e("Can't open database %d", dbName);
         // SD Card removed ? File corruption ? OOM ?
         // isOOM = true;
-        UI.DBStateIconSetColor(-1); // OOM or I/O error
+        UI.DBStateIconSetStatus(-1); // OOM or I/O error
         delay(1);
         isQuerying = false;
         return rc;
       } else {
         log_v("Opened database %d successfully", dbName);
         if(readonly) {
-          UI.DBStateIconSetColor(1); // R/O
+          UI.DBStateIconSetStatus(1); // R/O
         } else {
-          UI.DBStateIconSetColor(2); // R+W
+          UI.DBStateIconSetStatus(2); // R+W
         }
         delay(1);
       }
@@ -575,7 +575,7 @@ class DBUtils {
 
     // close the (hopefully) previously opened DB
     void close(DBName dbName) {
-      UI.DBStateIconSetColor(0);
+      UI.DBStateIconSetStatus(0);
       switch(dbName) {
         case BLE_COLLECTOR_DB:    sqlite3_close(BLECollectorDB); break;
         case MAC_OUI_NAMES_DB:    sqlite3_close(OUIVendorsDB); break;
@@ -904,7 +904,7 @@ class DBUtils {
         }
         BLEDevTmp = SourceCache[i];
         if( showBLECards ) {
-          UI.printBLECard( BLEDevTmp ); // render 
+          UI.printBLECard( (BlueToothDeviceLink){.cacheIndex=i,.device=BLEDevTmp}/*BLEDevTmp*/ ); // render 
         }
         updateItemFromCache( SourceCache[i] );
 

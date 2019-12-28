@@ -36,42 +36,42 @@ struct BLEGATTService {
 };
 
 static const BLEGATTService BLE_gattServices[] = {
-  {"Alert Notification Service", "org.bluetooth.service.alert_notification", 0x1811},
-  {"Automation IO", "org.bluetooth.service.automation_io",  0x1815 },
-  {"Battery Service","org.bluetooth.service.battery_service", 0x180F},
-  {"Blood Pressure", "org.bluetooth.service.blood_pressure", 0x1810},
-  {"Body Composition", "org.bluetooth.service.body_composition", 0x181B},
-  {"Bond Management", "org.bluetooth.service.bond_management", 0x181E},
-  {"Continuous Glucose Monitoring", "org.bluetooth.service.continuous_glucose_monitoring", 0x181F},
-  {"Current Time Service", "org.bluetooth.service.current_time", 0x1805},
-  {"Cycling Power", "org.bluetooth.service.cycling_power", 0x1818},
-  {"Cycling Speed and Cadence", "org.bluetooth.service.cycling_speed_and_cadence", 0x1816},
-  {"Device Information", "org.bluetooth.service.device_information", 0x180A},
-  {"Environmental Sensing", "org.bluetooth.service.environmental_sensing", 0x181A},
-  {"Generic Access", "org.bluetooth.service.generic_access", 0x1800},
-  {"Generic Attribute", "org.bluetooth.service.generic_attribute", 0x1801},
-  {"Glucose", "org.bluetooth.service.glucose", 0x1808},
-  {"Health Thermometer", "org.bluetooth.service.health_thermometer", 0x1809},
-  {"Heart Rate", "org.bluetooth.service.heart_rate", 0x180D},
-  {"HTTP Proxy", "org.bluetooth.service.http_proxy", 0x1823},
-  {"Human Interface Device", "org.bluetooth.service.human_interface_device", 0x1812},
-  {"Immediate Alert", "org.bluetooth.service.immediate_alert", 0x1802},
-  {"Indoor Positioning", "org.bluetooth.service.indoor_positioning", 0x1821},
-  {"Internet Protocol Support", "org.bluetooth.service.internet_protocol_support", 0x1820},
-  {"Link Loss", "org.bluetooth.service.link_loss", 0x1803},
-  {"Location and Navigation", "org.bluetooth.service.location_and_navigation", 0x1819},
-  {"Next DST Change Service", "org.bluetooth.service.next_dst_change", 0x1807},
-  {"Object Transfer", "org.bluetooth.service.object_transfer", 0x1825},
-  {"Phone Alert Status Service", "org.bluetooth.service.phone_alert_status", 0x180E},
-  {"Pulse Oximeter", "org.bluetooth.service.pulse_oximeter", 0x1822},
-  {"Reference Time Update Service", "org.bluetooth.service.reference_time_update", 0x1806},
-  {"Running Speed and Cadence", "org.bluetooth.service.running_speed_and_cadence", 0x1814},
-  {"Scan Parameters", "org.bluetooth.service.scan_parameters", 0x1813},
-  {"Transport Discovery", "org.bluetooth.service.transport_discovery", 0x1824},
-  {"Tx Power", "org.bluetooth.service.tx_power", 0x1804},
-  {"User Data", "org.bluetooth.service.user_data", 0x181C},
-  {"Weight Scale", "org.bluetooth.service.weight_scale", 0x181D},
-  {"", "", 0 }
+  {"Alert Notification Service",    "org.bluetooth.service.alert_notification",             0x1811},
+  {"Automation IO",                 "org.bluetooth.service.automation_io",                  0x1815},
+  {"Battery Service",               "org.bluetooth.service.battery_service",                0x180F},
+  {"Blood Pressure",                "org.bluetooth.service.blood_pressure",                 0x1810},
+  {"Body Composition",              "org.bluetooth.service.body_composition",               0x181B},
+  {"Bond Management",               "org.bluetooth.service.bond_management",                0x181E},
+  {"Continuous Glucose Monitoring", "org.bluetooth.service.continuous_glucose_monitoring",  0x181F},
+  {"Current Time Service",          "org.bluetooth.service.current_time",                   0x1805},
+  {"Cycling Power",                 "org.bluetooth.service.cycling_power",                  0x1818},
+  {"Cycling Speed and Cadence",     "org.bluetooth.service.cycling_speed_and_cadence",      0x1816},
+  {"Device Information",            "org.bluetooth.service.device_information",             0x180A},
+  {"Environmental Sensing",         "org.bluetooth.service.environmental_sensing",          0x181A},
+  {"Generic Access",                "org.bluetooth.service.generic_access",                 0x1800},
+  {"Generic Attribute",             "org.bluetooth.service.generic_attribute",              0x1801},
+  {"Glucose",                       "org.bluetooth.service.glucose",                        0x1808},
+  {"Health Thermometer",            "org.bluetooth.service.health_thermometer",             0x1809},
+  {"Heart Rate",                    "org.bluetooth.service.heart_rate",                     0x180D},
+  {"HTTP Proxy",                    "org.bluetooth.service.http_proxy",                     0x1823},
+  {"Human Interface Device",        "org.bluetooth.service.human_interface_device",         0x1812},
+  {"Immediate Alert",               "org.bluetooth.service.immediate_alert",                0x1802},
+  {"Indoor Positioning",            "org.bluetooth.service.indoor_positioning",             0x1821},
+  {"Internet Protocol Support",     "org.bluetooth.service.internet_protocol_support",      0x1820},
+  {"Link Loss",                     "org.bluetooth.service.link_loss",                      0x1803},
+  {"Location and Navigation",       "org.bluetooth.service.location_and_navigation",        0x1819},
+  {"Next DST Change Service",       "org.bluetooth.service.next_dst_change",                0x1807},
+  {"Object Transfer",               "org.bluetooth.service.object_transfer",                0x1825},
+  {"Phone Alert Status Service",    "org.bluetooth.service.phone_alert_status",             0x180E},
+  {"Pulse Oximeter",                "org.bluetooth.service.pulse_oximeter",                 0x1822},
+  {"Reference Time Update Service", "org.bluetooth.service.reference_time_update",          0x1806},
+  {"Running Speed and Cadence",     "org.bluetooth.service.running_speed_and_cadence",      0x1814},
+  {"Scan Parameters",               "org.bluetooth.service.scan_parameters",                0x1813},
+  {"Transport Discovery",           "org.bluetooth.service.transport_discovery",            0x1824},
+  {"Tx Power",                      "org.bluetooth.service.tx_power",                       0x1804},
+  {"User Data",                     "org.bluetooth.service.user_data",                      0x181C},
+  {"Weight Scale",                  "org.bluetooth.service.weight_scale",                   0x181D},
+  {"", "", 0 } // terminator
 };
 
 static bool isEmpty(const char* str ) {
@@ -88,6 +88,7 @@ struct macScrollView {
   int scrollPosY = 0;
   //int initialPosY = 0;
   uint16_t borderColor = 0;
+  int32_t cacheIndex = -1;
 };
 static macScrollView MacScrollView[BLECARD_MAC_CACHE_SIZE]; // BLECard circular screen cache
 static byte lastPrintedMacIndex = 0; // index in the circular buffer
@@ -124,6 +125,10 @@ struct BlueToothDevice {
   DateTime updated_at = 0;
 };
 
+struct BlueToothDeviceLink {
+  uint16_t cacheIndex;
+  BlueToothDevice *device;
+};
 
 static uint16_t BLEDevCacheIndex = 0; // index in the circular buffer
 //static uint16_t BLEDevScanCacheIndex = 0; // index in the circular buffer
@@ -288,6 +293,8 @@ class BlueToothDeviceHelper {
       }
       if ( advertisedDevice.haveServiceUUID() ) {
         set(CacheItem, "uuid", advertisedDevice.getServiceUUID().toString().c_str());
+        const char* serviceStr = gattServiceToString( advertisedDevice.getServiceUUID() );
+        //log_w("Gatt Service UUID to string %s = %s", advertisedDevice.getServiceUUID().toString().c_str(), gattServiceToString( advertisedDevice.getServiceUUID() ) );
         //uint16_t sUUID = (uint16_t)advertisedDevice.getServiceUUID().getNative();
         //Serial.printf("[%s] GATT ServiceUUID:     '%s'\n", CacheItem->address, advertisedDevice.getServiceUUID().toString().c_str() );
       }
@@ -327,13 +334,25 @@ class BlueToothDeviceHelper {
     }
 
 
-    static const char *gattServiceToString( uint32_t serviceId ) {
-      BLEGATTService* p = (BLEGATTService*) BLE_gattServices;
-      while (strlen(p->name) > 0) {
-        if (p->assignedNumber == serviceId) {
-          return p->name;
+    static const char *gattServiceToString( BLEUUID serviceUUID ) {
+      size_t heapbefore = freeheap;
+      char* gattUUIDblock = substr( serviceUUID.toString().c_str(), 0, 8 );
+      char* gattUUIDchar = substr( gattUUIDblock, 4, 4 );
+      uint32_t serviceId = (int)strtol(gattUUIDchar, NULL, 16);
+      free(gattUUIDblock);
+      free(gattUUIDchar);
+      size_t heapafter = freeheap;
+      int heapdiff = heapbefore - heapafter;
+      byte i = 0;
+      while( true ) {
+        if (BLE_gattServices[i].assignedNumber == 0) {
+          break;
         }
-        p++;
+        if (BLE_gattServices[i].assignedNumber == serviceId) {
+          log_w("[%d (%d)] Gatt Service UUID to string %04x => %s", freeheap, heapdiff, serviceId, BLE_gattServices[i].name );
+          return BLE_gattServices[i].name;
+        }
+        i++;
       }
       return "Unknown";
     } // gattServiceToString 

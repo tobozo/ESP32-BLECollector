@@ -117,6 +117,25 @@ static xSemaphoreHandle mux = NULL; // this is needed to prevent rendering colli
 static bool DBneedsReplication = false;
 static bool isQuerying = false; // state maintained while SD is accessed, useful when SD is used instead of SD_MMC
 
+// str helpers
+char *substr(const char *src, int pos, int len) {
+  char* dest = NULL;
+  if (len > 0) {
+    dest = (char*)calloc(len + 1, 1);
+    if (NULL != dest) {
+      strncat(dest, src + pos, len);
+    }
+  }
+  return dest;
+}
+int strpos(const char *hay, const char *needle, int offset) {
+  char haystack[strlen(hay)];
+  strncpy(haystack, hay+offset, strlen(hay)-offset);
+  char *p = strstr(haystack, needle);
+  if (p)
+    return p - haystack+offset;
+  return -1;
+}
 
 // used to get the resetReason
 #include <rom/rtc.h>
@@ -139,6 +158,9 @@ Preferences preferences;
 #if HAS_GPS
   #define GPS_RX 39 // io pin number
   #define GPS_TX 35 // io pin number
+#else
+  static bool GPSHasFix = false;
+  static bool GPSHasDateTime = false;
 #endif
 
 // RF stack
@@ -182,15 +204,14 @@ Preferences preferences;
 #define giveMuxSemaphore() if( mux ) { xSemaphoreGive(mux); log_v("Gave Semaphore"); }
 
 // statistical values
-static int devicesCount = 0; // devices count per scan
+static int devicesCount     = 0; // devices count per scan
 static int sessDevicesCount = 0; // total devices count per session
-static int newDevicesCount = 0; // total devices count per session
-static int results = 0; // total results during last query
+static int newDevicesCount  = 0; // total devices count per session
+static int results          = 0; // total results during last query
 static unsigned int entries = 0; // total entries in database
-static byte prune_trigger = 0; // incremented on every insertion, reset on prune()
+static byte prune_trigger   = 0; // incremented on every insertion, reset on prune()
 static byte prune_threshold = 10; // prune every x inertions
-//static bool print_results = false;
-static bool print_tabular = true;
+static bool print_tabular   = true; // obsolete
 
 // load stack
 #include "Assets.h" // bitmaps

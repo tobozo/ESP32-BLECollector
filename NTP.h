@@ -74,6 +74,11 @@ void TimeInit() {
     }
     nowDateTime = RTC.now(); // fetch time from external RTC
     setTime( nowDateTime.unixtime() ); // sync to local clock
+    timeval epoch = {(time_t)nowDateTime.unixtime(), 0};
+    const timeval *tv = &epoch;
+    settimeofday(tv, NULL);
+    struct tm now;
+    getLocalTime(&now,0);
     dumpTime("RTC DateTime:", nowDateTime);
     TimeIsSet = true;
   #endif

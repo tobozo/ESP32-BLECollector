@@ -65,7 +65,7 @@ class AmigaRulez {
     float velocityX = 2.1;
     float velocityY = 0.07;
     float angleY    = 0.0;
-    
+
     float PhaseVelocity;
     float perspective[4];
     float XtoYratio;
@@ -74,7 +74,7 @@ class AmigaRulez {
 
     bool AnimationDone;
     bool isMovingRight;
-    
+
     byte Wires;
     byte bytecounter = 0;
 
@@ -96,7 +96,7 @@ class AmigaRulez {
     float YPos;
     float Width;
     float Height;
-    
+
     float VCentering;
     float Scale;
     float YPosAmplitude;
@@ -127,11 +127,11 @@ class AmigaRulez {
       MaxScaleAmplitude = Scale + ScaleAmplitude;
       YPosAmplitude = (Height-(Scale+ScaleAmplitude))/2; // ball will bounce on this span pixels
       VCentering = YPos + Height - MaxScaleAmplitude;// -(YPosAmplitude/2 + Scale + ScaleAmplitude);
-      
+
       BounceMargin = 4+Scale+ScaleAmplitude; // 135
       LeftBoundary = XPos + BounceMargin;
       RightBoundary = XPos + Width - BounceMargin;
-     
+
       TiltRad = TiltDeg * deg2rad;
       lastPositionX = 0;
       lastPositionY = 0;
@@ -225,7 +225,7 @@ class AmigaRulez {
       float yy2 = 0; // y0 + a * vectorY / d;
       float xx3 = 0; // x2 + h * vectorY / d;  // also x3=x2-h*(y1-y0)/d;
       float yy3 = 0; // y2 - h * vectorX / d;  // also y3=y2+h*(x1-x0)/d;
-      
+
       float mobAngleRadians = atan2(h, a);
       float angleRad0 = vectAngleRadians-mobAngleRadians;
       float angleRad1 = vectAngleRadians+mobAngleRadians;
@@ -234,7 +234,7 @@ class AmigaRulez {
         angleRad1 = vectAngleRadians-mobAngleRadians;
       }
       float angleStep = mobAngleRadians/8;
-      
+
       for( float angle=angleRad0-angleStep; angle<angleRad1+angleStep; angle+=angleStep ) {
         float ct = sin(angle);
         float st = cos(angle);

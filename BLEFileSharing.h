@@ -128,27 +128,6 @@ const char* checkMacFileMessage    = "checkMACOUI";
 const char* fileMarker             = "file:";
 
 
-
-// str helpers
-char *substr(char *src, int pos, int len) {
-  char* dest = NULL;
-  if (len > 0) {
-    dest = (char*)calloc(len + 1, 1);
-    if (NULL != dest) {
-      strncat(dest, src + pos, len);
-    }
-  }
-  return dest;
-}
-int strpos(const char *hay, const char *needle, int offset) {
-  char haystack[strlen(hay)];
-  strncpy(haystack, hay+offset, strlen(hay)-offset);
-  char *p = strstr(haystack, needle);
-  if (p)
-    return p - haystack+offset;
-  return -1;
-}
-
 /******************************************************
   BLE Time Client methods
 ******************************************************/
@@ -494,6 +473,7 @@ class FileSharingRouteCallbacks : public BLECharacteristicCallbacks {
           char* lenStr = substr( routing, strlen(sizeMarker), strlen(routing) - strlen(sizeMarker) );
           FileReceiverExpectedSize = atoi( lenStr );
           log_w( "Assigned size_t %d", FileReceiverExpectedSize );
+          free( lenStr );
         }
       } else if( strstr(routing, dateTimeMarker ) ) {
         log_w("Received dateTimeMarker");
@@ -502,6 +482,7 @@ class FileSharingRouteCallbacks : public BLECharacteristicCallbacks {
           log_w("Received time");
           memcpy( &BLERemoteTime, lenStr, strlen( lenStr ) );
           setBLETime();
+          free( lenStr );
         }
       } else if ( strcmp( routing, closeMessage ) == 0 ) { // file end
         FileSharingCloseFile();
@@ -806,6 +787,9 @@ static void FileSharingRouterCallbacks( BLERemoteCharacteristic* RemoteChar, uin
       char* fileSizeStr = substr( fileNameSize, pos+1,  strlen(fileNameSize) - (pos+1) );
       size_t fileSize = atoi( fileSizeStr );
       log_w( "remote file: %s (%s bytes)", fileNameStr, fileSizeStr );
+      free( fileNameSize );
+      free( fileNameStr );
+      free( fileSizeStr );
     }
     // TODO: add to array
   } else if (strcmp(routing, lsDoneMessage ) == 0) {
@@ -816,11 +800,13 @@ static void FileSharingRouterCallbacks( BLERemoteCharacteristic* RemoteChar, uin
     log_w("checkMacFileMessage response: %s", resp);
     checkMacResponded = true;
     checkMacResponse = atoi( resp );
+    free( resp );
   } else if ( strstr(routing, checkVendorFileMessage) ) {
     char* resp = substr( routing, strlen(routing)-1, 1 );
     log_w("checkVendorFileMessage response: %s", resp);
     checkVendorResponded = true;
     checkVendorResponse = atoi( resp );
+    free( resp );
   } else if (strcmp(routing, "quit" ) == 0) {
     fileSharingClientTaskIsRunning = false;
   } else {

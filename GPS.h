@@ -17,7 +17,6 @@ static void GPSInit() {
   // todo: launch a task to check for GPS health
 }
 
-
 #include <TinyGPS++.h> // https://github.com/mikalhart/TinyGPSPlus
 TinyGPSPlus gps;
 
@@ -66,6 +65,13 @@ static void setGPSTime( void * param ) {
       );
     #endif
     setTime( LocalTime.unixtime() );
+    timeval epoch = {(time_t)LocalTime.unixtime(), 0};
+    const timeval *tv = &epoch;
+    settimeofday(tv, NULL);
+
+    struct tm now;
+    getLocalTime(&now,0);
+
     Serial.printf("Internal clock adjusted to GPS Time (GMT%s%d): %04d-%02d-%02d %02d:%02d:%02d\n",
       timeZone>0 ? "+" : "",
       timeZone,
