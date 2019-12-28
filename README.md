@@ -36,7 +36,7 @@ Hardware requirements
 Software requirements
 ---------------------
   - [mandatory] Arduino IDE
-  - [mandatory] [BLE Library](https://github.com/tobozo/ESP32-BLECollector/releases/download/1.2/BLE.zip) exposing a private method
+  - [mandatory] [BLE Library](https://github.com/tobozo/ESP32-BLECollector/releases/download/1.2/BLE.zip) exposing a private method (supersedes the BLE (legacy) version, install it via the library manager)
   - [mandatory] [ESP32-Chimera-Core](https://github.com/tobozo/ESP32-Chimera-Core) (a substitute to M5Stack Core)
   - [mandatory] https://github.com/tobozo/M5Stack-SD-Updater
   - [mandatory] https://github.com/PaulStoffregen/Time
