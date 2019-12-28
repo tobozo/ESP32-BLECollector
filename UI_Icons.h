@@ -110,16 +110,22 @@ void (*fillTrianglePointer)( uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1,
 struct IconSrcStatus {
   IconSrcStatusType status;
   IconSrc           *src;
+  IconSrcStatus( IconSrcStatusType s, IconSrc *sr ) : status(s), src(sr) { };
+  IconSrcStatus( IconSrc *sr, IconSrcStatusType s ) : status(s), src(sr) { };
 };
 
 struct IconWidgetStatus {
   IconWidget        *widget;
   IconSrcStatusType status;
+  IconWidgetStatus( IconWidget *w, IconSrcStatusType s ) : status(s), widget(w) { };
+  IconWidgetStatus( IconSrcStatusType s, IconWidget *w ) : status(s), widget(w) { };
 };
 
 struct IconShapeStatus {
   IconShape         *shape;
   IconSrcStatusType status;
+  IconShapeStatus( IconShape *s, IconSrcStatusType st ) : status(st), shape(s) { };
+  IconShapeStatus( IconSrcStatusType st, IconShape *s ) : status(st), shape(s) { };
 };
 
 struct IconSrc {
@@ -127,12 +133,7 @@ struct IconSrc {
   size_t   jpeg_len;
   uint16_t width;
   uint16_t height;
-  IconSrc(const unsigned char *_jpeg, size_t _jpeg_len, uint16_t _width, uint16_t _height) {
-    jpeg     = _jpeg;
-    jpeg_len = _jpeg_len;
-    width    = _width;
-    height   = _height;
-  }
+  IconSrc(const unsigned char *j, size_t l, uint16_t w, uint16_t h) : jpeg{j}, jpeg_len{l}, width{w}, height{h} { };
 };
 
 
@@ -429,61 +430,61 @@ IconWidget BLERssiWidget;
 IconWidget TextCountersWidget;
 
 // { status + src }
-IconSrcStatus IconSrcStatus_filter       = { ICON_STATUS_filter,       VendorFilterIcon_SET };
-IconSrcStatus IconSrcStatus_filter_unset = { ICON_STATUS_filter_unset, VendorFilterIcon_UNSET };
-IconSrcStatus IconSrcStatus_disk         = { ICON_STATUS_disk,         TextCounters_heap_src };
-IconSrcStatus IconSrcStatus_ghost        = { ICON_STATUS_ghost,        TextCounters_entries_src };
-IconSrcStatus IconSrcStatus_earth        = { ICON_STATUS_earth,        TextCounters_last_src };
-IconSrcStatus IconSrcStatus_insert       = { ICON_STATUS_insert,       TextCounters_seen_src };
-IconSrcStatus IconSrcStatus_moai         = { ICON_STATUS_moai,         TextCounters_scans_src };
-IconSrcStatus IconSrcStatus_ram          = { ICON_STATUS_ram,          TextCounters_uptime_src };
-IconSrcStatus IconSrcStatus_clock        = { ICON_STATUS_clock,        TimeIcon_SET_src };
-IconSrcStatus IconSrcStatus_clock2       = { ICON_STATUS_clock2,       TimeIcon_UNSET_src };
-IconSrcStatus IconSrcStatus_clock3       = { ICON_STATUS_clock3,       TimeIcon_RTC_src };
-IconSrcStatus IconSrcStatus_zzz          = { ICON_STATUS_zzz,          Icon8x8_zzz_src };
-IconSrcStatus IconSrcStatus_update       = { ICON_STATUS_update,       Icon8x8_update_src };
-IconSrcStatus IconSrcStatus_service      = { ICON_STATUS_service,      Icon8x8_service_src };
-IconSrcStatus IconSrcStatus_espressif    = { ICON_STATUS_espressif,    Icon8x8_espressif_src };
-IconSrcStatus IconSrcStatus_apple16      = { ICON_STATUS_apple16,      Icon8x8_apple16_src };
-IconSrcStatus IconSrcStatus_crosoft      = { ICON_STATUS_crosoft,      Icon8x8_crosoft_src };
-IconSrcStatus IconSrcStatus_generic      = { ICON_STATUS_generic,      Icon8x8_generic_src };
-IconSrcStatus IconSrcStatus_nic16        = { ICON_STATUS_nic16,        Icon8h_nic16_src };
-IconSrcStatus IconSrcStatus_ibm8         = { ICON_STATUS_ibm8,         Icon8h_ibm8_src };
-IconSrcStatus IconSrcStatus_speaker      = { ICON_STATUS_speaker,      Icon8h_speaker_src };
-IconSrcStatus IconSrcStatus_name         = { ICON_STATUS_name,         Icon8h_name_src };
-IconSrcStatus IconSrcStatus_BLECollector = { ICON_STATUS_BLECollector, Icon8h_BLECollector_src };
-IconSrcStatus IconSrcStatus_ble          = { ICON_STATUS_ble,          Icon_ble_src };
-IconSrcStatus IconSrcStatus_db           = { ICON_STATUS_db,           Icon_db_src };
-IconSrcStatus IconSrcStatus_tbz          = { ICON_STATUS_tbz,          Icon_tbz_src };
-IconSrcStatus IconSrcStatus_disk00       = { ICON_STATUS_disk00,       SDLoaderIcon_SET_src };
-IconSrcStatus IconSrcStatus_disk01       = { ICON_STATUS_disk01,       SDLoaderIcon_UNSET_src };
-IconSrcStatus IconSrcStatus_gps          = { ICON_STATUS_gps,          GPSIcon_SET_src };
-IconSrcStatus IconSrcStatus_nogps        = { ICON_STATUS_nogps,        GPSIcon_UNSET_src };
+IconSrcStatus IconSrcStatus_filter(        ICON_STATUS_filter,       VendorFilterIcon_SET );
+IconSrcStatus IconSrcStatus_filter_unset ( ICON_STATUS_filter_unset, VendorFilterIcon_UNSET );
+IconSrcStatus IconSrcStatus_disk(          ICON_STATUS_disk,         TextCounters_heap_src );
+IconSrcStatus IconSrcStatus_ghost(         ICON_STATUS_ghost,        TextCounters_entries_src );
+IconSrcStatus IconSrcStatus_earth(         ICON_STATUS_earth,        TextCounters_last_src );
+IconSrcStatus IconSrcStatus_insert(        ICON_STATUS_insert,       TextCounters_seen_src );
+IconSrcStatus IconSrcStatus_moai(          ICON_STATUS_moai,         TextCounters_scans_src );
+IconSrcStatus IconSrcStatus_ram(           ICON_STATUS_ram,          TextCounters_uptime_src );
+IconSrcStatus IconSrcStatus_clock(         ICON_STATUS_clock,        TimeIcon_SET_src );
+IconSrcStatus IconSrcStatus_clock2(        ICON_STATUS_clock2,       TimeIcon_UNSET_src );
+IconSrcStatus IconSrcStatus_clock3(        ICON_STATUS_clock3,       TimeIcon_RTC_src );
+IconSrcStatus IconSrcStatus_zzz(           ICON_STATUS_zzz,          Icon8x8_zzz_src );
+IconSrcStatus IconSrcStatus_update(        ICON_STATUS_update,       Icon8x8_update_src );
+IconSrcStatus IconSrcStatus_service(       ICON_STATUS_service,      Icon8x8_service_src );
+IconSrcStatus IconSrcStatus_espressif(     ICON_STATUS_espressif,    Icon8x8_espressif_src );
+IconSrcStatus IconSrcStatus_apple16(       ICON_STATUS_apple16,      Icon8x8_apple16_src );
+IconSrcStatus IconSrcStatus_crosoft(       ICON_STATUS_crosoft,      Icon8x8_crosoft_src );
+IconSrcStatus IconSrcStatus_generic(       ICON_STATUS_generic,      Icon8x8_generic_src );
+IconSrcStatus IconSrcStatus_nic16(         ICON_STATUS_nic16,        Icon8h_nic16_src );
+IconSrcStatus IconSrcStatus_ibm8(          ICON_STATUS_ibm8,         Icon8h_ibm8_src );
+IconSrcStatus IconSrcStatus_speaker(       ICON_STATUS_speaker,      Icon8h_speaker_src );
+IconSrcStatus IconSrcStatus_name(          ICON_STATUS_name,         Icon8h_name_src );
+IconSrcStatus IconSrcStatus_BLECollector(  ICON_STATUS_BLECollector, Icon8h_BLECollector_src );
+IconSrcStatus IconSrcStatus_ble(           ICON_STATUS_ble,          Icon_ble_src );
+IconSrcStatus IconSrcStatus_db(            ICON_STATUS_db,           Icon_db_src );
+IconSrcStatus IconSrcStatus_tbz(           ICON_STATUS_tbz,          Icon_tbz_src );
+IconSrcStatus IconSrcStatus_disk00(        ICON_STATUS_disk00,       SDLoaderIcon_SET_src );
+IconSrcStatus IconSrcStatus_disk01(        ICON_STATUS_disk01,       SDLoaderIcon_UNSET_src );
+IconSrcStatus IconSrcStatus_gps(           ICON_STATUS_gps,          GPSIcon_SET_src );
+IconSrcStatus IconSrcStatus_nogps(         ICON_STATUS_nogps,        GPSIcon_UNSET_src );
 
 // { status + shape }
-IconShapeStatus Shape_BLE_OFF_status             = { Shape_BLE_OFF,             ICON_STATUS_UNSET };
-IconShapeStatus Shape_BLE_IDLE_status            = { Shape_BLE_IDLE,            ICON_STATUS_IDLE }; 
-IconShapeStatus Shape_BLE_ADV_SCAN_status        = { Shape_BLE_ADV_SCAN,        ICON_STATUS_ADV_SCAN };
-IconShapeStatus Shape_BLE_ADV_WHITELISTED_status = { Shape_BLE_ADV_WHITELISTED, ICON_STATUS_ADV_WHITELISTED };
-IconShapeStatus Shape_ROLE_NONE_status           = { Shape_ROLE_NONE,           ICON_STATUS_ROLE_NONE };
-IconShapeStatus Shape_ROLE_CLOCK_SHARING_status  = { Shape_ROLE_CLOCK_SHARING,  ICON_STATUS_ROLE_CLOCK_SHARING };
-IconShapeStatus Shape_ROLE_CLOCK_SEEKING_status  = { Shape_ROLE_CLOCK_SEEKING,  ICON_STATUS_ROLE_CLOCK_SEEKING };
-IconShapeStatus Shape_ROLE_FILE_SHARING_status   = { Shape_ROLE_FILE_SHARING,   ICON_STATUS_ROLE_FILE_SHARING };
-IconShapeStatus Shape_ROLE_FILE_SEEKING_status   = { Shape_ROLE_FILE_SEEKING,   ICON_STATUS_ROLE_FILE_SEEKING };
-IconShapeStatus Shape_DB_READ_status             = { Shape_DB_READ,             ICON_STATUS_DB_READ };
-IconShapeStatus Shape_DB_WRITE_status            = { Shape_DB_WRITE,            ICON_STATUS_DB_WRITE };
-IconShapeStatus Shape_DB_ERROR_status            = { Shape_DB_ERROR,            ICON_STATUS_DB_ERROR };
-IconShapeStatus Shape_DB_IDLE_status             = { Shape_DB_IDLE,             ICON_STATUS_DB_IDLE };
+IconShapeStatus Shape_BLE_OFF_status(              Shape_BLE_OFF,             ICON_STATUS_UNSET );
+IconShapeStatus Shape_BLE_IDLE_status(             Shape_BLE_IDLE,            ICON_STATUS_IDLE ); 
+IconShapeStatus Shape_BLE_ADV_SCAN_status(         Shape_BLE_ADV_SCAN,        ICON_STATUS_ADV_SCAN );
+IconShapeStatus Shape_BLE_ADV_WHITELISTED_status(  Shape_BLE_ADV_WHITELISTED, ICON_STATUS_ADV_WHITELISTED );
+IconShapeStatus Shape_ROLE_NONE_status(            Shape_ROLE_NONE,           ICON_STATUS_ROLE_NONE );
+IconShapeStatus Shape_ROLE_CLOCK_SHARING_status(   Shape_ROLE_CLOCK_SHARING,  ICON_STATUS_ROLE_CLOCK_SHARING );
+IconShapeStatus Shape_ROLE_CLOCK_SEEKING_status(   Shape_ROLE_CLOCK_SEEKING,  ICON_STATUS_ROLE_CLOCK_SEEKING );
+IconShapeStatus Shape_ROLE_FILE_SHARING_status(    Shape_ROLE_FILE_SHARING,   ICON_STATUS_ROLE_FILE_SHARING );
+IconShapeStatus Shape_ROLE_FILE_SEEKING_status(    Shape_ROLE_FILE_SEEKING,   ICON_STATUS_ROLE_FILE_SEEKING );
+IconShapeStatus Shape_DB_READ_status(              Shape_DB_READ,             ICON_STATUS_DB_READ );
+IconShapeStatus Shape_DB_WRITE_status(             Shape_DB_WRITE,            ICON_STATUS_DB_WRITE );
+IconShapeStatus Shape_DB_ERROR_status(             Shape_DB_ERROR,            ICON_STATUS_DB_ERROR );
+IconShapeStatus Shape_DB_IDLE_status(              Shape_DB_IDLE,             ICON_STATUS_DB_IDLE );
 
 // { status + widget }
-IconWidgetStatus TextCounter_heap_status    = { &TextCountersWidget, ICON_STATUS_HEAP };
-IconWidgetStatus TextCounter_entries_status = { &TextCountersWidget, ICON_STATUS_ENTRIES };
-IconWidgetStatus TextCounter_last_status    = { &TextCountersWidget, ICON_STATUS_LAST };
-IconWidgetStatus TextCounter_seen_status    = { &TextCountersWidget, ICON_STATUS_SEEN };
-IconWidgetStatus TextCounter_scans_status   = { &TextCountersWidget, ICON_STATUS_SCANS };
-IconWidgetStatus TextCounter_uptime_status  = { &TextCountersWidget, ICON_STATUS_UPTIME };
-IconWidgetStatus BLERssi_SET_status         = { &BLERssiWidget,      ICON_STATUS_SET };
-IconWidgetStatus BLERssi_UNSET_status       = { &BLERssiWidget,      ICON_STATUS_UNSET };
+IconWidgetStatus TextCounter_heap_status(     &TextCountersWidget, ICON_STATUS_HEAP );
+IconWidgetStatus TextCounter_entries_status(  &TextCountersWidget, ICON_STATUS_ENTRIES );
+IconWidgetStatus TextCounter_last_status(     &TextCountersWidget, ICON_STATUS_LAST );
+IconWidgetStatus TextCounter_seen_status(     &TextCountersWidget, ICON_STATUS_SEEN );
+IconWidgetStatus TextCounter_scans_status(    &TextCountersWidget, ICON_STATUS_SCANS );
+IconWidgetStatus TextCounter_uptime_status(   &TextCountersWidget, ICON_STATUS_UPTIME );
+IconWidgetStatus BLERssi_SET_status(          &BLERssiWidget,      ICON_STATUS_SET );
+IconWidgetStatus BLERssi_UNSET_status(        &BLERssiWidget,      ICON_STATUS_UNSET );
 
 IconSrcStatus *SDLoaderIconSrcStatuses[]       = { &IconSrcStatus_disk00, &IconSrcStatus_disk01 };
 IconSrcStatus *TimeIconsStatuses[]             = { &IconSrcStatus_clock, &IconSrcStatus_clock2, &IconSrcStatus_clock3 };
