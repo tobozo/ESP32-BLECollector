@@ -48,7 +48,8 @@
 #define HAS_EXTERNAL_RTC   false // uses I2C, search this file for RTC_SDA or RTC_SCL to change pins
 #define HAS_GPS            false // uses hardware serial, search this file for GPS_RX and GPS_TX to change pins
 #define TIME_UPDATE_SOURCE TIME_UPDATE_NONE // TIME_UPDATE_GPS // soon deprecated, will be implicit
-
+int8_t timeZone = 1; // 1 = GMT+1, 2 = GMT+2, etc
+const char* NTP_SERVER = "europe.pool.ntp.org";
 
 byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define MIN_SCAN_DURATION 10 // seconds min

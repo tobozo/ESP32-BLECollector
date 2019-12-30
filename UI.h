@@ -210,7 +210,7 @@ class UIUtils {
         tft_fillGradientHRect( 0, headerHeight, Out.width/2, scrollHeight, colorstart, colorend );
         tft_fillGradientHRect( Out.width/2, headerHeight, Out.width/2, scrollHeight, colorend, colorstart );
         // clear heap map
-        for (uint16_t i = 0; i < HEAPMAP_BUFFLEN; i++) heapmap[i] = 0;
+        for (uint16_t i = 0; i < heapMapBuffLen; i++) heapmap[i] = 0;
       }
       tft.fillRect(0, 0, Out.width, headerHeight, HEADER_BGCOLOR);// fill header
       tft.fillRect(0, footerBottomPosY - footerHeight, Out.width, footerHeight, FOOTER_BGCOLOR);// fill footer
@@ -219,8 +219,8 @@ class UIUtils {
         tft.fillRect(0, footerBottomPosY - (footerHeight - 2), Out.width, 1, BLE_DARKGREY);
       }
       IconRender( Icon8h_BLECollector_src, 2, 3 );
-      IconRender( Icon_ble_src, 88, 2 );
-      IconRender( Icon_db_src, 100, 2 );
+      IconRender( Icon_ble_src, 91, 2 );
+      IconRender( Icon_db_src, 104, 2 );
 
       alignTextAt( COPYLEFT_SIGN " " AUTHOR , copyleftPosX, copyleftPosY, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
 
@@ -245,6 +245,7 @@ class UIUtils {
     }
 
     void begin() {
+      // alloc some ram for the heap graph
       xTaskCreatePinnedToCore(taskHeapGraph, "taskHeapGraph", 1024, NULL, 0, NULL, 1);
     }
 
@@ -658,7 +659,7 @@ class UIUtils {
         TextCountersWidget.setText( textWidgetStr, ndevcPosX, ndevcPosY, BLE_GREENYELLOW, FOOTER_BGCOLOR, ndevcAlign );
       }
       if( showUptime ) {
-        sprintf( textWidgetStr, "Up:%9s", UpTimeString );
+        sprintf( textWidgetStr, UpTimeStringTplTpl, UpTimeString );
         TextCountersIcon.status = ICON_STATUS_UPTIME;
         TextCountersWidget.setText( textWidgetStr, uptimePosX, uptimePosY, BLE_GREENYELLOW, FOOTER_BGCOLOR, uptimeAlign );
       }
@@ -754,7 +755,7 @@ class UIUtils {
       }
       devCountWasUpdated = false;
       heapmap[heapindex++] = freeheap;
-      heapindex = heapindex % HEAPMAP_BUFFLEN;
+      heapindex = heapindex % heapMapBuffLen;
       lastfreeheap = freeheap;
 
       // render heatmap
@@ -766,7 +767,7 @@ class UIUtils {
       uint16_t GRAPH_BG_COLOR = BLE_BLACK;
       // dynamic scaling
       for (uint8_t i = 0; i < graphLineWidth; i++) {
-        int thisindex = int(heapindex - graphLineWidth + i + HEAPMAP_BUFFLEN) % HEAPMAP_BUFFLEN;
+        int thisindex = int(heapindex - graphLineWidth + i + heapMapBuffLen) % heapMapBuffLen;
         uint32_t heapval = heapmap[thisindex];
         if (heapval != 0 && heapval < graphMin) {
           graphMin =  heapval;
@@ -797,7 +798,7 @@ class UIUtils {
       heapGraphSprite.createSprite( graphLineWidth, graphLineHeight );
 
       for (uint8_t i = 0; i < graphLineWidth; i++) {
-        int thisindex = int(heapindex - graphLineWidth + i + HEAPMAP_BUFFLEN) % HEAPMAP_BUFFLEN;
+        int thisindex = int(heapindex - graphLineWidth + i + heapMapBuffLen) % heapMapBuffLen;
         uint32_t heapval = heapmap[thisindex];
         if ( heapval > toleranceheap ) {
           // nominal, all green
@@ -883,7 +884,7 @@ class UIUtils {
 
 
     void printBLECard( BlueToothDeviceLink BleLink /*BlueToothDevice *BleCard*/ ) {
-      unsigned long renderstart = millis();
+      //unsigned long renderstart = millis();
       BlueToothDevice *BleCard = BleLink.device;
       // don't render if already on screen
       if( BLECardIsOnScreen( BleCard->address ) ) {
@@ -1108,8 +1109,8 @@ class UIUtils {
       MacScrollView[lastPrintedMacIndex].cacheIndex = BleLink.cacheIndex;
       giveMuxSemaphore();
 
-      unsigned long rendertime = millis() - renderstart;
-      log_w("Rendered %s in %d ms", BleCard->address, rendertime );
+      //unsigned long rendertime = millis() - renderstart;
+      //log_w("Rendered %s in %d ms", BleCard->address, rendertime );
 
     }
 
@@ -1250,6 +1251,7 @@ class UIUtils {
 
       TextCountersIcon.posX     = heapStrX;
       TextCountersIcon.posY     = heapStrY;
+      TextCountersIcon.bgcolor  = HEADER_BGCOLOR;
 
       rssiPointer         = &drawRSSIBar;
       textAlignPointer    = &alignTextAt;
@@ -1268,6 +1270,7 @@ class UIUtils {
       BLECollectorIconBar.pushIcon( &TextCountersIcon );
       BLECollectorIconBar.setMargin( BLECollectorIconBarM );
       BLECollectorIconBar.init();
+      BLECollectorIconBarX = Out.width - BLECollectorIconBar.width;
 
     }
 
@@ -1310,28 +1313,28 @@ class UIUtils {
     // landscape / portrait theme switcher
     static void setUISizePos() {
       // TODO: dynamize these
-      iconAppX = 124;
-      iconAppY = 0;
-      iconRtcX = 92;
-      iconRtcY = 7;
       iconBleX = 104;
       iconBleY = 7;
       iconDbX = 116;
       iconDbY = 7;
       iconR = 4; // BLE icon radius
+      displayMode = getDisplayMode();
 
-      switch( getDisplayMode() ) {
+      switch( displayMode ) {
         case TFT_LANDSCAPE:
           log_w("Using UI in landscape mode (w:%d, h:%d)", Out.width, Out.height);
+          sprintf(UpTimeStringTplTpl, "%s", "Up:%9s");
           sprintf(seenDevicesCountSpacer, "%s", "   "); // Seen
           sprintf(scansCountSpacer, "%s", "  "); // Scans
-          headerHeight        = 35; // Important: resulting scrollHeight must be a multiple of font height, default font height is 8px
-          footerHeight        = 13; // Important: resulting scrollHeight must be a multiple of font height, default font height is 8px
+          iconAppX            = 124;
+          headerHeight        = 36; // Important: resulting scrollHeight must be a multiple of font height, default font height is 8px
+          footerHeight        = 12; // Important: resulting scrollHeight must be a multiple of font height, default font height is 8px
           scrollHeight        = ( Out.height - ( headerHeight + footerHeight ));
           leftMargin          = 2;
           footerBottomPosY    = Out.height;
           headerStatsX        = Out.width - 80;
-          graphLineWidth      = HEAPMAP_BUFFLEN - 1;
+          graphLineWidth      = 60;//heapMapBuffLen - 1;
+          heapMapBuffLen     = graphLineWidth+1; // add 1 for scroll
           graphLineHeight     = 29;
           graphX              = Out.width - (150);
           graphY              = 0; // footerBottomPosY - 37;// 283
@@ -1342,13 +1345,13 @@ class UIUtils {
           headerStatsIconsY   = 4;
           headerLineHeight    = 16;
           progressBarY        = 32;
-          hhmmPosX            = 180;
-          hhmmPosY            = footerBottomPosY - 8;
+          hhmmPosX            = 200;
+          hhmmPosY            = footerBottomPosY - 9;
           uptimePosX          = Out.width-80;
           uptimePosY          = headerStatsIconsY + headerLineHeight;
           uptimeAlign         = ALIGN_RIGHT;
           copyleftPosX        = 250;
-          copyleftPosY        = footerBottomPosY - 8;
+          copyleftPosY        = footerBottomPosY - 9;
           cdevcPosX           = Out.width-80;
           cdevcPosY           = headerStatsIconsY + headerLineHeight;
           cdevcAlign          = ALIGN_RIGHT;
@@ -1377,7 +1380,7 @@ class UIUtils {
           entriesStrX         = Out.width-80;
           entriesStrY         = headerStatsIconsY + headerLineHeight;
           entriesAlign        = ALIGN_RIGHT;
-          BLECollectorIconBarM= 2;
+          BLECollectorIconBarM= 4;
           BLECollectorIconBarX= Out.width - 74;
           BLECollectorIconBarY= 3;
           hallOfMacPosX       = 0;
@@ -1391,15 +1394,18 @@ class UIUtils {
         break;
         case TFT_PORTRAIT:
           log_w("Using UI in portrait mode");
+          sprintf(UpTimeStringTplTpl, "%s", "Up:%9s");
           sprintf(seenDevicesCountSpacer, "%s", "   "); // Seen
           sprintf(scansCountSpacer, "%s", "  "); // Scans
+          iconAppX            = 124;
           headerHeight        = 35; // Important: resulting scrollHeight must be a multiple of font height, default font height is 8px
           footerHeight        = 45; // Important: resulting scrollHeight must be a multiple of font height, default font height is 8px
           scrollHeight        = ( Out.height - ( headerHeight + footerHeight ));
           leftMargin          = 2;
           footerBottomPosY    = Out.height;
           headerStatsX        = Out.width-76;
-          graphLineWidth      = HEAPMAP_BUFFLEN - 1;
+          graphLineWidth      = 70;//heapMapBuffLen - 1;
+          heapMapBuffLen     = graphLineWidth+1; // add 1 for scroll
           graphLineHeight     = 35;
           graphX              = Out.width - graphLineWidth - 2;
           graphY              = footerBottomPosY - 37;// 283
@@ -1410,12 +1416,12 @@ class UIUtils {
           headerStatsIconsY   = 4;
           headerLineHeight    = 14;
           progressBarY        = 30;
-          hhmmPosX            = 107;
+          hhmmPosX            = 97;
           hhmmPosY            = footerBottomPosY - 28;
           uptimePosX          = Out.width-80;
           uptimePosY          = headerStatsIconsY + headerLineHeight;
           uptimeAlign         = ALIGN_RIGHT;
-          copyleftPosX        = 87;
+          copyleftPosX        = 77;
           copyleftPosY        = footerBottomPosY - 8;
           cdevcPosX           = Out.width-80;
           cdevcPosY           = headerStatsIconsY + headerLineHeight;
@@ -1458,41 +1464,45 @@ class UIUtils {
         break;
         case TFT_SQUARE:
         default:
+          TextCountersIcon.srcStatus = NULL; // don't decorate text counters = save 10px
           log_w("Using UI in square/squeezed mode (w:%d, h:%d)", Out.width, Out.height);
+          sprintf(UpTimeStringTplTpl, "%s", "Up:%9s");
           sprintf(seenDevicesCountSpacer, "%s", "   "); // Seen
           sprintf(scansCountSpacer, "%s", "  "); // Scans
-          headerHeight        = 35; // Important: resulting scrollHeight must be a multiple of font height, default font height is 8px
-          footerHeight        = 13; // Important: resulting scrollHeight must be a multiple of font height, default font height is 8px
+          iconAppX            = 120;
+          headerHeight        = 37; // Important: resulting scrollHeight must be a multiple of font height, default font height is 8px
+          footerHeight        = 11; // Important: resulting scrollHeight must be a multiple of font height, default font height is 8px
           scrollHeight        = ( Out.height - ( headerHeight + footerHeight ));
           leftMargin          = 2;
           footerBottomPosY    = Out.height;
           headerStatsX        = Out.width - 80;
-          graphLineWidth      = HEAPMAP_BUFFLEN - 1;
-          graphLineHeight     = 29;
+          graphLineWidth      = 73;
+          heapMapBuffLen     = graphLineWidth+1; // add 1 for scroll
+          graphLineHeight     = 18;
           graphX              = Out.width - (graphLineWidth);
-          graphY              = 0; // footerBottomPosY - 37;// 283
+          graphY              = 13; // footerBottomPosY - 37;// 283
           percentBoxX         = (graphX - 12); // percentbox is 10px wide + 2px margin and 2px border
-          percentBoxY         = graphLineHeight+2;
+          percentBoxY         = graphY+graphLineHeight+2;
           percentBoxSize      = 8;
           headerStatsIconsX   = Out.width - (80 + 6);
           headerStatsIconsY   = 4;
           headerLineHeight    = 16;
-          progressBarY        = 32;
-          hhmmPosX            = leftMargin;
-          hhmmPosY            = footerBottomPosY - 8;
-          uptimePosX          = 50;
-          uptimePosY          = footerBottomPosY - 8;
-          uptimeAlign         = ALIGN_FREE;
-          copyleftPosX        = 94;
-          copyleftPosY        = footerBottomPosY - 8;
+          progressBarY        = 33;
+          hhmmPosX            = 63;
+          hhmmPosY            = footerBottomPosY - 9;
+          uptimePosX          = headerStatsX;
+          uptimePosY          = footerBottomPosY - 9;
+          uptimeAlign         = ALIGN_RIGHT;
+          copyleftPosX        = 97;
+          copyleftPosY        = footerBottomPosY - 9;
           cdevcPosX           = headerStatsX;
-          cdevcPosY           = footerBottomPosY - 8;
+          cdevcPosY           = footerBottomPosY - 9;
           cdevcAlign          = ALIGN_RIGHT;
           sesscPosX           = headerStatsX;
-          sesscPosY           = footerBottomPosY - 8;
+          sesscPosY           = footerBottomPosY - 9;
           sesscAlign          = ALIGN_RIGHT;
           ndevcPosX           = headerStatsX;
-          ndevcPosY           = footerBottomPosY - 8;
+          ndevcPosY           = footerBottomPosY - 9;
           ndevcAlign          = ALIGN_RIGHT;
           macAddrColorsScaleX = 4;
           macAddrColorsScaleY = 2;
@@ -1508,18 +1518,18 @@ class UIUtils {
           showNdevc           = false;
           showUptime          = false;
           heapStrX            = headerStatsX;
-          heapStrY            = footerBottomPosY - 8;
+          heapStrY            = footerBottomPosY - 9;
           heapAlign           = ALIGN_RIGHT;
           entriesStrX         = headerStatsX;
-          entriesStrY         = footerBottomPosY - 8;
+          entriesStrY         = footerBottomPosY - 9;
           entriesAlign        = ALIGN_RIGHT;
           BLECollectorIconBarM= 2;
-          BLECollectorIconBarX= Out.width - 76;
+          BLECollectorIconBarX= Out.width - 72;
           BLECollectorIconBarY= 0;
           hallOfMacPosX       = 0;
-          hallOfMacPosY       = footerBottomPosY - 36;
-          hallOfMacHmargin    = 4;
-          hallOfMacVmargin    = 2;
+          hallOfMacPosY       = footerBottomPosY - 10;
+          hallOfMacHmargin    = 2;
+          hallOfMacVmargin    = 1;
           hallOfMacItemWidth  = 16 + hallOfMacHmargin*2;
           hallOfMacItemHeight = 8 + hallOfMacVmargin*2;
           hallofMacCols       = 3;
@@ -1528,12 +1538,17 @@ class UIUtils {
       }
 
       hallOfMacSize       = hallofMacCols*hallofMacRows;
-
+      iconAppY = (headerHeight-4)/2 - Icon_tbz_src->height/2;
       // init some heap graph variables
       toleranceheap = min_free_heap + heap_tolerance;
       baseCoordY = graphLineHeight-2; // set Y axis to 2px-bottom of the graph
       dcpmFirstY = baseCoordY;
       dcpmppFirstY = baseCoordY;
+
+      log_w("Will allocate heapgraph buffer to %d", heapMapBuffLen );
+      devCountPerMinutePerPeriod = (uint16_t*)calloc( heapMapBuffLen, sizeof( uint16_t ) );
+      heapmap = (uint32_t*)calloc( heapMapBuffLen, sizeof( uint32_t ) );
+      log_w("Allocation successful");
 
     }
 

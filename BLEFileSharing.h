@@ -29,7 +29,6 @@
 
 */
 
-
 #define TICKS_TO_DELAY 1000
 
 static BLEUUID FileSharingServiceUUID( "f59f6622-1540-0001-8d71-362b9e155667" ); // generated UUID for the service

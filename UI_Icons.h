@@ -386,36 +386,36 @@ IconSrc *TextCounters_uptime_src  = new IconSrc( ram_jpeg,               ram_jpe
 IconSrc *TimeIcon_SET_src         = new IconSrc( clock_jpeg,             clock_jpeg_len,             8,  8 );
 IconSrc *TimeIcon_UNSET_src       = new IconSrc( clock3_jpeg,            clock3_jpeg_len,            8,  8 );
 IconSrc *TimeIcon_RTC_src         = new IconSrc( clock2_jpeg,            clock2_jpeg_len,            8,  8 );
-IconSrc *Icon8x8_zzz_src          = new IconSrc( zzz_jpeg,               zzz_jpeg_len,               8,  8 );//, alignoffset,    headerStatsIconsY + headerLineHeight, 8,  8 ); // sleep icon
-IconSrc *Icon8x8_update_src       = new IconSrc( update_jpeg,            update_jpeg_len,            8,  8 );//, 138, Out.scrollPosY - hop, 8,  8);
-IconSrc *Icon8x8_service_src      = new IconSrc( service_jpeg,           service_jpeg_len,           8,  8 );//, 128, Out.scrollPosY - hop, 8,  8);
-IconSrc *Icon8x8_espressif_src    = new IconSrc( espressif_jpeg,         espressif_jpeg_len,         8,  8 );//, 11, Out.scrollPosY - hop, 8, 8 );
-IconSrc *Icon8x8_apple16_src      = new IconSrc( apple16_jpeg,           apple16_jpeg_len,           8,  8 );//, 12, Out.scrollPosY - hop, 8,  8 );
-IconSrc *Icon8x8_crosoft_src      = new IconSrc( crosoft_jpeg,           crosoft_jpeg_len,           8,  8 );//, 12, Out.scrollPosY - hop, 8,  8 );
-IconSrc *Icon8x8_generic_src      = new IconSrc( generic_jpeg,           generic_jpeg_len,           8,  8 );//, 12, Out.scrollPosY - hop, 8,  8 );
+IconSrc *Icon8x8_zzz_src          = new IconSrc( zzz_jpeg,               zzz_jpeg_len,               8,  8 );
+IconSrc *Icon8x8_update_src       = new IconSrc( update_jpeg,            update_jpeg_len,            8,  8 );
+IconSrc *Icon8x8_service_src      = new IconSrc( service_jpeg,           service_jpeg_len,           8,  8 );
+IconSrc *Icon8x8_espressif_src    = new IconSrc( espressif_jpeg,         espressif_jpeg_len,         8,  8 );
+IconSrc *Icon8x8_apple16_src      = new IconSrc( apple16_jpeg,           apple16_jpeg_len,           8,  8 );
+IconSrc *Icon8x8_crosoft_src      = new IconSrc( crosoft_jpeg,           crosoft_jpeg_len,           8,  8 );
+IconSrc *Icon8x8_generic_src      = new IconSrc( generic_jpeg,           generic_jpeg_len,           8,  8 );
 // ?x8 icons
-IconSrc *Icon8h_nic16_src         = new IconSrc( nic16_jpeg,             nic16_jpeg_len,             13, 8 );//, 10, Out.scrollPosY - hop, 13, 8 );
-IconSrc *Icon8h_ibm8_src          = new IconSrc( ibm8_jpg,               ibm8_jpg_len,               20, 8 );//, 10, Out.scrollPosY - hop, 20,  8);
-IconSrc *Icon8h_speaker_src       = new IconSrc( speaker_icon_jpg,       speaker_icon_jpg_len,       6,  8 );//, 12, Out.scrollPosY - hop, 6,  8 );
-IconSrc *Icon8h_name_src          = new IconSrc( name_jpeg,              name_jpeg_len,              7,  8 );//, 12, Out.scrollPosY - hop, 7,  8);
-IconSrc *Icon8h_BLECollector_src  = new IconSrc( BLECollector_Title_jpg, BLECollector_Title_jpg_len, 82, 8 );//, 2, 3, 82,  8);
+IconSrc *Icon8h_nic16_src         = new IconSrc( nic16_jpeg,             nic16_jpeg_len,             13, 8 );
+IconSrc *Icon8h_ibm8_src          = new IconSrc( ibm8_jpg,               ibm8_jpg_len,               20, 8 );
+IconSrc *Icon8h_speaker_src       = new IconSrc( speaker_icon_jpg,       speaker_icon_jpg_len,       6,  8 );
+IconSrc *Icon8h_name_src          = new IconSrc( name_jpeg,              name_jpeg_len,              7,  8 );
+IconSrc *Icon8h_BLECollector_src  = new IconSrc( BLECollector_Title_jpg, BLECollector_Title_jpg_len, 82, 8 );
 // ?x? icons
-IconSrc *Icon_ble_src             = new IconSrc( ble_jpeg,               ble_jpeg_len,               7,  11 );//, 88, 2, 7, 11);
-IconSrc *Icon_db_src              = new IconSrc( db_jpeg,                db_jpeg_len,                12, 11 );//,  100, 2, 12, 11);
-IconSrc *Icon_tbz_src             = new IconSrc( tbz_28x28_jpg,          tbz_28x28_jpg_len,          28, 28 );//, (Out.width/2 - 14), Out.scrollPosY - pos + 8, 28,  28);
+IconSrc *Icon_ble_src             = new IconSrc( ble_jpeg,               ble_jpeg_len,               7,  11 );
+IconSrc *Icon_db_src              = new IconSrc( db_jpeg,                db_jpeg_len,                12, 11 );
+IconSrc *Icon_tbz_src             = new IconSrc( tbz_28x28_jpg,          tbz_28x28_jpg_len,          28, 28 );
 IconSrc *SDLoaderIcon_SET_src     = new IconSrc( disk00_jpg,             disk00_jpg_len,             30, 30 );
 IconSrc *SDLoaderIcon_UNSET_src   = new IconSrc( disk01_jpg,             disk01_jpg_len,             30, 30 );
 IconSrc *GPSIcon_SET_src          = new IconSrc( gps_jpg,                gps_jpg_len,                10, 10 );
 IconSrc *GPSIcon_UNSET_src        = new IconSrc( nogps_jpg,              nogps_jpg_len,              10, 10 );
 
 // shape based icons
-IconShape *Shape_BLE_OFF             = new IconShape( ICON_SHAPE_DISC, HEADER_BGCOLOR );
+IconShape *Shape_BLE_OFF             = new IconShape( ICON_SHAPE_DISC, BLE_DARKBLUE );
 IconShape *Shape_BLE_IDLE            = new IconShape( ICON_SHAPE_DISC, BLE_DARKGREY );
 IconShape *Shape_BLE_ADV_SCAN        = new IconShape( ICON_SHAPE_DISC, BLUETOOTH_COLOR );
 IconShape *Shape_BLE_ADV_WHITELISTED = new IconShape( ICON_SHAPE_CIRCLE, BLE_GREENYELLOW );
 
-IconShape *Shape_ROLE_NONE           = new IconShape( ICON_SHAPE_SQUARE, BLE_DARKGREY );
-IconShape *Shape_ROLE_CLOCK_SHARING  = new IconShape( ICON_SHAPE_SQUARE, BLE_DARKORANGE );
+IconShape *Shape_ROLE_NONE           = new IconShape( ICON_SHAPE_SQUARE, BLE_DARKORANGE );
+IconShape *Shape_ROLE_CLOCK_SHARING  = new IconShape( ICON_SHAPE_SQUARE, BLE_ORANGE );
 IconShape *Shape_ROLE_CLOCK_SEEKING  = new IconShape( ICON_SHAPE_SQUARE, BLE_GREENYELLOW );
 IconShape *Shape_ROLE_FILE_SHARING   = new IconShape( ICON_SHAPE_SQUARE, BLE_ORANGE );
 IconShape *Shape_ROLE_FILE_SEEKING   = new IconShape( ICON_SHAPE_SQUARE, BLUETOOTH_COLOR );

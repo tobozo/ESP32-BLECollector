@@ -240,6 +240,7 @@ typedef enum {
   TFT_LANDSCAPE = 2
 } DisplayMode;
 
+static DisplayMode displayMode;
 
 static uint8_t percentBoxSize;
 static uint8_t headerLineHeight;
@@ -358,7 +359,7 @@ static const uint16_t BLECARD_BGCOLOR     = tft_color565(0x22, 0x22, 0x44);
 static uint16_t BGCOLOR                   = tft_color565(0x22, 0x22, 0x44);
 
 // heap map settings
-#define HEAPMAP_BUFFLEN 61 // graph width (+ 1 for hscroll)
+
 uint32_t lastfreeheap;
 uint32_t toleranceheap;
 uint16_t baseCoordY;
@@ -372,10 +373,11 @@ uint16_t dcpmppLastY = 0;
 #define AUTHOR "tobozo"
 
 // heap management (used by graph)
+static uint32_t heapMapBuffLen = 61; // graph width (+ 1 for hscroll)
 static uint32_t min_free_heap = 90000; // sql out of memory errors eventually occur under 100000
 static uint32_t initial_free_heap = freeheap;
 static uint32_t heap_tolerance = 20000; // how much memory under min_free_heap the sketch can go and recover without restarting itself
-static uint32_t heapmap[HEAPMAP_BUFFLEN] = {0}; // stores the history of heapmap values
+static uint32_t *heapmap = NULL;//[HEAPMAP_BUFFLEN] = {0}; // stores the history of heapmap values
 static uint16_t heapindex = 0; // index in the circular buffer
 
 size_t devicesStatCount = 0;    // how many devices found since last measure
@@ -386,21 +388,26 @@ unsigned long devGraphStartedSince = 0;
 const unsigned long devGraphPeriodShort = 1000; // refresh every 1 second
 const unsigned long devGraphPeriodLong  = 1000 * 5; // refresh every 5 seconds
 uint16_t devCountPerMinute[60] = {0};
-uint16_t devCountPerMinutePerPeriod[HEAPMAP_BUFFLEN] = {0};
+uint16_t *devCountPerMinutePerPeriod = NULL;//[HEAPMAP_BUFFLEN] = {0};
 uint8_t devCountPerMinuteIndex = 0;
 uint8_t devCountPerMinutePerPeriodIndex = 0;
-bool devCountWasUpdated = false;
+int8_t minutesTimeZone = 0;
+
 uint16_t maxcdpm = 0;
 uint16_t mincdpm = 0xffff;
 
 uint16_t maxcdpmpp = 0;
 uint16_t mincdpmpp = 0xffff;
 
+static bool devCountWasUpdated = false;
 static bool blinkit = false; // task blinker state
 static bool blinktoggler = true;
 static bool appIconRendered = false;
 static bool foundTimeServer = false;
 static bool foundFileServer = false;
+static bool RTCisRunning = false;
+static bool ForceBleTime = false;
+static bool HasBTTime = false;
 
 static unsigned long blinknow = millis(); // task blinker start time
 static unsigned long scanTime = SCAN_DURATION * 1000; // task blinker duration
@@ -431,5 +438,21 @@ static char nameStr[38] = {'\0'};
 static char ouiStr[38] = {'\0'};
 static char appearanceStr[48] = {'\0'};
 static char manufStr[38] = {'\0'};
+
+// some date/time formats used in this app
+const char* hhmmStringTpl = "%02d:%02d";
+static char hhmmString[13] = "--:--";
+const char* hhmmssStringTpl = "%02d:%02d:%02d";
+static char hhmmssString[13] = "--:--:--"; 
+const char* UpTimeStringTpl = "%02d:%02d";
+const char* UpTimeStringTplDays = "%2d %s";
+static char UpTimeString[32] = "--:--";
+static char UpTimeStringTplTpl[16] = "";
+const char* YYYYMMDD_HHMMSS_Tpl = "%04d-%02d-%02d %02d:%02d:%02d";
+static char YYYYMMDD_HHMMSS_Str[32] = "YYYY-MM-DD HH:MM:SS";
+static bool DayChangeTrigger = false;
+static bool HourChangeTrigger = false;
+int current_day = -1;
+int current_hour = -1;
 
 extern bool scanTaskRunning;
