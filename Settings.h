@@ -48,7 +48,8 @@
 #define HAS_EXTERNAL_RTC   false // uses I2C, search this file for RTC_SDA or RTC_SCL to change pins
 #define HAS_GPS            false // uses hardware serial, search this file for GPS_RX and GPS_TX to change pins
 #define TIME_UPDATE_SOURCE TIME_UPDATE_NONE // TIME_UPDATE_GPS // soon deprecated, will be implicit
-
+int8_t timeZone = 1; // 1 = GMT+1, 2 = GMT+2, etc
+const char* NTP_SERVER = "europe.pool.ntp.org";
 
 byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define MIN_SCAN_DURATION 10 // seconds min
@@ -117,11 +118,37 @@ static xSemaphoreHandle mux = NULL; // this is needed to prevent rendering colli
 static bool DBneedsReplication = false;
 static bool isQuerying = false; // state maintained while SD is accessed, useful when SD is used instead of SD_MMC
 
+// str helpers
+char *substr(const char *src, int pos, int len) {
+  char* dest = NULL;
+  if (len > 0) {
+    dest = (char*)calloc(len + 1, 1);
+    if (NULL != dest) {
+      strncat(dest, src + pos, len);
+    }
+  }
+  return dest;
+}
+int strpos(const char *hay, const char *needle, int offset) {
+  char haystack[strlen(hay)];
+  strncpy(haystack, hay+offset, strlen(hay)-offset);
+  char *p = strstr(haystack, needle);
+  if (p)
+    return p - haystack+offset;
+  return -1;
+}
 
 // used to get the resetReason
 #include <rom/rtc.h>
 #include <Preferences.h>
 Preferences preferences;
+// use the primitive because ESP.getFreeHeap() is inconsistent across SDK versions
+#define freeheap heap_caps_get_free_size(MALLOC_CAP_INTERNAL)
+#define freepsheap ESP.getFreePsram()
+#define resetReason (int)rtc_get_reset_reason(0)
+#define takeMuxSemaphore() if( mux ) { xSemaphoreTake(mux, portMAX_DELAY); log_v("Took Semaphore"); }
+#define giveMuxSemaphore() if( mux ) { xSemaphoreGive(mux); log_v("Gave Semaphore"); }
+
 #include "Display.h"
 #include "DateTime.h"
 
@@ -139,16 +166,27 @@ Preferences preferences;
 #if HAS_GPS
   #define GPS_RX 39 // io pin number
   #define GPS_TX 35 // io pin number
+#else
+  static bool GPSHasFix = false;
+  static bool GPSHasDateTime = false;
 #endif
 
-// don't load BLE stack and SQLite3 when compiling the NTP Utility
+// RF stack
+#ifdef WITH_WIFI
+  #include <WiFi.h>
+  char WiFi_SSID[32];
+  char WiFi_PASS[32];
+#endif
+
+// BLE stack
 #include <BLEDevice.h>
 #include <BLEUtils.h>
 #include <BLEScan.h>
 #include <BLEAdvertisedDevice.h>
+#include <BLEClient.h>
+#include <BLE2902.h>
 
-#include <stdio.h>
-#include <stdlib.h>
+// SQLite stack
 #include <sqlite3.h> // https://github.com/siara-cc/esp32_arduino_sqlite3_lib
 
 // used to disable brownout detector
@@ -169,28 +207,17 @@ Preferences preferences;
  * 
  */
 
-// use the primitive because ESP.getFreeHeap() is inconsistent across SDK versions
-#define freeheap heap_caps_get_free_size(MALLOC_CAP_INTERNAL)
-#define freepsheap ESP.getFreePsram()
-#define resetReason (int)rtc_get_reset_reason(0)
-#define takeMuxSemaphore() if( mux ) { xSemaphoreTake(mux, portMAX_DELAY); log_v("Took Semaphore"); }
-#define giveMuxSemaphore() if( mux ) { xSemaphoreGive(mux); log_v("Gave Semaphore"); }
-
 // statistical values
-static int devicesCount = 0; // devices count per scan
+static int devicesCount     = 0; // devices count per scan
 static int sessDevicesCount = 0; // total devices count per session
-static int newDevicesCount = 0; // total devices count per session
-static int results = 0; // total results during last query
+//static int newDevicesCount  = 0; // total devices count per session
+static int results          = 0; // total results during last query
 static unsigned int entries = 0; // total entries in database
-static byte prune_trigger = 0; // incremented on every insertion, reset on prune()
-static byte prune_threshold = 10; // prune every x inertions
-//static bool print_results = false;
-static bool print_tabular = true;
+static byte prune_trigger   = 0; // incremented on every insertion, reset on prune()
+
+
 
 // load stack
-#include "Assets.h" // bitmaps
-#include "AmigaBall.h"
-#include "SDUtils.h"
 #include "BLECache.h" // data struct
 #include "ScrollPanel.h" // scrolly methods
 #include "TimeUtils.h"

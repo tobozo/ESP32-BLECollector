@@ -126,7 +126,7 @@ static int VendorCacheHit = 0;
 struct VendorPsramCacheStruct {
   uint16_t *devid = NULL;
   uint16_t hits   = 0; // cache hits
-  char *vendor = NULL;
+  char *vendor    = NULL;
 };
 
 
@@ -144,16 +144,15 @@ struct OUIHeapCacheStruct {
   char *assignment = NULL;
   void init( bool hasPsram=false ) {
     if( hasPsram ) {  
-      mac =        (char*)ps_calloc(SHORT_MAC_LEN+1, sizeof(char));
+      mac        = (char*)ps_calloc(SHORT_MAC_LEN+1, sizeof(char));
       assignment = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
     } else {
-      mac =        (char*)calloc(SHORT_MAC_LEN+1, sizeof(char));
+      mac        = (char*)calloc(SHORT_MAC_LEN+1, sizeof(char));
       assignment = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
     }
   }
   void setMac( const char* _mac ) {
     copy( mac, _mac, SHORT_MAC_LEN );
-    
   }
   void setAssignment( const char* _assignment ) {
     copy( assignment, _assignment, MAX_FIELD_LEN );
@@ -191,7 +190,7 @@ class DBUtils {
   public:
 
     char currentBLEAddress[MAC_LEN+1] = "00:00:00:00:00:00"; // used to proxy BLE search term to DB query
-   
+
     char* BLEMacsDbSQLitePath = NULL;//"/sdcard/blemacs.db";
     char* BLEMacsDbFSPath = NULL;// "/blemacs.db";
 
@@ -208,7 +207,7 @@ class DBUtils {
       INSERTION_SUCCESS = 1,
       INCREMENT_SUCCESS = 2
     };
-    
+
     enum DBName {
       BLE_COLLECTOR_DB = 0,
       MAC_OUI_NAMES_DB = 1,
@@ -227,7 +226,7 @@ class DBUtils {
       { .id=BLE_VENDOR_NAMES_DB, .sqlitepath=(char *)BLE_VENDOR_NAMES_DB_SQLITE_PATH, .fspath=(char *)BLE_VENDOR_NAMES_DB_FS_PATH }
     };
 
-  
+
     bool isOOM = false; // for stability
     bool isCorrupt = false; // for maintenance
     bool hasPsram = false;
@@ -248,10 +247,10 @@ class DBUtils {
       hasPsram = psramInit();
 
       log_i("Has PSRAM: %s", hasPsram?"true":"false");
-      
+
       BLEMacsDbSQLitePath = (char*)malloc(32);
       BLEMacsDbFSPath = (char*)malloc(32);
-      
+
       setBLEDBPath();
 
       if( !checkDBFiles() ) {
@@ -259,7 +258,7 @@ class DBUtils {
       } else {
         log_w("OUI and Mac DB Files okay");
       }
-      
+
       initial_free_heap = freeheap;
       isQuerying = true;
       if( !BLE_FS.exists( BLEMacsDbFSPath ) ) {
@@ -271,7 +270,7 @@ class DBUtils {
         sqlite3_initialize();
       }
       isQuerying = false;
-      
+
       entries = getEntries();
 
       return cacheWarmup();
@@ -302,30 +301,36 @@ class DBUtils {
     }
 
 
-    bool checkDBFiles() {
+    static bool checkDBFiles() {
+      bool OUIFileChecksOut    = checkOUIFile();
+      bool VendorFileChecksOut = checkVendorFile();
+      if( !OUIFileChecksOut || !VendorFileChecksOut ) return false;
+      return true;
+    }
+
+
+    static bool checkOUIFile() {
+      return checkFile( MAC_OUI_NAMES_DB_FS_PATH, MAC_OUI_NAMES_DB_FS_SIZE );
+    }
+
+
+    static bool checkVendorFile() {
+      return checkFile( BLE_VENDOR_NAMES_DB_FS_PATH, BLE_VENDOR_NAMES_DB_FS_SIZE );
+    }
+
+
+    static bool checkFile( const char* fileName, const size_t expectedSize ) {
       bool ret = true;
       isQuerying = true;
-      if( ! BLE_FS.exists( MAC_OUI_NAMES_DB_FS_PATH ) ) {
-        log_e("Missing critical DB file %s, aborting\n", dbcollection[MAC_OUI_NAMES_DB].sqlitepath);
+      if( ! BLE_FS.exists( fileName ) ) {
+        log_e( "Missing critical DB file %s, aborting\n", fileName );
         ret = false;
       } else {
-        File tmpFile = BLE_FS.open( MAC_OUI_NAMES_DB_FS_PATH );
+        File tmpFile = BLE_FS.open( fileName );
         size_t size = tmpFile.size();
         tmpFile.close();
-        if( size != MAC_OUI_NAMES_DB_FS_SIZE ) {
-          log_e("Critical DB file %s is corrupted (expected: %d, found: %d), aborting", dbcollection[MAC_OUI_NAMES_DB].sqlitepath, MAC_OUI_NAMES_DB_FS_SIZE, size);
-          ret = false;
-        }
-      }
-      if( ! BLE_FS.exists( BLE_VENDOR_NAMES_DB_FS_PATH ) ) {
-        log_e("Missing critical DB file %s, aborting\n", dbcollection[BLE_VENDOR_NAMES_DB].sqlitepath);
-        ret = false;
-      } else {
-        File tmpFile = BLE_FS.open( BLE_VENDOR_NAMES_DB_FS_PATH );
-        size_t size = tmpFile.size();
-        tmpFile.close();
-        if( size != BLE_VENDOR_NAMES_DB_FS_SIZE ) {
-          log_e("Critical DB file %s is corrupted (expected: %d, found: %d), aborting", dbcollection[BLE_VENDOR_NAMES_DB].sqlitepath, BLE_VENDOR_NAMES_DB_FS_SIZE, size);
+        if( size != expectedSize ) {
+          log_e("Critical DB file %s is corrupted (expected: %d, found: %d), aborting", fileName, expectedSize, size);
           ret = false;
         }
       }
@@ -349,7 +354,7 @@ class DBUtils {
       } else {
         for(uint16_t i=0; i<OUICACHE_SIZE; i++) {
           OuiHeapCache[i].init( false );
-        }            
+        }
       }
     }
 
@@ -474,10 +479,19 @@ class DBUtils {
         }
       }
       if( HourChangeTrigger ) {
+        // try to adjust time if available
+        #if HAS_GPS
+          setGPSTime( NULL );
+        #else
+          ForceBleTime = true;
+        #endif
         log_w("Hour changed, will trigger replication");
+
+
         DBneedsReplication = true;
         HourChangeTrigger = false;
         DayChangeTrigger = false;
+
       }
       if( DBneedsReplication ) {
         log_w("Replicating DB");
@@ -526,7 +540,7 @@ class DBUtils {
 
     int open(DBName dbName, bool readonly=true) {
      isQuerying = true;
-     int rc;
+     int rc = 1;
       switch(dbName) {
         case BLE_COLLECTOR_DB: // will be created upon first boot
           rc = sqlite3_open( dbcollection[dbName].sqlitepath/*"/sdcard/blemacs.db"*/, &BLECollectorDB); 
@@ -537,22 +551,22 @@ class DBUtils {
         case BLE_VENDOR_NAMES_DB: // https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers
           rc = sqlite3_open( dbcollection[dbName].sqlitepath /*"/sdcard/ble-oui.db"*/, &BLEVendorsDB); 
         break;
-        default: log_e("Can't open null DB"); UI.DBStateIconSetColor(-1); isQuerying = false; return rc;
+        default: log_e("Can't open null DB"); UI.SetDBStateIcon(-1); isQuerying = false; return rc;
       }
       if (rc) {
-        log_e("Can't open database %d", dbName);
+        log_e("Can't open database %s", dbcollection[dbName].sqlitepath);
         // SD Card removed ? File corruption ? OOM ?
         // isOOM = true;
-        UI.DBStateIconSetColor(-1); // OOM or I/O error
+        UI.SetDBStateIcon(-1); // OOM or I/O error
         delay(1);
         isQuerying = false;
         return rc;
       } else {
-        log_v("Opened database %d successfully", dbName);
+        log_v("Opened database %s successfully", dbcollection[dbName].sqlitepath);
         if(readonly) {
-          UI.DBStateIconSetColor(1); // R/O
+          UI.SetDBStateIcon(1); // R/O
         } else {
-          UI.DBStateIconSetColor(2); // R+W
+          UI.SetDBStateIcon(2); // R+W
         }
         delay(1);
       }
@@ -561,7 +575,7 @@ class DBUtils {
 
     // close the (hopefully) previously opened DB
     void close(DBName dbName) {
-      UI.DBStateIconSetColor(0);
+      UI.SetDBStateIcon(0);
       switch(dbName) {
         case BLE_COLLECTOR_DB:    sqlite3_close(BLECollectorDB); break;
         case MAC_OUI_NAMES_DB:    sqlite3_close(OUIVendorsDB); break;
@@ -621,8 +635,8 @@ class DBUtils {
       }
       close(BLE_VENDOR_NAMES_DB);
       for(byte i=0;i<8;i++) {
-        uint32_t rnd = random(0, VendorDBSize);
-        log_i("Testing random vendor mac #%d: %d / %s", rnd, VendorPsramCache[rnd]->devid[0], VendorPsramCache[rnd]->vendor );
+        //uint32_t rnd = random(0, VendorDBSize);
+        log_i("Testing random vendor mac #%d: %d / %s", random(0, VendorDBSize), VendorPsramCache[rnd]->devid[0], VendorPsramCache[rnd]->vendor );
       }
     }
 
@@ -642,8 +656,8 @@ class DBUtils {
       }
       close(MAC_OUI_NAMES_DB);
       for(byte i=0;i<8;i++) {
-        uint32_t rnd = random(0, OUIDBSize);
-        log_i("Testing random mac #%06X: %s / %s", rnd, OuiPsramCache[rnd]->mac, OuiPsramCache[rnd]->assignment );
+        //uint32_t rnd = random(0, OUIDBSize);
+        log_i("Testing random mac #%06X: %s / %s", random(0, OUIDBSize), OuiPsramCache[rnd]->mac, OuiPsramCache[rnd]->assignment );
       }
     }
 
@@ -762,7 +776,7 @@ class DBUtils {
       } else {
         getHeapVendor(devid, dest);
       }
-    }   
+    }
 
 
     void getOUI(const char* mac, char* dest) {
@@ -775,8 +789,7 @@ class DBUtils {
 
 
     unsigned int getEntries(bool _display_results = false) {
-      int rc = open(BLE_COLLECTOR_DB);
-      //log_w("open collector db response=%d", rc);
+      open(BLE_COLLECTOR_DB);
       if (_display_results) {
         DBExec( BLECollectorDB, allEntriesQuery );
       } else {
@@ -818,7 +831,6 @@ class DBUtils {
     }
 
     void pruneDB() {
-      unsigned int before_pruning = getEntries();
       UI.headerStats("Pruning DB");
       open(BLE_COLLECTOR_DB, false);
       DBExec(BLECollectorDB, pruneTableQuery );
@@ -845,8 +857,7 @@ class DBUtils {
     }
 
     bool testOUI() {
-      int rc = open(MAC_OUI_NAMES_DB);
-      //log_w("open OUI DB responded with: %d", rc);
+      open(MAC_OUI_NAMES_DB);
       DBExec( OUIVendorsDB, testOUIQuery );
       close(MAC_OUI_NAMES_DB);
       char *ouiname = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
@@ -859,8 +870,6 @@ class DBUtils {
       }
       return true;
     }
-
-
 
     void updateItemFromCache( BlueToothDevice* CacheItem ) {
       // not really an update, more of a delete+reinsert
@@ -892,7 +901,7 @@ class DBUtils {
         }
         BLEDevTmp = SourceCache[i];
         if( showBLECards ) {
-          UI.printBLECard( BLEDevTmp ); // render 
+          UI.printBLECard( (BlueToothDeviceLink){.cacheIndex=i,.device=BLEDevTmp}/*BLEDevTmp*/ ); // render 
         }
         updateItemFromCache( SourceCache[i] );
 
@@ -909,7 +918,6 @@ class DBUtils {
       return true;
     }
 
-    
 
   private:
 
@@ -957,9 +965,9 @@ class DBUtils {
       uint16_t colValueLen = 10; // sizeof("[unknown]")
       if ( !isEmpty(colValue) ) {
         colValueLen = strlen( colValue );
-        if(colValueLen > MAX_FIELD_LEN) {
-          colValue[MAX_FIELD_LEN] = '\0';
-          colValueLen = MAX_FIELD_LEN+1;
+        if(colValueLen >= MAX_FIELD_LEN) {
+          colValue[MAX_FIELD_LEN-1] = '\0';
+          colValueLen = MAX_FIELD_LEN;
         } else {
           colValue[colValueLen] = '\0';
           colValueLen++;
@@ -998,7 +1006,6 @@ class DBUtils {
       }
       memcpy( dest, "[unknown]", 10 ); // sizeof("[unknown]")      
     }
-
 
     static void OUIHeapCacheSet(uint16_t cacheindex, const char* shortmac, const char* assignment) {
       memset( OuiHeapCache[cacheindex].mac, '\0', SHORT_MAC_LEN+1);
@@ -1053,9 +1060,9 @@ class DBUtils {
       uint16_t colValueLen = 10; // sizeof("[private]")
       if ( !isEmpty( colValue ) ) {
         colValueLen = strlen( colValue );
-        if(colValueLen > MAX_FIELD_LEN) {
-          colValue[MAX_FIELD_LEN] = '\0';
-          colValueLen = MAX_FIELD_LEN+1;
+        if(colValueLen >= MAX_FIELD_LEN) {
+          colValue[MAX_FIELD_LEN-1] = '\0';
+          colValueLen = MAX_FIELD_LEN;
         } else {
           colValue[colValueLen] = '\0';
           colValueLen++;

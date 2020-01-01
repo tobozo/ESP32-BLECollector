@@ -13,9 +13,9 @@ static float GPSLng = 0.00;
 
 static void GPSInit() {
   GPS.begin(GPS_BAUDRATE, SERIAL_8N1, GPS_RX, GPS_TX);
+  GPS.flush();
   // todo: launch a task to check for GPS health
 }
-
 
 #include <TinyGPS++.h> // https://github.com/mikalhart/TinyGPSPlus
 TinyGPSPlus gps;
@@ -53,9 +53,28 @@ static void setGPSTime( void * param ) {
     DateTime LocalTime = UTCTime.unixtime() + timeZone*3600;
     #if HAS_EXTERNAL_RTC
       RTC.adjust( LocalTime );
+      Serial.printf("External clock adjusted to GPS Time (GMT%s%d): %04d-%02d-%02d %02d:%02d:%02d\n",
+        timeZone>0 ? "+" : "",
+        timeZone,
+        LocalTime.year(),
+        LocalTime.month(),
+        LocalTime.day(),
+        LocalTime.hour(),
+        LocalTime.minute(),
+        LocalTime.second()
+      );
     #endif
     setTime( LocalTime.unixtime() );
-    Serial.printf("Time adjusted to: %04d-%02d-%02d %02d:%02d:%02d\n",
+    timeval epoch = {(time_t)LocalTime.unixtime(), 0};
+    const timeval *tv = &epoch;
+    settimeofday(tv, NULL);
+
+    struct tm now;
+    getLocalTime(&now,0);
+
+    Serial.printf("Internal clock adjusted to GPS Time (GMT%s%d): %04d-%02d-%02d %02d:%02d:%02d\n",
+      timeZone>0 ? "+" : "",
+      timeZone,
       LocalTime.year(),
       LocalTime.month(),
       LocalTime.day(),
@@ -66,7 +85,7 @@ static void setGPSTime( void * param ) {
     logTimeActivity(SOURCE_GPS, LocalTime.unixtime());
     lastSyncDateTime = LocalTime;
   } else {
-    Serial.printf("Can't set GPS Time (no signal since %d seconds)\n", NoGPSSignalSince/1000);
+    Serial.printf("Can't set GPS Time (no signal since %ld seconds)\n", NoGPSSignalSince/1000);
   }
 }
 

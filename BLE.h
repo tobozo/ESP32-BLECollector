@@ -38,21 +38,20 @@ const char* processTemplateLong = "%s%d%s%d";
 const char* processTemplateShort = "%s%d";
 static char processMessage[20];
 
-static bool onScanProcessed = true;
-static bool onScanPopulated = true;
-static bool onScanPropagated = true;
-static bool onScanPostPopulated = true;
-static bool onScanRendered = true;
-static bool onScanDone = true;
-static bool scanTaskRunning = false;
-static bool scanTaskStopped = true;
+bool onScanProcessed = true;
+bool onScanPopulated = true;
+bool onScanPropagated = true;
+bool onScanPostPopulated = true;
+bool onScanRendered = true;
+bool onScanDone = true;
+bool scanTaskRunning = false;
+bool scanTaskStopped = true;
 
 extern size_t devicesStatCount;
 
 static char* serialBuffer = NULL;
 static char* tempBuffer = NULL;
 #define SERIAL_BUFFER_SIZE 64
-
 
 unsigned long lastheap = 0;
 uint16_t lastscanduration = SCAN_DURATION;
@@ -61,15 +60,10 @@ char scantimesign[5]; // unicode sign terminated
 BLEScanResults bleresults;
 BLEScan *pBLEScan;
 
-std::string stdBLEAddress;
-//std::string timeServerBLEAddress;
-//std::string fileServerBLEAddress;
-
-//esp_ble_addr_type_t timeServerClientType;
-//esp_ble_addr_type_t fileServerClientType;
 
 static uint16_t processedDevicesCount = 0;
 bool foundDeviceToggler = true;
+
 
 enum AfterScanSteps {
   POPULATE  = 0,
@@ -78,17 +72,12 @@ enum AfterScanSteps {
   PROPAGATE = 3
 };
 
-
+/*
 // work in progress: MAC blacklist/whitelist
 const char MacList[3][MAC_LEN + 1] = {
   "aa:aa:aa:aa:aa:aa",
   "bb:bb:bb:bb:bb:bb",
   "cc:cc:cc:cc:cc:cc"
-};
-
-const BLEUUID ServicesList[2] = {
-  timeServiceUUID,
-  FileSharingServiceUUID
 };
 
 
@@ -100,7 +89,7 @@ static bool AddressIsListed( const char* address ) {
   }
   return false;
 }
-
+*/
 
 static bool deviceHasPayload( BLEAdvertisedDevice advertisedDevice ) {
   if ( !advertisedDevice.haveServiceUUID() ) return false;
@@ -110,12 +99,6 @@ static bool deviceHasPayload( BLEAdvertisedDevice advertisedDevice ) {
     timeServerClientType = advertisedDevice.getAddressType();
     foundTimeServer = true;
     if ( foundTimeServer && (!TimeIsSet || ForceBleTime) ) {
-      scan_cursor = 0;
-      processedDevicesCount = 0;
-      onScanDone = true;
-      //ForceBleTime = false;
-      advertisedDevice.getScan()->stop();
-      // log_e("[Heap: %06d] Found TimeServer !!", freeheap);
       return true;
     }
   }
@@ -126,18 +109,9 @@ static bool deviceHasPayload( BLEAdvertisedDevice advertisedDevice ) {
     fileServerClientType = advertisedDevice.getAddressType();
     if ( fileSharingEnabled ) {
       log_w("Ready to connect to file server %s", fileServerBLEAddress.c_str());
-      scan_cursor = 0;
-      processedDevicesCount = 0;
-      onScanDone = true;
-      advertisedDevice.getScan()->stop();
       return true;
     }
   }
-  #if BLACKLIST_MAC_DETECTOR_ENABLED
-    stdBLEAddress = advertisedDevice.getAddress().toString();
-    // iterate over the list
-    //
-  #endif
   return false;
 }
 
@@ -149,9 +123,7 @@ class FoundDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
 
       devicesStatCount++; // raw stats for heapgraph
 
-      if( deviceHasPayload( advertisedDevice ) ) {
-        return;
-      }
+      bool scanShouldStop =  deviceHasPayload( advertisedDevice );
 
       if ( onScanDone  ) return;
 
@@ -173,9 +145,9 @@ class FoundDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
               DB.getVendor( BLEDevScanCache[scan_cursor]->manufid, BLEDevScanCache[scan_cursor]->manufname );
             }
             BLEDevScanCache[scan_cursor]->is_anonymous = BLEDevHelper.isAnonymous( BLEDevScanCache[scan_cursor] );
-            log_i(  "  stored and populated #%02d : %s", scan_cursor, advertisedDevice.toString().c_str());
+            log_i(  "  stored and populated #%02d : %s", scan_cursor, advertisedDevice.getName().c_str());
           } else {
-            log_i(  "  stored #%02d : %s", scan_cursor, advertisedDevice.toString().c_str());
+            log_i(  "  stored #%02d : %s", scan_cursor, advertisedDevice.getName().c_str());
           }
           scan_cursor++;
           processedDevicesCount++;
@@ -195,15 +167,19 @@ class FoundDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
       }
       foundDeviceToggler = !foundDeviceToggler;
       if (foundDeviceToggler) {
-        UI.BLEStateIconSetColor(BLE_GREEN);
+        //UI.BLEStateIconSetColor(BLE_GREEN);
+        BLEActivityIcon.setStatus( ICON_STATUS_ADV_WHITELISTED );
       } else {
-        UI.BLEStateIconSetColor(BLE_DARKGREEN);
+        //UI.BLEStateIconSetColor(BLE_DARKGREEN);
+        BLEActivityIcon.setStatus( ICON_STATUS_ADV_SCAN );
+      }
+      if( scanShouldStop ) {
+        advertisedDevice.getScan()->stop();
       }
     }
 };
 
 FoundDeviceCallbacks *FoundDeviceCallback;// = new FoundDeviceCallbacks(); // collect/store BLE data
-
 
 
 struct SerialCallback {
@@ -241,6 +217,7 @@ class BLEScanUtils {
       BLEDevice::init( PLATFORM_NAME " BLE Collector");
       getPrefs(); // load prefs from NVS
       UI.init(); // launch all UI tasks
+      VendorFilterIcon.setStatus( UI.filterVendors ? ICON_STATUS_SET : ICON_STATUS_UNSET );
       if ( ! DB.init() ) { // mount DB
         log_e("Error with .db files (not found or corrupted), starting BLE File Sharing");
         startSerialTask();
@@ -261,6 +238,50 @@ class BLEScanUtils {
       startScanCB();
       UI.begin();
     }
+
+    #ifdef WITH_WIFI
+    static void setWiFiSSID( void * param = NULL ) {
+      if( param == NULL ) return;
+      sprintf( WiFi_SSID, "%s", (const char*)param);
+    }
+
+    static void setWiFiPASS( void * param = NULL ) {
+      if( param == NULL ) return;
+      sprintf( WiFi_PASS, "%s", (const char*)param);
+    }
+
+    static void stopBLECB( void * param = NULL ) {
+      stopScanCB();
+      xTaskCreatePinnedToCore( stopBLE, "stopBLE", 8192, NULL, 5, NULL, 1 ); /* last = Task Core */
+    }
+
+    static void stopBLE( void * param = NULL ) {
+      Serial.println(F("Shutting BT Down ..."));
+      Serial.print("esp_bt_controller_disable");
+      esp_bt_controller_disable() ;
+      Serial.print("esp_bt_controller_deinit ");
+      esp_bt_controller_deinit();
+      Serial.print("BT Shutdown finished");
+      WiFi.mode(WIFI_STA);
+      Serial.println(WiFi.macAddress());
+      if( String( WiFi_SSID ) !="" && String( WiFi_PASS ) !="" ) {
+        WiFi.begin( WiFi_SSID, WiFi_PASS );
+      } else {
+        WiFi.begin();
+      }
+      while(WiFi.status() != WL_CONNECTED) {
+        log_e("Not connected");
+        delay(1000);
+      }
+      log_w("Connected!");
+      Serial.print("Connected to ");
+      Serial.println(WiFi_SSID);
+      Serial.print("IP address: ");
+      Serial.println(WiFi.localIP());
+      Serial.println("");
+      vTaskDelete( NULL );
+    }
+    #endif
 
     static void startScanCB( void * param = NULL ) {
 
@@ -288,7 +309,8 @@ class BLEScanUtils {
       BLEDevice::setMTU(100);
       if ( !scanTaskRunning ) {
         log_d("Starting scan" );
-        xTaskCreatePinnedToCore( scanTask, "scanTask", 6144, NULL, 5, NULL, 1 ); /* last = Task Core */
+        uint16_t stackSize = DB.hasPsram ? 5120 : 5120;
+        xTaskCreatePinnedToCore( scanTask, "scanTask", stackSize, NULL, 5, NULL, 1 ); /* last = Task Core */
         while ( scanTaskStopped ) {
           log_d("Waiting for scan to start...");
           vTaskDelay(1000);
@@ -297,6 +319,7 @@ class BLEScanUtils {
         UI.headerStats("Scan started...");
       }
     }
+
     static void stopScanCB( void * param = NULL) {
       if ( scanTaskRunning ) {
         log_d("Stopping scan" );
@@ -310,10 +333,12 @@ class BLEScanUtils {
         UI.headerStats("Scan stopped...");
       }
     }
+
     static void restartCB( void * param = NULL ) {
       stopScanCB();
       xTaskCreatePinnedToCore( doRestart, "doRestart", 8192, param, 5, NULL, 1 ); // last = Task Core
     }
+
     static void doRestart( void * param = NULL ) {
       // "restart now" command skips db replication
       if ( strcmp( "now", (const char*)param ) != 0 ) {
@@ -331,6 +356,7 @@ class BLEScanUtils {
 
     static void startFileSharingServer( void * param = NULL) {
       bool scanWasRunning = scanTaskRunning;
+      int8_t oldrole = BLERoleIcon.status;
       if ( fileSharingServerTaskIsRunning ) {
         log_e("FileSharingClientTask already running!");
         vTaskDelete( NULL );
@@ -338,6 +364,7 @@ class BLEScanUtils {
       }
       if ( scanTaskRunning ) stopScanCB();
       fileSharingServerTaskIsRunning = true;
+      BLERoleIcon.setStatus( ICON_STATUS_ROLE_FILE_SEEKING );
       xTaskCreatePinnedToCore( FileSharingServerTask, "FileSharingServerTask", 12000, NULL, 5, NULL, 0 );
       if ( scanWasRunning ) {
         while ( fileSharingServerTaskIsRunning ) {
@@ -346,6 +373,7 @@ class BLEScanUtils {
         log_w("Resuming operations after FileSharingServerTask");
         fileDownloadingEnabled = false;
         startScanCB();
+        BLERoleIcon.setStatus( oldrole );
       } else {
         log_w("FileSharingServerTask started with nothing to resume");
       }
@@ -358,9 +386,11 @@ class BLEScanUtils {
 
     static void startFileSharingClient( void * param ) {
       bool scanWasRunning = scanTaskRunning;
+      int8_t oldrole = BLERoleIcon.status;
       fileSharingClientStarted = true;
       if ( scanTaskRunning ) stopScanCB();
       fileSharingClientTaskIsRunning = true;
+      BLERoleIcon.setStatus( ICON_STATUS_ROLE_FILE_SHARING );
       xTaskCreatePinnedToCore( FileSharingClientTask, "FileSharingClientTask", 12000, param, 5, NULL, 0 ); // last = Task Core
       if ( scanWasRunning ) {
         while ( fileSharingClientTaskIsRunning ) {
@@ -369,6 +399,7 @@ class BLEScanUtils {
         log_w("Resuming operations after FileSharingClientTask");
         fileSharingEnabled = false;
         startScanCB();
+        BLERoleIcon.setStatus( oldrole );
       } else {
         log_w("FileSharingClientTask spawned with nothing to resume");
       }
@@ -386,12 +417,14 @@ class BLEScanUtils {
 
     static void startTimeClient( void * param ) {
       bool scanWasRunning = scanTaskRunning;
+      int8_t oldrole = BLERoleIcon.status;
       ForceBleTime = false;
       while ( ! foundTimeServer ) {
         vTaskDelay( 100 );
       }
       if ( scanTaskRunning ) stopScanCB();
-      xTaskCreatePinnedToCore( TimeClientTask, "TimeClientTask", 2048, NULL, 5, NULL, 0 ); // TimeClient task prefers core 0
+      BLERoleIcon.setStatus( ICON_STATUS_ROLE_CLOCK_SEEKING );
+      xTaskCreatePinnedToCore( TimeClientTask, "TimeClientTask", 2560, NULL, 5, NULL, 0 ); // TimeClient task prefers core 0
       if ( scanWasRunning ) {
         while ( timeClientisRunning ) {
           vTaskDelay( 1000 );
@@ -400,12 +433,12 @@ class BLEScanUtils {
         timeClientisStarted = false;
         //DB.maintain();
         startScanCB();
+        BLERoleIcon.setStatus( oldrole );
       } else {
         log_w("TimeClientTask started with nothing to resume");
       }
       vTaskDelete( NULL );
     }
-
 
     static void setTimeServerOn( void * param ) {
       if( !timeServerStarted ) {
@@ -417,6 +450,7 @@ class BLEScanUtils {
     static void startTimeServer( void * param ) {
       // timeServer runs forever
       timeServerIsRunning = true;
+      BLERoleIcon.setStatus(ICON_STATUS_ROLE_CLOCK_SHARING );
       xTaskCreatePinnedToCore( TimeServerTask, "TimeServerTask", 2048, NULL, 1, NULL, 1 ); // TimeServerTask prefers core 1
       log_w("TimeServerTask started");
       vTaskDelete( NULL );
@@ -441,6 +475,7 @@ class BLEScanUtils {
       delay(100);
       //startScanCB();
     }
+
     static void pruneCB( void * param = NULL ) {
       DB.needsPruning = true;
       Serial.println("DB Scheduled for pruning");
@@ -448,12 +483,15 @@ class BLEScanUtils {
       DB.maintain();
       startScanCB();
     }
+
     static void toggleFilterCB( void * param = NULL ) {
       UI.filterVendors = ! UI.filterVendors;
+      VendorFilterIcon.setStatus( UI.filterVendors ? ICON_STATUS_filter : ICON_STATUS_filter_unset );
       UI.cacheStats(); // refresh icon
       setPrefs(); // save prefs
       Serial.printf("UI.filterVendors = %s\n", UI.filterVendors ? "true" : "false" );
     }
+
     static void startDumpCB( void * param = NULL ) {
       DBneedsReplication = true;
       bool scanWasRunning = scanTaskRunning;
@@ -463,22 +501,25 @@ class BLEScanUtils {
       }
       if ( scanWasRunning ) startScanCB();
     }
+
     static void toggleEchoCB( void * param = NULL ) {
       Out.serialEcho = !Out.serialEcho;
       setPrefs();
       Serial.printf("Out.serialEcho = %s\n", Out.serialEcho ? "true" : "false" );
     }
+
     static void rmFileCB( void * param = NULL ) {
       xTaskCreatePinnedToCore(rmFileTask, "rmFileTask", 5000, param, 2, NULL, 1); /* last = Task Core */
     }
+
     static void rmFileTask( void * param = NULL ) {
       // YOLO style
       isQuerying = true;
       if ( param != NULL ) {
         if ( BLE_FS.remove( (const char*)param ) ) {
-          Serial.printf("File %s deleted\n", param);
+          Serial.printf("File %s deleted\n", (const char*)param );
         } else {
-          Serial.printf("File %s could not be deleted\n", param);
+          Serial.printf("File %s could not be deleted\n", (const char*)param );
         }
       } else {
         Serial.println("Nothing to delete");
@@ -486,6 +527,7 @@ class BLEScanUtils {
       isQuerying = false;
       vTaskDelete( NULL );
     }
+
     static void screenShowCB( void * param = NULL ) {
       xTaskCreate(screenShowTask, "screenShowTask", 16000, param, 2, NULL);
     }
@@ -498,6 +540,7 @@ class BLEScanUtils {
     static void screenShotCB( void * param = NULL ) {
       xTaskCreate(screenShotTask, "screenShotTask", 16000, NULL, 2, NULL);
     }
+
     static void screenShotTask( void * param = NULL ) {
       if( !UI.ScreenShotLoaded ) {
         M5.ScreenShot.init( &tft, BLE_FS );
@@ -507,23 +550,29 @@ class BLEScanUtils {
       UI.screenShot();
       vTaskDelete(NULL);
     }
+
     static void listDirCB( void * param = NULL ) {
       xTaskCreatePinnedToCore(listDirTask, "listDirTask", 5000, param, 2, NULL, 1); /* last = Task Core */
     }
+
     static void listDirTask( void * param = NULL ) {
       isQuerying = true;
+      bool scanWasRunning = scanTaskRunning;
+      if ( scanTaskRunning ) stopScanCB();
       if( param != NULL ) {
         if(! BLE_FS.exists( (const char*)param ) ) {
-          Serial.printf("Directory %s does not exist");
+          Serial.printf("Directory %s does not exist\n", (const char*)param );
         } else {
           listDir(BLE_FS, (const char*)param, 0, DB.BLEMacsDbFSPath);
         }
       } else {
         listDir(BLE_FS, "/", 0, DB.BLEMacsDbFSPath);
       }
+      if ( scanWasRunning ) startScanCB();
       isQuerying = false;
       vTaskDelete( NULL );
     }
+
     static void toggleCB( void * param = NULL ) {
       bool setbool = true;
       if ( param != NULL ) {
@@ -546,14 +595,14 @@ class BLEScanUtils {
 
     static void nullCB( void * param = NULL ) {
       if ( param != NULL ) {
-        Serial.printf("nullCB param: %s\n", param);
+        Serial.printf("nullCB param: %s\n", (const char*)param);
       }
       // zilch, niente, nada, que dalle, nothing
     }
     static void startSerialTask() {
       serialBuffer = (char*)calloc( SERIAL_BUFFER_SIZE, sizeof(char) );
       tempBuffer   = (char*)calloc( SERIAL_BUFFER_SIZE, sizeof(char) );
-      xTaskCreatePinnedToCore(serialTask, "serialTask", 2048 + SERIAL_BUFFER_SIZE, NULL, 0, NULL, 0); /* last = Task Core */
+      xTaskCreatePinnedToCore(serialTask, "serialTask", 2048 + SERIAL_BUFFER_SIZE, NULL, 0, NULL, 1); /* last = Task Core */
     }
 
     static void serialTask( void * parameter ) {
@@ -585,6 +634,11 @@ class BLEScanUtils {
         #endif
         { "resetDB",       resetCB,        "Hard Reset DB + forced restart" },
         { "pruneDB",       pruneCB,        "Soft Reset DB without restarting (hopefully)" },
+        #ifdef WITH_WIFI
+          { "stopBLE",       stopBLECB,      "Stop BLE and start WiFi (experimental)" },
+          { "setWiFiSSID",   setWiFiSSID,    "Set WiFi SSID" },
+          { "setWiFiPASS",   setWiFiPASS,    "Set WiFi Password" },
+        #endif
       };
 
       SerialCommands = Commands;
@@ -625,6 +679,7 @@ class BLEScanUtils {
       char lf = '\n';
       char cr = '\r';
       char c;
+      unsigned long lastHidCheck = millis();
       while ( 1 ) {
         while (Serial.available() > 0) {
           c = Serial.read();
@@ -646,17 +701,20 @@ class BLEScanUtils {
           GPSRead();
         #endif
         if( hasHID() ) {
-          M5.update();
-          if( M5.BtnA.wasPressed() ) {
-            UI.brightness -= UI.brightnessIncrement;
-            setBrightnessCB();
-          }
-          if( M5.BtnB.wasPressed() ) {
-            UI.brightness += UI.brightnessIncrement;
-            setBrightnessCB();
-          }
-          if( M5.BtnC.wasPressed() ) {
-            toggleFilterCB();
+          if( lastHidCheck + 150 < millis() ) {
+            M5.update();
+            if( M5.BtnA.wasPressed() ) {
+              UI.brightness -= UI.brightnessIncrement;
+              setBrightnessCB();
+            }
+            if( M5.BtnB.wasPressed() ) {
+              UI.brightness += UI.brightnessIncrement;
+              setBrightnessCB();
+            }
+            if( M5.BtnC.wasPressed() ) {
+              toggleFilterCB();
+            }
+            lastHidCheck = millis();
           }
         }
         vTaskDelay(1);
@@ -705,7 +763,7 @@ class BLEScanUtils {
     }
 
 
-    static void scanTask( void * parameter ) {
+    static void scanInit() {
       UI.update(); // run after-scan display stuff
       DB.maintain();
       scanTaskRunning = true;
@@ -718,6 +776,17 @@ class BLEScanUtils {
       pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
       pBLEScan->setInterval(0x50); // 0x50
       pBLEScan->setWindow(0x30); // 0x30
+    }
+
+
+    static void scanDeInit() {
+      scanTaskStopped = true;
+      delete FoundDeviceCallback; FoundDeviceCallback = NULL;
+    }
+
+
+    static void scanTask( void * parameter ) {
+      scanInit();
       byte onAfterScanStep = 0;
       while ( scanTaskRunning ) {
         if ( onAfterScanSteps( onAfterScanStep, scan_cursor ) ) continue;
@@ -725,13 +794,11 @@ class BLEScanUtils {
         onBeforeScan();
         pBLEScan->start(SCAN_DURATION);
         onAfterScan();
-        UI.update(); // run after-scan display stuff
         //DB.maintain();
         dumpStats("AfterScan:::");
         scan_rounds++;
       }
-      scanTaskStopped = true;
-      delete FoundDeviceCallback; FoundDeviceCallback = NULL;
+      scanDeInit();
       vTaskDelete( NULL );
     }
 
@@ -860,7 +927,7 @@ class BLEScanUtils {
       }
       UI.BLECardTheme.setTheme( IN_CACHE_ANON );
       BLEDevTmp = BLEDevScanCache[_scan_cursor];
-      UI.printBLECard( BLEDevTmp ); // render
+      UI.printBLECard( (BlueToothDeviceLink){.cacheIndex=_scan_cursor,.device=BLEDevTmp} ); // render
       delay(1);
       sprintf( processMessage, processTemplateLong, "Rendered ", _scan_cursor + 1, " / ", devicesCount );
       UI.headerStats( processMessage );
@@ -977,6 +1044,9 @@ class BLEScanUtils {
       inCacheCount = 0;
       onScanDone = true;
       scan_cursor = 0;
+
+      UI.update();
+
     }
 
 

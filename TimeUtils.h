@@ -95,11 +95,8 @@ struct TimeActivity {
 void uptimeSet() {
   unsigned long seconds_since_boot = millis() / 1000;
   unsigned long minutes_since_boot = seconds_since_boot / 60;
-  unsigned long hours_since_boot   = minutes_since_boot / 60;
-  unsigned long days_since_boot    = hours_since_boot / 24;
   unsigned long mm = minutes_since_boot % 60;
   unsigned long hh = minutes_since_boot / 60;
-  unsigned long ss = seconds_since_boot % 60;
   unsigned long forcedUptimes = forcedUptime + hh;
   if( forcedUptimes < 24 ) {
     sprintf( UpTimeString, UpTimeStringTpl, forcedUptimes, mm );
@@ -114,8 +111,6 @@ void uptimeSet() {
 static void timeHousekeeping() {
   unsigned long seconds_since_boot = millis() / 1000;
   unsigned long minutes_since_boot = seconds_since_boot / 60;
-  unsigned long hours_since_boot   = minutes_since_boot / 60;
-  unsigned long days_since_boot    = hours_since_boot / 24;
   unsigned long mm = minutes_since_boot % 60;
   unsigned long hh = minutes_since_boot / 60;
   unsigned long ss = seconds_since_boot % 60;
@@ -128,8 +123,6 @@ static void timeHousekeeping() {
       HourChangeTrigger = true;
     }
     current_hour = internalDateTime.hour();
-  } else {
-    //HourChangeTrigger = false;
   }
 
   if( current_day != internalDateTime.day() ) {
@@ -140,10 +133,8 @@ static void timeHousekeeping() {
       HourChangeTrigger = false;
     }
     current_day = internalDateTime.day();
-  } else {
-    //DayChangeTrigger = false;
   }
-  
+
   // - get the time from the internal clock
   // - compare with external clocks sources if applicable
   if( HourChangeTrigger || DayChangeTrigger ) {
@@ -153,15 +144,15 @@ static void timeHousekeeping() {
     }
   }
   sprintf(hhmmString, hhmmStringTpl, internalDateTime.hour(), internalDateTime.minute());
-    
+
   #if HAS_EXTERNAL_RTC
-  
+
     if( abs( seconds_since_boot - internalDateTime.unixtime() ) > 2 ) { // internal datetime is set
       // safe to assume internal RTC is running
       TimeIsSet = true;
     } 
     sprintf(hhmmssString, hhmmssStringTpl, hh, mm, ss);
-    
+
   #else // HAS_EXTERNAL_RTC=false
 
     sprintf(hhmmssString, hhmmssStringTpl, internalDateTime.hour(), internalDateTime.minute(), internalDateTime.second());

@@ -72,15 +72,15 @@ class ScrollableOutput {
     void setupScrollArea(uint16_t TFA, uint16_t BFA, RGBColor colorstart, RGBColor colorend, bool clear = false) {
       BGColorStart = colorstart;
       BGColorEnd = colorend;
-      
       tft.setCursor(0, TFA);
-      tft_setupScrollArea(TFA, BFA); // driver needs patching for that, see https://github.com/espressif/WROVER_KIT_LCD/pull/3/files
+      uint16_t VSA = scrollpanel_width()-TFA-BFA;
+      tft_setupScrollArea(TFA, VSA, BFA); // driver needs patching for that, see https://github.com/espressif/WROVER_KIT_LCD/pull/3/files
       scrollPosY = TFA;
       scrollTopFixedArea = TFA;
       scrollBottomFixedArea = BFA;
       yStart = scrollTopFixedArea;
       yArea = height - scrollTopFixedArea - scrollBottomFixedArea;
-      log_d("*** NEW Scroll Setup: Top=%d Bottom=%d YArea=%d", TFA, BFA, yArea);
+      log_w("*** NEW Scroll Setup: Top=%d Bottom=%d YArea=%d", TFA, BFA, yArea);
       if (clear) {
         tft_fillGradientHRect( 0, TFA, width/2, yArea, BGColorStart, BGColorEnd );
         tft_fillGradientHRect( width/2, TFA, width/2, yArea, BGColorEnd, BGColorStart );
@@ -143,7 +143,7 @@ class ScrollableOutput {
         tft.endWrite();
       }
     }
-    
+
   private:
 
     int scroll(const char* str) {
@@ -161,12 +161,12 @@ class ScrollableOutput {
       tft_fillGradientHRect( 0, scrollPosY, width/2, h_tmp, BGColorStart, BGColorEnd );
       tft_fillGradientHRect( width/2, scrollPosY, width/2, h_tmp, BGColorEnd, BGColorStart );
       tft.setCursor(scrollPosX, scrollPosY);
-      scroll_slow(h_tmp, 5); // Scroll lines, 5ms per line
+      scroll_slow(h_tmp, 3); // Scroll lines, 5ms per line
       //tft.print(str);
       if( strcmp(str, " \n")!=0 ) {
         tft.drawString( str, tft.getCursorX(), tft.getCursorY());
       }
-      
+
       scrollPosY = tft.getCursorY() + h_tmp;
       tft.setCursor(0, scrollPosY);
       isScrolling = false;

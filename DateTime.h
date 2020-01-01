@@ -33,29 +33,6 @@
 #include <sys/time.h> // needed by BLETimeServer
 #include <TimeLib.h> // https://github.com/PaulStoffregen/Time
 
-
-int8_t timeZone = 1; // 1 = GMT+1, 2 = GMT+2, etc
-int8_t minutesTimeZone = 0;
-const char* NTP_SERVER = "europe.pool.ntp.org";
-static bool RTCisRunning = false;
-static bool ForceBleTime = false;
-static bool HasBTTime = false;
-// some date/time formats used in this app
-const char* hhmmStringTpl = "%02d:%02d";
-static char hhmmString[13] = "--:--";
-const char* hhmmssStringTpl = "%02d:%02d:%02d";
-static char hhmmssString[13] = "--:--:--"; 
-const char* UpTimeStringTpl = "%02d:%02d";
-const char* UpTimeStringTplDays = "%2d %s";
-static char UpTimeString[32] = "--:--";
-const char* YYYYMMDD_HHMMSS_Tpl = "%04d-%02d-%02d %02d:%02d:%02d";
-static char YYYYMMDD_HHMMSS_Str[32] = "YYYY-MM-DD HH:MM:SS";
-static bool DayChangeTrigger = false;
-static bool HourChangeTrigger = false;
-int current_day = -1;
-int current_hour = -1;
-
-
 // helper
 static uint8_t DateTimeConv2d(const char* p) {
   uint8_t v = 0;
@@ -84,7 +61,7 @@ class DateTime {
     uint32_t unixtime() const; // 32-bit times as seconds since 1/1/1970
     static uint32_t tm2unixtime(tmElements_t tm); // conversion utility
   protected:
-    uint8_t yOff, m, d, hh, mm, ss;
+    uint8_t yOff=0, m=0, d=0, hh=0, mm=0, ss=0;
     tmElements_t tm;
 };
 
@@ -124,7 +101,7 @@ DateTime::DateTime (const char* date, const char* time) {
   yOff = DateTimeConv2d(date + 9) + 30; // 2000 offset to 1970 offset
   // Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec 
   switch (date[0]) {
-      case 'J': m = date[1] == 'a' ? 1 : m = date[2] == 'n' ? 6 : 7; break;
+      case 'J': m = (date[1] == 'a') ? 1 : (date[2] == 'n') ? 6 : 7; break;
       case 'F': m = 2; break;
       case 'A': m = date[2] == 'r' ? 4 : 8; break;
       case 'M': m = date[2] == 'r' ? 3 : 5; break;
@@ -132,6 +109,7 @@ DateTime::DateTime (const char* date, const char* time) {
       case 'O': m = 10; break;
       case 'N': m = 11; break;
       case 'D': m = 12; break;
+      default:  m = 0;
   }
   d = DateTimeConv2d(date + 4);
   hh = DateTimeConv2d(time);
