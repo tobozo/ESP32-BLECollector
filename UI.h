@@ -1416,13 +1416,13 @@ class UIUtils {
           headerStatsIconsY   = 4;
           headerLineHeight    = 14;
           progressBarY        = 30;
-          hhmmPosX            = 97;
+          hhmmPosX            = 99;
           hhmmPosY            = footerBottomPosY - 28;
           uptimePosX          = Out.width-80;
           uptimePosY          = headerStatsIconsY + headerLineHeight;
           uptimeAlign         = ALIGN_RIGHT;
-          copyleftPosX        = 77;
-          copyleftPosY        = footerBottomPosY - 8;
+          copyleftPosX        = 79;
+          copyleftPosY        = footerBottomPosY - 12;
           cdevcPosX           = Out.width-80;
           cdevcPosY           = headerStatsIconsY + headerLineHeight;
           cdevcAlign          = ALIGN_RIGHT;
