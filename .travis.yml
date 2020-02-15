@@ -65,6 +65,8 @@ script:
   # build_sketch arguments: sketch name, fqbn, allow failure, IDE version/list/range
   - check_library_manager_compliance "$TRAVIS_BUILD_DIR"
   # compile at least one basic example
+  - set_ide_preference "compiler.warning_level=auto"
+  - set_ide_preference "custom_PartitionScheme=min_spiffs"
   - build_sketch "${TRAVIS_BUILD_DIR}/ESP32-BLECollector.ino" "esp32:esp32:m5stack-core-esp32:FlashFreq=80,UploadSpeed=921600" "false" "oldest" "newest"
   #- if [ "$TRAVIS_BRANCH" != "master" ]; then echo "This commit was made against the $TRAVIS_BRANCH, skipping examples compilation"; exit 0; fi
   #- if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then echo "This is a pull request, skipping examples compilation"; exit 0; fi
