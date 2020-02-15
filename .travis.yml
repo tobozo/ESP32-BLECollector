@@ -104,3 +104,14 @@ notifications:
       - https://www.travisbuddy.com/
     on_success: never
     on_failure: always
+
+deploy:
+  provider: releases
+  api_key: "${GH_TOKEN}"
+  file:
+    - "/tmp/BLECollector-binaries/M5stack-BLECollector.bin"
+    - "/tmp/BLECollector-binaries/OdroidGo-BLECollector.bin"
+    - "/tmp/BLECollector-binaries/M5Fire-BLECollector.bin"
+  skip_cleanup: true
+  draft: true
+
