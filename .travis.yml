@@ -51,7 +51,8 @@ before_install:
   - install_ide '("1.8.0" "1.8.10" "newest")'
 
   # Install the library from the repository
-  - install_library ESP32-Chimera-Core
+  #- install_library ESP32-Chimera-Core
+  - install_library https://github.com/tobozo/ESP32-Chimera-Core/archive/master.zip
   - install_library M5Stack-SD-Updater
   - install_library Sqlite3Esp32
   - install_library https://github.com/tobozo/ESP32-BLECollector/releases/download/1.3/BLE.zip
