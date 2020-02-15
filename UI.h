@@ -1508,7 +1508,7 @@ class UIUtils {
           iconAppX            = 124;
           headerHeight        = 35; // Important: resulting scrollHeight must be a multiple of font height, default font height is 8px
           footerHeight        = 45; // Important: resulting scrollHeight must be a multiple of font height, default font height is 8px
-          scrollHeight        = ( Out.height - ( headerHeight + footerHeight )) - 8;
+          scrollHeight        = ( Out.height - ( headerHeight + footerHeight ));
           leftMargin          = 2;
           footerBottomPosY    = Out.height;
           headerStatsX        = Out.width-76;
