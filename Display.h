@@ -1,13 +1,13 @@
-
-
-//#define DDUINO32_XS
-
-#include <M5Stack.h> // https://github.com/tobozo/ESP32-Chimera-Core
+#include <ESP32-Chimera-Core.h> // https://github.com/tobozo/ESP32-Chimera-Core
 #include <M5StackUpdater.h> // https://github.com/tobozo/M5Stack-SD-Updater
+
+#ifndef _CHIMERA_CORE_
+  #error "This app needs ESP32 Chimera Core but M5Stack Core was selected, check your library path !!"
+#endif
 
 
 #if defined( ARDUINO_M5Stack_Core_ESP32 ) || defined( ARDUINO_M5STACK_FIRE ) || defined( ARDUINO_ODROID_ESP32 ) || defined ( ARDUINO_ESP32_DEV ) || defined( ARDUINO_DDUINO32_XS )
-  #define CHIMERA_CORE
+  // yay! platform is supported
 #else
   #error "NO SUPPORTED BOARD DETECTED !!"
   #error "Please select the right board from the Arduino boards menu"
@@ -25,6 +25,7 @@
 #define tft_drawBitmap tft.drawBitmap
 #define SD_begin BLE_FS.begin
 #define hasHID() (bool)true
+#define snapNeedsScrollReset() (bool)false // some TFT models need a scroll reset before screen capture
 #define BLE_FS_TYPE "sd" // sd = fs::SD, sdcard = fs::SD_MMC
 #define SKIP_INTRO // don't play intro (tft spi access messes up SD/DB init)
 static const int AMIGABALL_YPOS = 50;
@@ -74,6 +75,7 @@ static const int AMIGABALL_YPOS = 50;
   #undef HAS_EXTERNAL_RTC
   #undef HAS_GPS
   #undef hasHID
+  #undef snapNeedsScrollReset
   #undef SD_begin
   #undef scrollpanel_height
   #undef scrollpanel_width
@@ -89,6 +91,7 @@ static const int AMIGABALL_YPOS = 50;
   #define HAS_EXTERNAL_RTC true // will use RTC_SDA and RTC_SCL from settings.h
   #define HAS_GPS true // will use GPS_RX and GPS_TX from settings.h
   #define hasHID() (bool)false // disable buttons
+  #define snapNeedsScrollReset() (bool)true
   #define SD_begin /*(bool)true*/BLE_FS.begin // SD_MMC is auto started
   #define tft_initOrientation() tft.setRotation(0) // default orientation for hardware scroll
   #define scrollpanel_height() tft.height() // invert these if scroll fails
@@ -97,10 +100,10 @@ static const int AMIGABALL_YPOS = 50;
   #define RTC_SCL 27 // pin number
   #define GPS_RX 39 // io pin number
   #define GPS_TX 35 // io pin number
-  #define BLE_FS_TYPE "sdcard" // sd = fs::SD, sdcard = fs::SD_MMC
+  #define BLE_FS_TYPE "sdcard" // "sd" = fs::SD, "sdcard" = fs::SD_MMC
 
   #warning WROVER KIT DETECTED !!
-  
+
 #else
 
   #error "NO SUPPORTED BOARD DETECTED !!"
@@ -139,15 +142,15 @@ void tft_setBrightness( uint8_t brightness ) {
 // emulating Adafruit's tft.getTextBounds()
 void tft_getTextBounds(const char *string, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h) {
   *w = tft.textWidth( string );
-  *h = tft.fontHeight( tft.textfont );  
+  *h = tft.fontHeight( tft.textfont );
 }
 void tft_getTextBounds(const __FlashStringHelper *s, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h) {
   *w = tft.textWidth( s );
-  *h = tft.fontHeight( tft.textfont );  
+  *h = tft.fontHeight( tft.textfont );
 }
 void tft_getTextBounds(const String &str, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h) {
   *w = tft.textWidth( str );
-  *h = tft.fontHeight( tft.textfont );  
+  *h = tft.fontHeight( tft.textfont );
 }
 
 void tft_fillCircle( uint16_t x, uint16_t y, uint16_t r, uint16_t color) {
@@ -305,6 +308,9 @@ static uint16_t scrollHeight;
 static uint16_t graphLineWidth;
 static uint16_t graphLineHeight;
 
+static uint16_t prevx;
+static uint16_t prevy;
+
 static int32_t macAddrColorsSize;
 
 static bool showScanStats;
@@ -443,7 +449,7 @@ static char manufStr[38] = {'\0'};
 const char* hhmmStringTpl = "%02d:%02d";
 static char hhmmString[13] = "--:--";
 const char* hhmmssStringTpl = "%02d:%02d:%02d";
-static char hhmmssString[13] = "--:--:--"; 
+static char hhmmssString[13] = "--:--:--";
 const char* UpTimeStringTpl = "%02d:%02d";
 const char* UpTimeStringTplDays = "%2d %s";
 static char UpTimeString[32] = "--:--";

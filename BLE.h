@@ -1086,7 +1086,7 @@ class BLEScanUtils {
       lastheap = freeheap;
       lastscanduration = SCAN_DURATION;
 
-      log_i("%s[Scan#%02d][%s][Duration%s%d][Processed:%d of %d][Heap%s%d / %d] [Cache hits][Screen:%d][BLEDevCards:%d][Anonymous:%d][Oui:%d][Vendor:%d]\n",
+      log_i("%s[Scan#%02d][%s][Duration%s%d][Processed:%d of %d][Heap%s%d / %d] [Cache hits][BLEDevCards:%d][Anonymous:%d][Oui:%d][Vendor:%d]\n",
         prefixStr,
         scan_rounds,
         hhmmssString,
@@ -1097,7 +1097,6 @@ class BLEScanUtils {
         heapsign,
         lastheap,
         freepsheap,
-        SelfCacheHit,
         BLEDevCacheHit,
         AnonymousCacheHit,
         OuiCacheHit,

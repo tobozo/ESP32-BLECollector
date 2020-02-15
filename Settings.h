@@ -27,14 +27,14 @@
 
   -----------------------------------------------------------------------------
 
-  RTC Profiles: 
+  RTC Profiles:
     1 - "Hobo": No TinyRTC module in your build, only uptime will be displayed until another BLECollector broadcasts time
     2 - "Rogue": TinyRTC module adjusted after flashing, will broadcast time for other BLECollectors
     3 - "Chronomaniac": TinyRTC module adjusts itself via NTP (separate binary), will broadcast time for other BLECollectors
- 
+
 */
 // don't edit those
-//#define HOBO 1 
+//#define HOBO 1
 #define HOBO         1 // No TinyRTC module in your build, will use BLE TimeClient otherwise only uptime will be displayed
 #define ROGUE        2 // TinyRTC module adjusted via flashing or BLE TimeClient
 #define CHRONOMANIAC 3 // TinyRTC module adjusted via flashing, BLE TimeClient or GPS
@@ -104,7 +104,7 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define BLE_MENU_FILENAME "/" BLE_MENU_NAME ".bin"
 
 #define BUILD_NEEDLE PLATFORM_NAME " BLE Scanner Compiled On " // this 'signature' string must be unique in the whole source tree
-#define BUILD_SIGNATURE __DATE__ " - " __TIME__ " - " BUILD_TYPE 
+#define BUILD_SIGNATURE __DATE__ " - " __TIME__ " - " BUILD_TYPE
 #define WELCOME_MESSAGE BUILD_NEEDLE BUILD_SIGNATURE
 const char* needle = BUILD_NEEDLE;
 const char* welcomeMessage = WELCOME_MESSAGE;
@@ -112,7 +112,7 @@ const char* BUILDSIGNATURE = BUILD_SIGNATURE;
 uint32_t sizeofneedle = strlen(needle);
 uint32_t sizeoftrail = strlen(welcomeMessage) - sizeofneedle;
 
-static xSemaphoreHandle mux = NULL; // this is needed to prevent rendering collisions 
+static xSemaphoreHandle mux = NULL; // this is needed to prevent rendering collisions
                                     // between scrollpanel and heap graph
 
 static bool DBneedsReplication = false;
@@ -201,10 +201,10 @@ Preferences preferences;
  * - SPIRAM BLEDEV Cache L2 : all returning BLE Devices are copied there for hits counting
  * - SPIRAM OUI Lookup : OUI/Mac Database is copied there
  * - SPIRAM Vendor Lookup : Manufacturer names/id Database is copied there
- * - SQLite3 DB OUI : readonly, mainly a getter for vendor names by mac address 
+ * - SQLite3 DB OUI : readonly, mainly a getter for vendor names by mac address
  * - SQLite3 DB Vendor : readonly, mainly a getter for vendor names by manufacturer data
  * - SQLite3 DB blemacs : read/write, getter and setter for non anonymous BLE Advertised Devices
- * 
+ *
  */
 
 // statistical values

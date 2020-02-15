@@ -222,6 +222,22 @@ class UIUtils {
       IconRender( Icon_ble_src, 91, 2 );
       IconRender( Icon_db_src, 104, 2 );
 
+/*
+      uint16_t xpos = 0;
+      uint16_t ypos = 50;
+      for( byte a=10 ; a<128; a++ ) {
+        drawBluetoothLogo( xpos, ypos, a );
+        xpos +=a+1;
+        if( xpos > tft.width() ) {
+          ypos += a+1;
+          xpos = 0;
+        }
+        if( ypos > tft.height() ) {
+          break;
+        }
+      }
+      while(1) { ; }
+*/
       alignTextAt( COPYLEFT_SIGN " " AUTHOR , copyleftPosX, copyleftPosY, BLE_YELLOW, FOOTER_BGCOLOR, ALIGN_FREE );
 
       if (resetReason == 12) { // SW Reset
@@ -299,12 +315,71 @@ class UIUtils {
 
 
     static void screenShot() {
-
+/*
       takeMuxSemaphore();
       isQuerying = true;
+      if( snapNeedsScrollReset() ) {
+        // reset scroll before snapping to avoid messing up the chunks order
+        tft_setupScrollArea(0, tft.height(), 0);
+        tft_scrollTo(0);
+      }
       M5.ScreenShot.snap("BLECollector", true);
+      if( snapNeedsScrollReset() ) {
+        // restore initial scroll setup
+        tft_setupScrollArea(headerHeight, tft.height()-(headerHeight+footerHeight), footerHeight);
+      }
       isQuerying = false;
       giveMuxSemaphore();
+*/
+/*
+      if( psramInit() ) {
+        char screenshotFilenameStr[42] = {'\0'};
+        const char* screenshotFilenameTpl = "/screenshot-%04d-%02d-%02d_%02dh%02dm%02ds.jpg";
+        sprintf(screenshotFilenameStr, screenshotFilenameTpl, year(), month(), day(), hour(), minute(), second());
+
+        takeMuxSemaphore();
+        uint8_t *imgBuffer = (uint8_t*)calloc( (Out.width*3)+1, sizeof( uint8_t ) );
+
+        for(uint16_t y=0; y<headerHeight; y++) { // header portion
+          tft.readRectRGB(0, y, Out.width, 1, imgBuffer);
+          for( int j=0; j<Out.width*3; j++ ) {
+            uint32_t rgb888Index = ( y* Out.width ) + j;
+            M5.ScreenShot.rgb888Buffer[rgb888Index]   = imgBuffer[j];
+          }
+        }
+        for(uint16_t y=Out.yStart; y<Out.height-footerHeight; y++) { // lower scroll portion
+          tft.readRectRGB(0, y, Out.width, 1, imgBuffer);
+          for( int j=0; j<Out.width*3; j++ ) {
+            uint32_t rgb888Index = ( y* Out.width ) + j;
+            M5.ScreenShot.rgb888Buffer[rgb888Index]   = imgBuffer[j];
+          }
+        }
+        for(uint16_t y=headerHeight; y<Out.yStart; y++) { // upper scroll portion
+          tft.readRectRGB(0, y, Out.width, 1, imgBuffer);
+          for( int j=0; j<Out.width*3; j++ ) {
+            uint32_t rgb888Index = ( y* Out.width ) + j;
+            M5.ScreenShot.rgb888Buffer[rgb888Index]   = imgBuffer[j];
+          }
+        }
+        for(uint16_t y=Out.height-footerHeight; y<Out.height; y++) { // footer portion
+          tft.readRectRGB(0, y, Out.width, 1, imgBuffer);
+          for( int j=0; j<Out.width*3; j++ ) {
+            uint32_t rgb888Index = ( y* Out.width ) + j;
+            M5.ScreenShot.rgb888Buffer[rgb888Index]   = imgBuffer[j];
+          }
+        }
+
+        if ( !M5.ScreenShot.JPEGEncoder.encodeToFile( screenshotFilenameStr, Out.width, Out.height, 3, M5.ScreenShot.rgb888Buffer ) ) {
+          log_e( "[ERROR] Could not write JPG file to: %s", screenshotFilenameStr );
+        } else {
+          Serial.printf( "Screenshot saved as %s\n", screenshotFilenameStr );
+        }
+        //free( rgb888Buffer );
+        free( imgBuffer );
+
+        giveMuxSemaphore();
+      }
+*/
 
     }
 
@@ -355,7 +430,7 @@ class UIUtils {
         for( byte i = 0; i<6 ; i++ ) {
           randomAddress[i] = random(0,255);
         }
-        sprintf(randomAddressStr, "%02x:%02x:%02x:%02x:%02x:%02x", 
+        sprintf(randomAddressStr, "%02x:%02x:%02x:%02x:%02x:%02x",
                 randomAddress[0],
                 randomAddress[1],
                 randomAddress[2],
@@ -497,7 +572,7 @@ class UIUtils {
       }
       if( GPSHasDateTime ) {
         GPSIcon.setStatus( ICON_STATUS_gps );
-      } else{ 
+      } else{
         GPSIcon.setStatus( ICON_STATUS_nogps );
       }
     }
@@ -582,7 +657,7 @@ class UIUtils {
             sorted[macFound] = index;
             macFound++;
           } else {
-            int32_t has = Mac.hasRecentActivity( index, sorted, macFound ); 
+            int32_t has = Mac.hasRecentActivity( index, sorted, macFound );
             if( has > -1 ) { // insertable
               sorted[has] = index;
             }
@@ -779,7 +854,7 @@ class UIUtils {
 
       if (graphMin == graphMax) {
         // data isn't relevant enough to render
-        return; 
+        return;
       }
       // bounds, min and max lines
       minline = map(min_free_heap, graphMin, graphMax, 0, graphLineHeight);
@@ -992,7 +1067,7 @@ class UIUtils {
           if( BleCard->created_at.year() > 1970 ) {
             blockHeight += Out.println(SPACE);
             *hitsTimeStampStr = {'\0'};
-            sprintf(hitsTimeStampStr, hitsTimeStampTpl, 
+            sprintf(hitsTimeStampStr, hitsTimeStampTpl,
               BleCard->created_at.year(),
               BleCard->created_at.month(),
               BleCard->created_at.day(),
@@ -1134,7 +1209,7 @@ class UIUtils {
         }
       }
       log_v("%s is NOT in cache and NOT visible onScreen", address);
-      return false;      
+      return false;
     }
 
     static void highlightBLECard( uint16_t card_index, int16_t offset ) {
@@ -1183,6 +1258,39 @@ class UIUtils {
       tft.drawFastHLine(x, y + boxh, linew, barcolor);
     }
 
+
+    static void lineTo( uint16_t x, uint16_t y, uint16_t color) {
+      tft.drawLine( prevx, prevy, x, y, color );
+      prevx = x;
+      prevy = y;
+    }
+
+
+    static void drawBluetoothLogo( uint16_t x, uint16_t y, uint8_t height = 10, uint16_t color = BLE_WHITE, uint16_t bgcolor = BLUETOOTH_COLOR ) {
+      if( height<10) height=10; // low cap
+      if( height%2!=0) height++; // lame centering
+
+      tft.fillRoundRect( x+height/4, y+height*0.05, height/2, height-height*0.1, height/4, bgcolor );
+
+      x += height*.1;
+      y += height*.1;
+      height *= .8;
+
+      float y1 = height * 0.05;
+      float y2 = height * 0.25;
+
+      prevx = x + y2;
+      prevy = y + y2;
+
+      lineTo( x + height - y2, y + height - y2, color );
+      lineTo( x + height/2,    y + height - y1, color );
+      lineTo( x + height/2,    y + y1,          color );
+      lineTo( x + height - y2, y + y2,          color );
+      lineTo( x + y2,          y + height - y2, color );
+
+    }
+
+
     // draws a RSSI Bar for the BLECard
     static void drawRSSIBar(int16_t x, int16_t y, int16_t rssi, uint16_t bgcolor, float size=1.0) {
       uint16_t barColors[4] = { bgcolor, bgcolor, bgcolor, bgcolor };
@@ -1193,25 +1301,25 @@ class UIUtils {
           barColors[2] = BLE_GREEN;
           barColors[3] = BLE_GREEN;
         break;
-        case 4:  
+        case 4:
           barColors[0] = BLE_GREEN;
           barColors[1] = BLE_GREEN;
           barColors[2] = BLE_GREEN;
         break;
-        case 3:  
+        case 3:
           barColors[0] = BLE_YELLOW;
           barColors[1] = BLE_YELLOW;
           barColors[2] = BLE_YELLOW;
         break;
-        case 2:  
+        case 2:
           barColors[0] = BLE_YELLOW;
           barColors[1] = BLE_YELLOW;
         break;
-        case 1:  
+        case 1:
           barColors[0] = BLE_RED;
         break;
         default:
-        case 0:  
+        case 0:
           barColors[0] = RED; // want: RAINBOW
         break;
       }

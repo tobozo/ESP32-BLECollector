@@ -10,7 +10,7 @@ bool SDSetup() {
       sd_mounted = true;
     } else {
       log_e("[SD] Mount Failed");
-      //delay(max_wait);
+      delay(max_wait);
       if(attempts%2==0) {
         IconRender( &SDLoaderIcon, ICON_STATUS_SET, (tft.width()-30)/2, 100 );
       } else {

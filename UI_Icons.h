@@ -117,15 +117,15 @@ struct IconSrcStatus {
 struct IconWidgetStatus {
   IconWidget        *widget;
   IconSrcStatusType status;
-  IconWidgetStatus( IconWidget *w, IconSrcStatusType s ) : status(s), widget(w) { };
-  IconWidgetStatus( IconSrcStatusType s, IconWidget *w ) : status(s), widget(w) { };
+  IconWidgetStatus( IconWidget *w, IconSrcStatusType s ) : widget(w), status(s) { };
+  IconWidgetStatus( IconSrcStatusType s, IconWidget *w ) : widget(w), status(s) { };
 };
 
 struct IconShapeStatus {
   IconShape         *shape;
   IconSrcStatusType status;
-  IconShapeStatus( IconShape *s, IconSrcStatusType st ) : status(st), shape(s) { };
-  IconShapeStatus( IconSrcStatusType st, IconShape *s ) : status(st), shape(s) { };
+  IconShapeStatus( IconShape *s, IconSrcStatusType st ) : shape(s), status(st) { };
+  IconShapeStatus( IconSrcStatusType st, IconShape *s ) : shape(s), status(st) { };
 };
 
 struct IconSrc {
@@ -176,13 +176,13 @@ struct Icon {
   uint16_t    posX;
   uint16_t    posY;
   uint16_t    bgcolor;
-  uint8_t     statuses; // how many different statuses this icon handles
   bool        render;   // does it need rendering ?
   IconType          type;     // jpg, geometric, widget, text, hybrid
   IconSrcStatusType status;   // current status
   IconSrcStatus     **srcStatus;    // [optional] jpg images (must match statuses)
   IconShapeStatus   **shapeStatus; // [optional] shapes (must match statuses)
   IconWidgetStatus  **widgetStatus;  // [optional] widgets (must match statuses)
+  uint8_t     statuses; // how many different statuses this icon handles
   // constructors
   Icon( const char*_n, uint16_t _w, uint16_t _h, IconType _t, IconSrcStatusType _s, IconSrcStatus **_sr, uint8_t _st )
     :        name{_n}, width{_w},   height{_h},  type{_t},    status{_s},           srcStatus{_sr},      statuses{_st} {
@@ -463,7 +463,7 @@ IconSrcStatus IconSrcStatus_nogps(         ICON_STATUS_nogps,        GPSIcon_UNS
 
 // { status + shape }
 IconShapeStatus Shape_BLE_OFF_status(              Shape_BLE_OFF,             ICON_STATUS_UNSET );
-IconShapeStatus Shape_BLE_IDLE_status(             Shape_BLE_IDLE,            ICON_STATUS_IDLE ); 
+IconShapeStatus Shape_BLE_IDLE_status(             Shape_BLE_IDLE,            ICON_STATUS_IDLE );
 IconShapeStatus Shape_BLE_ADV_SCAN_status(         Shape_BLE_ADV_SCAN,        ICON_STATUS_ADV_SCAN );
 IconShapeStatus Shape_BLE_ADV_WHITELISTED_status(  Shape_BLE_ADV_WHITELISTED, ICON_STATUS_ADV_WHITELISTED );
 IconShapeStatus Shape_ROLE_NONE_status(            Shape_ROLE_NONE,           ICON_STATUS_ROLE_NONE );

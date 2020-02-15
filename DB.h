@@ -35,7 +35,7 @@
 const char* data = 0; // for some reason sqlite3 db callback needs this
 const char* dataBLE = 0; // for some reason sqlite3 db callback needs this
 const char* dataOUI = 0; // for some reason sqlite3 db callback needs this
-const char* dataVendor = 0; 
+const char* dataVendor = 0;
 char *zErrMsg = 0; // holds DB Error message
 const char BACKSLASH = '\\'; // used to clean() slashes
 static char *colNeedle = 0; // search criteria
@@ -110,7 +110,7 @@ struct VendorHeapCacheStruct {
   int devid = -1;
   char *vendor = NULL;
   void init( bool hasPsram=false ) {
-    if( hasPsram ) {  
+    if( hasPsram ) {
       vendor = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
     } else {
       vendor = (char*)calloc(MAX_FIELD_LEN+1, sizeof(char));
@@ -143,7 +143,7 @@ struct OUIHeapCacheStruct {
   char *mac = NULL;
   char *assignment = NULL;
   void init( bool hasPsram=false ) {
-    if( hasPsram ) {  
+    if( hasPsram ) {
       mac        = (char*)ps_calloc(SHORT_MAC_LEN+1, sizeof(char));
       assignment = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
     } else {
@@ -543,13 +543,13 @@ class DBUtils {
      int rc = 1;
       switch(dbName) {
         case BLE_COLLECTOR_DB: // will be created upon first boot
-          rc = sqlite3_open( dbcollection[dbName].sqlitepath/*"/sdcard/blemacs.db"*/, &BLECollectorDB); 
+          rc = sqlite3_open( dbcollection[dbName].sqlitepath/*"/sdcard/blemacs.db"*/, &BLECollectorDB);
         break;
         case MAC_OUI_NAMES_DB: // https://code.wireshark.org/review/gitweb?p=wireshark.git;a=blob_plain;f=manuf
-          rc = sqlite3_open( dbcollection[dbName].sqlitepath /*"/sdcard/mac-oui-light.db"*/, &OUIVendorsDB); 
+          rc = sqlite3_open( dbcollection[dbName].sqlitepath /*"/sdcard/mac-oui-light.db"*/, &OUIVendorsDB);
         break;
         case BLE_VENDOR_NAMES_DB: // https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers
-          rc = sqlite3_open( dbcollection[dbName].sqlitepath /*"/sdcard/ble-oui.db"*/, &BLEVendorsDB); 
+          rc = sqlite3_open( dbcollection[dbName].sqlitepath /*"/sdcard/ble-oui.db"*/, &BLEVendorsDB);
         break;
         default: log_e("Can't open null DB"); UI.SetDBStateIcon(-1); isQuerying = false; return rc;
       }
@@ -635,7 +635,7 @@ class DBUtils {
       }
       close(BLE_VENDOR_NAMES_DB);
       for(byte i=0;i<8;i++) {
-        //uint32_t rnd = random(0, VendorDBSize);
+        __attribute__((unused)) uint32_t rnd = random(0, VendorDBSize);
         log_i("Testing random vendor mac #%d: %d / %s", random(0, VendorDBSize), VendorPsramCache[rnd]->devid[0], VendorPsramCache[rnd]->vendor );
       }
     }
@@ -656,7 +656,7 @@ class DBUtils {
       }
       close(MAC_OUI_NAMES_DB);
       for(byte i=0;i<8;i++) {
-        //uint32_t rnd = random(0, OUIDBSize);
+        __attribute__((unused)) uint32_t rnd = random(0, OUIDBSize);
         log_i("Testing random mac #%06X: %s / %s", random(0, OUIDBSize), OuiPsramCache[rnd]->mac, OuiPsramCache[rnd]->assignment );
       }
     }
@@ -711,7 +711,7 @@ class DBUtils {
         // cowardly refusing to use DB when OOM
         return DB_IS_OOM;
       }
-      if( CacheItem->appearance==0 
+      if( CacheItem->appearance==0
        && isEmpty( CacheItem->name )
        && isEmpty( CacheItem->uuid )
        && isEmpty( CacheItem->ouiname )
@@ -727,7 +727,7 @@ class DBUtils {
       clean( CacheItem->manufname );
       clean( CacheItem->uuid );
 
-      sprintf(YYYYMMDD_HHMMSS_Str, YYYYMMDD_HHMMSS_Tpl, 
+      sprintf(YYYYMMDD_HHMMSS_Str, YYYYMMDD_HHMMSS_Tpl,
         CacheItem->created_at.year(),
         CacheItem->created_at.month(),
         CacheItem->created_at.day(),
@@ -826,7 +826,7 @@ class DBUtils {
       open(BLE_COLLECTOR_DB, false);
       log_d("dropped if exists: %s DB", BLEMacsDbSQLitePath);
       DBExec( BLECollectorDB, dropTableQuery );
-      close(BLE_COLLECTOR_DB);   
+      close(BLE_COLLECTOR_DB);
       UI.headerStats("DB Dropped");
     }
 
@@ -901,7 +901,7 @@ class DBUtils {
         }
         BLEDevTmp = SourceCache[i];
         if( showBLECards ) {
-          UI.printBLECard( (BlueToothDeviceLink){.cacheIndex=i,.device=BLEDevTmp}/*BLEDevTmp*/ ); // render 
+          UI.printBLECard( (BlueToothDeviceLink){.cacheIndex=i,.device=BLEDevTmp}/*BLEDevTmp*/ ); // render
         }
         updateItemFromCache( SourceCache[i] );
 
@@ -929,7 +929,7 @@ class DBUtils {
     }
     static uint16_t getNextVendorCacheIndex() {
       VendorCacheIndex++;
-      VendorCacheIndex = VendorCacheIndex % VENDORCACHE_SIZE;  
+      VendorCacheIndex = VendorCacheIndex % VENDORCACHE_SIZE;
       return VendorCacheIndex;
     }
 
@@ -1004,7 +1004,7 @@ class DBUtils {
         dest[VendorCacheLen] = '\0';
         return;
       }
-      memcpy( dest, "[unknown]", 10 ); // sizeof("[unknown]")      
+      memcpy( dest, "[unknown]", 10 ); // sizeof("[unknown]")
     }
 
     static void OUIHeapCacheSet(uint16_t cacheindex, const char* shortmac, const char* assignment) {
@@ -1016,7 +1016,7 @@ class DBUtils {
     }
     static uint16_t getNextOUICacheIndex() {
       OuiCacheIndex++;
-      OuiCacheIndex = OuiCacheIndex % OUICACHE_SIZE;  
+      OuiCacheIndex = OuiCacheIndex % OUICACHE_SIZE;
       return OuiCacheIndex;
     }
 
