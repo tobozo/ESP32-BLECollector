@@ -43,7 +43,7 @@ Software requirements
   - [mandatory] https://github.com/siara-cc/esp32_arduino_sqlite3_lib
   - [optional] https://github.com/mikalhart/TinyGPSPlus
 
-Behaviours (auto-selected): 
+Behaviours (auto-selected):
 ---------------------------
   - **Hobo**: when no TinyRTC module exists in your build, only uptime will be displayed
   - **Rogue**: TinyRTC module adjusted after flashing (build DateTime), shares time over BLE
@@ -55,7 +55,7 @@ Optional I2C RTC Module requirements
   - Insert the SD Card
   - Set `#define HAS_EXTERNAL_RTC true` in [Settings.h](https://github.com/tobozo/ESP32-BLECollector/blob/master/Settings.h)
   - Flash the ESP with partition scheme `Minimal SPIFFS (Large APPS with OTA)`
-  
+
 Optional Serial GPS Module requirements
 ---------------------------------------
   - Wire your GPS module to TX1/RX1 (edit `GPS_RX` and `GPS_TX` in GPS.h
@@ -68,7 +68,7 @@ Time Sharing
 ------------
   - Once the time is set using RTC and/or GPS, the BLECollector will start the TimeSharing service and advertise a DateTime characteristic for other BLECollectors to sync with.
   - Builds with no RTC/GPS will try to identify this service during their scan duty cycle and subscribe for notifications.
-  
+
 File Sharing (still experimental)
 ------------
   - This feature is currently limited to sharing the two necessary .db files, if at least one of those files is missing or corrupted at boot, the BLECollector will start a BLE File server and wait for another BLECollector to send those files.

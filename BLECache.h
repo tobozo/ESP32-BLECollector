@@ -177,7 +177,7 @@ class BlueToothDeviceHelper {
       CacheItem->appearance = 0;
       CacheItem->rssi       = 0;
       CacheItem->manufid    = -1;
-      if( hasPsram ) {    
+      if( hasPsram ) {
         CacheItem->name      = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
         CacheItem->address   = (char*)ps_calloc(MAC_LEN+1, sizeof(char));
         CacheItem->ouiname   = (char*)ps_calloc(MAX_FIELD_LEN+1, sizeof(char));
@@ -278,9 +278,9 @@ class BlueToothDeviceHelper {
       set(CacheItem, "address", advertisedDevice.getAddress().toString().c_str());
       set(CacheItem, "rssi", advertisedDevice.getRSSI());
       set(CacheItem, "addr_type", advertisedDevice.getAddressType());
-      if(  advertisedDevice.getAddressType() == BLE_ADDR_TYPE_RANDOM 
+      if(  advertisedDevice.getAddressType() == BLE_ADDR_TYPE_RANDOM
         || advertisedDevice.getAddressType() == BLE_ADDR_TYPE_RPA_RANDOM ) {
-        set(CacheItem, "ouiname", "[random]"); 
+        set(CacheItem, "ouiname", "[random]");
       } else {
         set(CacheItem, "ouiname", "[unpopulated]");
       }
@@ -367,7 +367,7 @@ class BlueToothDeviceHelper {
         i++;
       }
       return "Unknown";
-    } // gattServiceToString 
+    } // gattServiceToString
 
     static uint16_t getNextCacheIndex( BlueToothDevice **CacheItem, uint16_t CacheItemIndex ) {
       uint16_t minCacheValue = 65535;
