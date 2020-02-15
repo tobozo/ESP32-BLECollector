@@ -74,7 +74,7 @@ class ScrollableOutput {
       BGColorEnd = colorend;
       tft.setCursor(0, TFA);
       uint16_t VSA = scrollpanel_width()-TFA-BFA;
-      tft_setupScrollArea(TFA, VSA, BFA); // driver needs patching for that, see https://github.com/espressif/WROVER_KIT_LCD/pull/3/files
+      tft_setupScrollArea(TFA, VSA, BFA);
       scrollPosY = TFA;
       scrollTopFixedArea = TFA;
       scrollBottomFixedArea = BFA;
