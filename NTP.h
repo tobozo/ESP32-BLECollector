@@ -1,4 +1,6 @@
-
+/*\
+ * NTP Helpers
+\*/
 
 // returns true if time has been updated
 static bool checkForTimeUpdate( DateTime &internalDateTime ) {
@@ -35,7 +37,7 @@ static bool checkForTimeUpdate( DateTime &internalDateTime ) {
     #if HAS_EXTERNAL_RTC // have external RTC, adjust internal RTC accordingly
       setTime( externalDateTime.unixtime() );
       if(drift > 5) {
-        log_e("[***** WTF Clocks don't agree after adjustment] %d - %d = %d", internalDateTime.unixtime(), externalDateTime.unixtime(), drift);  
+        log_e("[***** WTF Clocks don't agree after adjustment] %d - %d = %d", internalDateTime.unixtime(), externalDateTime.unixtime(), drift);
       } else {
         log_i("[***** OK Clocks agree-ish] %d - %d = %d", internalDateTime.unixtime(), externalDateTime.unixtime(), drift);
       }
@@ -52,7 +54,7 @@ void TimeInit() {
   lastSyncDateTime = preferences.getUInt("epoch", millis());
   byte clockUpdateSource   = preferences.getUChar("source", 0);
   preferences.end();
-  sprintf(YYYYMMDD_HHMMSS_Str, YYYYMMDD_HHMMSS_Tpl, 
+  sprintf(YYYYMMDD_HHMMSS_Str, YYYYMMDD_HHMMSS_Tpl,
     lastSyncDateTime.year(),
     lastSyncDateTime.month(),
     lastSyncDateTime.day(),

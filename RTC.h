@@ -74,7 +74,7 @@ uint32_t BLE_RTC_DS1307::unixtime() {
 }
 uint8_t BLE_RTC_DS1307::isrunning(void) {
   Wire.beginTransmission(DS1307_ADDR);
-  Wire.write(ZEROINT);  
+  Wire.write(ZEROINT);
   Wire.endTransmission();
   Wire.requestFrom(DS1307_ADDR, 1);
   uint8_t ss = Wire.read();
@@ -96,7 +96,7 @@ void BLE_RTC_DS1307::adjust(const tmElements_t& dt) {
 }
 tmElements_t BLE_RTC_DS1307::now() {
   Wire.beginTransmission(DS1307_ADDR);
-  Wire.write(ZEROINT);  
+  Wire.write(ZEROINT);
   Wire.endTransmission();
   Wire.requestFrom(DS1307_ADDR, 7);
   uint8_t ss = BLE_RTC_bcd2bin(Wire.read() & 0x7F);

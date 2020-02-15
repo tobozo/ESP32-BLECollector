@@ -1,3 +1,7 @@
+/*\
+ * GPS Helpers
+\*/
+
 
 HardwareSerial GPS(1); // uart 1
 #define GPS_RX 39 // io pin number

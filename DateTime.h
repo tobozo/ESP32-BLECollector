@@ -26,7 +26,7 @@
   -----------------------------------------------------------------------------
 
   This wrapper mainly exists to supply friend methods to the RTC Library based on JeeLabs's code http://news.jeelabs.org/code/
-  The changes are added dependencies to PaulStoffregen's Time library  https://github.com/PaulStoffregen/Time/ 
+  The changes are added dependencies to PaulStoffregen's Time library  https://github.com/PaulStoffregen/Time/
 
 */
 
@@ -72,7 +72,7 @@ DateTime::DateTime(uint32_t unixtime) {
   hh = tm.Hour;
   mm = tm.Minute;
   ss = tm.Second;
-  yOff = tm.Year; // offset from 1970; 
+  yOff = tm.Year; // offset from 1970;
 };
 DateTime::DateTime(tmElements_t dateTimeNow) {
   tm = dateTimeNow;
@@ -81,7 +81,7 @@ DateTime::DateTime(tmElements_t dateTimeNow) {
   hh = tm.Hour;
   mm = tm.Minute;
   ss = tm.Second;
-  yOff = tm.Year; // offset from 1970; 
+  yOff = tm.Year; // offset from 1970;
 };
 DateTime::DateTime(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t min, uint8_t sec) {
   if (year >= 1970)
@@ -99,7 +99,7 @@ DateTime::DateTime (const char* date, const char* time) {
   //   DateTime now (__DATE__, __TIME__);
   // sample input: date = "Dec 26 2009", time = "12:34:56"
   yOff = DateTimeConv2d(date + 9) + 30; // 2000 offset to 1970 offset
-  // Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec 
+  // Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec
   switch (date[0]) {
       case 'J': m = (date[1] == 'a') ? 1 : (date[2] == 'n') ? 6 : 7; break;
       case 'F': m = 2; break;
@@ -129,8 +129,8 @@ uint32_t DateTime::tm2unixtime(tmElements_t tm_)  {
 
 // for debug
 
-void dumpTime(const char* message, DateTime dateTime) { 
-   Serial.printf("[%s]: %04d-%02d-%02d %02d:%02d:%02d\n", 
+void dumpTime(const char* message, DateTime dateTime) {
+   Serial.printf("[%s]: %04d-%02d-%02d %02d:%02d:%02d\n",
     message,
     dateTime.year(),
     dateTime.month(),
@@ -142,7 +142,7 @@ void dumpTime(const char* message, DateTime dateTime) {
 }
 
 void dumpTime(const char* message, tmElements_t tm) {
-  Serial.printf("[%s]: %04d-%02d-%02d %02d:%02d:%02d\n", 
+  Serial.printf("[%s]: %04d-%02d-%02d %02d:%02d:%02d\n",
     message,
     tm.Year + 1970,
     tm.Month,

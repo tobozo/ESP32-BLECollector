@@ -1,4 +1,3 @@
-
 /*
 
   ESP32 BLE Collector - A BLE scanner with sqlite data persistence on the SD Card

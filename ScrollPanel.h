@@ -102,7 +102,7 @@ class ScrollableOutput {
     // draw rounded corners boxes inside the scroll view, with scroll limit overlap support
     void drawScrollableRoundRect(uint16_t x, uint16_t y, uint16_t _width, uint16_t _height, uint16_t radius, uint16_t bordercolor, bool fill = false ) {
       int yStart = translate(y, 0); // get the scrollview-translated y position
-      if ( yStart >= scrollTopFixedArea && (yStart+_height)<(height-scrollBottomFixedArea) ) { 
+      if ( yStart >= scrollTopFixedArea && (yStart+_height)<(height-scrollBottomFixedArea) ) {
         // no scroll loop point overlap, just render the translated box using the native method
         log_d("Rendering native x:%d, y:%d, width:%d, height:%d, radius:%d", x, y, _width, _height, radius);
         if( fill ) {
