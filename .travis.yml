@@ -67,21 +67,21 @@ script:
   # compile at least one basic example
   - set_ide_preference "compiler.warning_level=auto"
   
-  - mkdir /tmp/BLECollector-binaries
-  - mkdir /tmp/m5stack
-  - mkdir /tmp/odroidgo
-  - mkdir /tmp/m5fire
+  - mkdir "/tmp/BLECollector-binaries"
+  - mkdir "/tmp/m5stack"
+  - mkdir "/tmp/odroidgo"
+  - mkdir "/tmp/m5fire"
   
   #- set_ide_preference "custom_PartitionScheme=min_spiffs"
   - set_ide_preference "build.path=/tmp/m5stack"
   - build_sketch "${TRAVIS_BUILD_DIR}/ESP32-BLECollector.ino" "esp32:esp32:m5stack-core-esp32:PartitionScheme=min_spiffs" "false" "newest"
-  - cp /tmp/m5stack/ESP32-BLECollector.ino.bin /tmp/BLECollector-binaries/M5stack-BLECollector.bin
+  - cp "/tmp/m5stack/ESP32-BLECollector.ino.bin" "/tmp/BLECollector-binaries/M5stack-BLECollector.bin"
   - set_ide_preference "build.path=/tmp/odroidgo"
   - build_sketch "${TRAVIS_BUILD_DIR}/ESP32-BLECollector.ino" "esp32:esp32:odroid_esp32:PartitionScheme=min_spiffs" "false" "newest"
-  - cp /tmp/odroidgo/ESP32-BLECollector.ino.bin /tmp/BLECollector-binaries/OdroidGo-BLECollector.bin
+  - cp "/tmp/odroidgo/ESP32-BLECollector.ino.bin" "/tmp/BLECollector-binaries/OdroidGo-BLECollector.bin"
   - set_ide_preference "build.path=/tmp/m5fire"
   - build_sketch "${TRAVIS_BUILD_DIR}/ESP32-BLECollector.ino" "esp32:esp32:m5stack-fire:PartitionScheme=default" "false" "newest"
-  - cp /tmp/m5fire/ESP32-BLECollector.ino.bin /tmp/BLECollector-binaries/M5Fire-BLECollector.bin
+  - cp "/tmp/m5fire/ESP32-BLECollector.ino.bin" "/tmp/BLECollector-binaries/M5Fire-BLECollector.bin"
 
 - ls /tmp/BLECollector-binaries -la
 
