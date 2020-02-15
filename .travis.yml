@@ -66,19 +66,23 @@ script:
   - check_library_manager_compliance "$TRAVIS_BUILD_DIR"
   # compile at least one basic example
   - set_ide_preference "compiler.warning_level=auto"
+  - mkdir /tmp/BLECollector-binaries
   - mkdir /tmp/m5stack
   - mkdir /tmp/odroidgo
   - mkdir /tmp/m5fire
   #- set_ide_preference "custom_PartitionScheme=min_spiffs"
   - set_ide_preference "build.path=/tmp/m5stack"
   - build_sketch "${TRAVIS_BUILD_DIR}/ESP32-BLECollector.ino" "esp32:esp32:m5stack-core-esp32:PartitionScheme=min_spiffs" "false" "newest"
-  - ls /tmp/m5stack -la
+  - cp /tmp/m5stack/ESP32-BLECollector.ino.bin /tmp/BLECollector-binaries/M5stack-BLECollector.bin
   - set_ide_preference "build.path=/tmp/odroidgo"
   - build_sketch "${TRAVIS_BUILD_DIR}/ESP32-BLECollector.ino" "esp32:esp32:odroid_esp32:PartitionScheme=min_spiffs" "false" "newest"
-  - ls /tmp/odroidgo -la
+  - cp /tmp/odroidgo/ESP32-BLECollector.ino.bin /tmp/BLECollector-binaries/OdroidGo-BLECollector.bin
   - set_ide_preference "build.path=/tmp/m5fire"
   - build_sketch "${TRAVIS_BUILD_DIR}/ESP32-BLECollector.ino" "esp32:esp32:m5stack-fire:PartitionScheme=default" "false" "newest"
-  - ls /tmp/m5fire -la
+  - cp /tmp/m5fire/ESP32-BLECollector.ino.bin /tmp/BLECollector-binaries/M5Fire-BLECollector.bin
+
+- ls /tmp/BLECollector-binaries -la
+
   #- if [ "$TRAVIS_BRANCH" != "master" ]; then echo "This commit was made against the $TRAVIS_BRANCH, skipping examples compilation"; exit 0; fi
   #- if [ "$TRAVIS_PULL_REQUEST" != "false" ]; then echo "This is a pull request, skipping examples compilation"; exit 0; fi
 
