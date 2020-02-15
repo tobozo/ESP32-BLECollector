@@ -115,4 +115,4 @@ deploy:
     #skip_cleanup: true
     # draft: true
     on:
-      branch: master
+      branch: unstable
