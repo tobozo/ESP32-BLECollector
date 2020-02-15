@@ -1,3 +1,7 @@
+/*\
+ * UI Icons
+\*/
+
 
 #include "Assets.h" // bitmaps
 
@@ -524,4 +528,3 @@ void BLERssiIconUpdateCB( uint16_t posX, uint16_t posY, uint16_t bgcolor ) {
 
 
 IconBar BLECollectorIconBar;
-
