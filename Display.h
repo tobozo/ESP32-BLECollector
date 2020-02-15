@@ -274,8 +274,8 @@ static int16_t sesscPosY;
 static int16_t ndevcPosX;
 static int16_t ndevcPosY;
 // icon positions for RTC/DB/BLE
-static int16_t iconAppX;
-static int16_t iconAppY;
+__attribute__((unused)) static int16_t iconAppX;
+__attribute__((unused)) static int16_t iconAppY;
 static int16_t iconRtcX;
 static int16_t iconRtcY;
 static int16_t iconBleX;

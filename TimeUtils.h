@@ -76,14 +76,14 @@ struct TimeActivity {
  *  - when time is not set
  *  - every hour if external RTC, otherwise every 24h
  *
- * 
+ *
  *                 External RTC | No External RTC
  *                 -------------|----------------
  *        WiFi NTP      X       | Not applicable/useless
  *         BLE NTP      X       |      X
  *    Internal RTC      X       |
  *      GPS Module      X       |      X
- * 
+ *
  * */
 
 #if HAS_GPS
@@ -111,10 +111,10 @@ void uptimeSet() {
 static void timeHousekeeping() {
   unsigned long seconds_since_boot = millis() / 1000;
   unsigned long minutes_since_boot = seconds_since_boot / 60;
-  unsigned long mm = minutes_since_boot % 60;
-  unsigned long hh = minutes_since_boot / 60;
-  unsigned long ss = seconds_since_boot % 60;
-  
+  __attribute__((unused)) unsigned long mm = minutes_since_boot % 60;
+  __attribute__((unused)) unsigned long hh = minutes_since_boot / 60;
+  __attribute__((unused)) unsigned long ss = seconds_since_boot % 60;
+
   DateTime internalDateTime = DateTime(year(), month(), day(), hour(), minute(), second());
   // before adjustment checks
   if( current_hour != internalDateTime.hour() ) {
@@ -150,7 +150,7 @@ static void timeHousekeeping() {
     if( abs( seconds_since_boot - internalDateTime.unixtime() ) > 2 ) { // internal datetime is set
       // safe to assume internal RTC is running
       TimeIsSet = true;
-    } 
+    }
     sprintf(hhmmssString, hhmmssStringTpl, hh, mm, ss);
 
   #else // HAS_EXTERNAL_RTC=false

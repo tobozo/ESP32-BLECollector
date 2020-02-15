@@ -368,7 +368,7 @@ static void TimeServerTask( void * param ) {
   log_w("Starting advertising");
   BLEDevice::startAdvertising();
   log_w("TimeServer Advertising started");
-  
+
   TimeServerSignalSent = false;
 
   xTaskCreate( TimeServerTaskNotify, "TimeServerTaskNotify", 2560, NULL, 6, NULL );
@@ -503,7 +503,7 @@ class FileSharingRouteCallbacks : public BLECharacteristicCallbacks {
           RouterAgent->setValue( (uint8_t*)resp, strlen(resp) );
           RouterAgent->notify();
         }
-      } else   if (strcmp(routing, lsMessage ) == 0) {  
+      } else   if (strcmp(routing, lsMessage ) == 0) {
         int filesCount = 0;
         char strOut[32+64];
         File root = BLE_FS.open("/");
@@ -685,7 +685,7 @@ unsigned long fileSharingClientTimeout = 10000;
 void FileSharingSendFile( BLERemoteCharacteristic* RemoteChar, const char* filename ) {
   while( fileTransferInProgress ) {
     log_w("Waiting for current transfert to finish");
-    vTaskDelay( 1000 ); 
+    vTaskDelay( 1000 );
   }
 
   if ( !RemoteChar->writeValue((uint8_t*)filename, strlen(filename), true) ) {
@@ -932,7 +932,9 @@ static void FileSharingClientTask( void * param ) {
 
   while( fileSharingClientTaskIsRunning ) {
     if( fileSharingClientLastActivity + fileSharingClientTimeout < millis() ) break;
-    else log_w("fileSharingClientLastActivity: %d", fileSharingClientLastActivity);
+    else {
+      log_w("fileSharingClientLastActivity: %d", fileSharingClientLastActivity);
+    }
     vTaskDelay( 1000 );
   }
 

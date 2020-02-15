@@ -62,6 +62,14 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 
 // don't edit anything below this
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-value"
+#pragma GCC diagnostic ignored "-Wunused-label"
+#pragma GCC diagnostic ignored "-Wchar-subscripts"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wempty-body"
+
+
 #define BLE_MENU_NAME "BLEMenu"
 
 #if defined( ARDUINO_M5Stack_Core_ESP32 )
@@ -167,8 +175,8 @@ Preferences preferences;
   #define GPS_RX 39 // io pin number
   #define GPS_TX 35 // io pin number
 #else
-  static bool GPSHasFix = false;
-  static bool GPSHasDateTime = false;
+  __attribute__((unused)) static bool GPSHasFix = false;
+  __attribute__((unused)) static bool GPSHasDateTime = false;
 #endif
 
 // RF stack
