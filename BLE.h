@@ -118,18 +118,30 @@ static bool deviceHasPayload( BLEAdvertisedDevice advertisedDevice ) {
 
 
 class FoundDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
-
-    void onResult( BLEAdvertisedDevice advertisedDevice ) {
+    #if BLE_LIB==LIB_CUSTOM_BLE
+    void onResult( BLEAdvertisedDevice advertisedDevice )
+    #else
+    void onResult( BLEAdvertisedDevice *advertisedDevice )
+    #endif
+    {
 
       devicesStatCount++; // raw stats for heapgraph
 
+      #if BLE_LIB==LIB_CUSTOM_BLE
       bool scanShouldStop =  deviceHasPayload( advertisedDevice );
+      #else
+      bool scanShouldStop =  deviceHasPayload( *advertisedDevice );
+      #endif
 
       if ( onScanDone  ) return;
 
       if ( scan_cursor < MAX_DEVICES_PER_SCAN ) {
         log_i("will store advertisedDevice in cache #%d", scan_cursor);
+        #if BLE_LIB==LIB_CUSTOM_BLE
         BLEDevHelper.store( BLEDevScanCache[scan_cursor], advertisedDevice );
+        #else
+        BLEDevHelper.store( BLEDevScanCache[scan_cursor], *advertisedDevice );
+        #endif
         //bool is_random = strcmp( BLEDevScanCache[scan_cursor]->ouiname, "[random]" ) == 0;
         bool is_random = (BLEDevScanCache[scan_cursor]->addr_type == BLE_ADDR_TYPE_RANDOM || BLEDevScanCache[scan_cursor]->addr_type == BLE_ADDR_TYPE_RPA_RANDOM );
         //bool is_blacklisted = isBlackListed( BLEDevScanCache[scan_cursor]->address );
@@ -145,9 +157,17 @@ class FoundDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
               DB.getVendor( BLEDevScanCache[scan_cursor]->manufid, BLEDevScanCache[scan_cursor]->manufname );
             }
             BLEDevScanCache[scan_cursor]->is_anonymous = BLEDevHelper.isAnonymous( BLEDevScanCache[scan_cursor] );
+            #if BLE_LIB==LIB_CUSTOM_BLE
             log_i(  "  stored and populated #%02d : %s", scan_cursor, advertisedDevice.getName().c_str());
+            #else
+            log_i(  "  stored and populated #%02d : %s", scan_cursor, advertisedDevice->getName().c_str());
+            #endif
           } else {
+            #if BLE_LIB==LIB_CUSTOM_BLE
             log_i(  "  stored #%02d : %s", scan_cursor, advertisedDevice.getName().c_str());
+            #else
+            log_i(  "  stored #%02d : %s", scan_cursor, advertisedDevice->getName().c_str());
+            #endif
           }
           scan_cursor++;
           processedDevicesCount++;
@@ -159,7 +179,11 @@ class FoundDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
         onScanDone = true;
       }
       if ( onScanDone ) {
+        #if BLE_LIB==LIB_CUSTOM_BLE
         advertisedDevice.getScan()->stop();
+        #else
+        advertisedDevice->getScan()->stop();
+        #endif
         scan_cursor = 0;
         if ( SCAN_DURATION - 1 >= MIN_SCAN_DURATION ) {
           SCAN_DURATION--;
@@ -174,7 +198,11 @@ class FoundDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
         BLEActivityIcon.setStatus( ICON_STATUS_ADV_SCAN );
       }
       if( scanShouldStop ) {
+        #if BLE_LIB==LIB_CUSTOM_BLE
         advertisedDevice.getScan()->stop();
+        #else
+        advertisedDevice->getScan()->stop();
+        #endif
       }
     }
 };
@@ -217,7 +245,7 @@ class BLEScanUtils {
       BLEDevice::init( PLATFORM_NAME " BLE Collector");
       getPrefs(); // load prefs from NVS
       UI.init(); // launch all UI tasks
-      VendorFilterIcon.setStatus( UI.filterVendors ? ICON_STATUS_SET : ICON_STATUS_UNSET );
+      VendorFilterIcon.setStatus( UI.filterVendors ? ICON_STATUS_filter : ICON_STATUS_filter_unset );
       if ( ! DB.init() ) { // mount DB
         log_e("Error with .db files (not found or corrupted), starting BLE File Sharing");
         startSerialTask();
@@ -542,12 +570,13 @@ class BLEScanUtils {
     }
 
     static void screenShotTask( void * param = NULL ) {
+      /*
       if( !UI.ScreenShotLoaded ) {
         M5.ScreenShot.init( &tft, BLE_FS );
         M5.ScreenShot.begin();
         UI.ScreenShotLoaded = true;
       }
-      UI.screenShot();
+      UI.screenShot();*/
       vTaskDelete(NULL);
     }
 
@@ -602,7 +631,7 @@ class BLEScanUtils {
     static void startSerialTask() {
       serialBuffer = (char*)calloc( SERIAL_BUFFER_SIZE, sizeof(char) );
       tempBuffer   = (char*)calloc( SERIAL_BUFFER_SIZE, sizeof(char) );
-      xTaskCreatePinnedToCore(serialTask, "serialTask", 2048 + SERIAL_BUFFER_SIZE, NULL, 0, NULL, 1); /* last = Task Core */
+      xTaskCreatePinnedToCore(serialTask, "serialTask", 8192 + SERIAL_BUFFER_SIZE, NULL, 0, NULL, 1); /* last = Task Core */
     }
 
     static void serialTask( void * parameter ) {
@@ -666,10 +695,16 @@ class BLEScanUtils {
         //runCommand( (char*)"toggle" );
         //runCommand( (char*)"ls" );
       }
+
+      #if HAS_EXTERNAL_RTC
       if( TimeIsSet ) {
         // auto share time if available
+        #if BLE_LIB==LIB_CUSTOM_BLE
         runCommand( (char*)"bleclock" );
+        #endif
       }
+      #endif
+
 
       #if HAS_GPS
         GPSInit();
@@ -700,6 +735,7 @@ class BLEScanUtils {
         #if HAS_GPS
           GPSRead();
         #endif
+        /*
         if( hasHID() ) {
           if( lastHidCheck + 150 < millis() ) {
             M5.update();
@@ -717,6 +753,7 @@ class BLEScanUtils {
             lastHidCheck = millis();
           }
         }
+        */
         vTaskDelay(1);
       }
     }
@@ -768,11 +805,13 @@ class BLEScanUtils {
       DB.maintain();
       scanTaskRunning = true;
       scanTaskStopped = false;
+
       if ( FoundDeviceCallback == NULL ) {
         FoundDeviceCallback = new FoundDeviceCallbacks(); // collect/store BLE data
       }
       pBLEScan = BLEDevice::getScan(); //create new scan
       pBLEScan->setAdvertisedDeviceCallbacks( FoundDeviceCallback );
+
       pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
       pBLEScan->setInterval(0x50); // 0x50
       pBLEScan->setWindow(0x30); // 0x30
@@ -886,7 +925,7 @@ class BLEScanUtils {
           BLEDevHelper.reset( BLEDevRAMCache[nextCacheIndex] );
           BLEDevScanCache[_scan_cursor]->hits++;
           BLEDevHelper.copyItem( BLEDevScanCache[_scan_cursor], BLEDevRAMCache[nextCacheIndex] );
-          log_i( "Device %d / %s is anonymous, won't be inserted", _scan_cursor, BLEDevScanCache[_scan_cursor]->address, BLEDevScanCache[_scan_cursor]->hits );
+          log_v( "Device %d / %s is anonymous, won't be inserted", _scan_cursor, BLEDevScanCache[_scan_cursor]->address, BLEDevScanCache[_scan_cursor]->hits );
         } else {
           deviceIndexIfExists = DB.deviceExists( BLEDevScanCache[_scan_cursor]->address ); // will load returning devices from DB if necessary
           if (deviceIndexIfExists > -1) {
@@ -903,11 +942,11 @@ class BLEScanUtils {
             BLEDevHelper.copyItem( BLEDevDBCache, BLEDevRAMCache[nextCacheIndex] ); // copy merged data to assigned psram cache
             BLEDevHelper.copyItem( BLEDevDBCache, BLEDevScanCache[_scan_cursor] ); // copy back merged data for rendering
 
-            log_i( "Device %d / %s is already in DB, increased hits to %d", _scan_cursor, BLEDevScanCache[_scan_cursor]->address, BLEDevScanCache[_scan_cursor]->hits );
+            log_v( "Device %d / %s is already in DB, increased hits to %d", _scan_cursor, BLEDevScanCache[_scan_cursor]->address, BLEDevScanCache[_scan_cursor]->hits );
           } else {
             // will be inserted after rendering
             BLEDevScanCache[_scan_cursor]->in_db = false;
-            log_i( "Device %d / %s is not in DB", _scan_cursor, BLEDevScanCache[_scan_cursor]->address );
+            log_v( "Device %d / %s is not in DB", _scan_cursor, BLEDevScanCache[_scan_cursor]->address );
           }
         }
       }
@@ -921,7 +960,7 @@ class BLEScanUtils {
         return false;
       }
       if ( _scan_cursor >= devicesCount) {
-        log_d("done all");
+        log_v("done all");
         onScanRendered = true;
         return false;
       }
@@ -946,7 +985,7 @@ class BLEScanUtils {
         return false;
       }
       if ( _scan_cursor >= devicesCount) {
-        log_d("done all");
+        log_v("done all");
         onScanPropagated = true;
         _scan_cursor = 0;
         return false;
@@ -1137,7 +1176,7 @@ class BLEScanUtils {
         }
       }
       CacheItem->is_anonymous = BLEDevHelper.isAnonymous( CacheItem );
-      log_d("[populated :%s]", CacheItem->address);
+      log_v("[populated :%s]", CacheItem->address);
     }
 
 };

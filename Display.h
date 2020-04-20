@@ -1,8 +1,23 @@
+
+
 #include <ESP32-Chimera-Core.h> // https://github.com/tobozo/ESP32-Chimera-Core
 #include <M5StackUpdater.h> // https://github.com/tobozo/M5Stack-SD-Updater
 
+//#include <LGFX_TFT_eSPI.hpp>
+//#include <driver/ledc.h>
+//static TFT_eSPI tft;
+/*
+TFT_eSprite gradientSprite = TFT_eSprite( &tft );
+TFT_eSprite heapGraphSprite = TFT_eSprite( &tft );
+TFT_eSprite animSprite = TFT_eSprite( &tft );
+*/
+
 #ifndef _CHIMERA_CORE_
-  #error "This app needs ESP32 Chimera Core but M5Stack Core was selected, check your library path !!"
+  #warning "This app needs ESP32 Chimera Core but M5Stack Core was selected, check your library path !!"
+  #include <SD.h>
+  #define M5STACK_SD SD
+#else
+  #define tft M5.Lcd // syntax sugar
 #endif
 
 
@@ -15,15 +30,15 @@
 #endif
 
 #define BLE_FS M5STACK_SD // inherited from ESP32-Chimera-Core
-#define tft M5.Lcd // syntax sugar
+
 #define tft_drawJpg tft.drawJpg
 #define tft_color565 tft.color565
 #define tft_readPixels tft.readRect
-#define scrollpanel_height() tft.width()
-#define scrollpanel_width() tft.height()
+#define scrollpanel_height() tft.height()
+#define scrollpanel_width() tft.width()
 #define tft_initOrientation() tft.setRotation(1)
 #define tft_drawBitmap tft.drawBitmap
-#define SD_begin BLE_FS.begin
+#define SD_begin M5StackSDBegin // BLE_FS.begin
 #define hasHID() (bool)true
 #define snapNeedsScrollReset() (bool)false // some TFT models need a scroll reset before screen capture
 #define BLE_FS_TYPE "sd" // sd = fs::SD, sdcard = fs::SD_MMC
@@ -111,6 +126,12 @@ static const int AMIGABALL_YPOS = 50;
 
 #endif
 
+
+static TFT_eSprite gradientSprite( &tft );
+static TFT_eSprite heapGraphSprite( &tft );
+static TFT_eSprite animSprite( &tft );
+
+
 // TODO: make this SD-driver dependant rather than platform dependant
 static bool isInQuery() {
   return isQuerying; // M5Stack uses SPI SD, isolate SD accesses from TFT rendering
@@ -119,21 +140,82 @@ static bool isInQuery() {
 
 void tft_begin() {
   M5.begin( true, true, false, false, false ); // don't start Serial
+  //tft.init();
+
   #if HAS_EXTERNAL_RTC
-    Wire.begin(RTC_SDA, RTC_SCL);
-    M5.I2C.scan();
+    //Wire.begin(RTC_SDA, RTC_SCL);
+    //M5.I2C.scan();
   #endif
   delay( 100 );
-  if( hasHID() ) {
-    // build has buttons => enable SD Updater at boot
-    if(digitalRead(BUTTON_A_PIN) == 0) {
-      Serial.println("Will Load menu binary");
-      updateFromFS();
-      ESP.restart();
+
+  //tft.init();
+  //tft.setRotation(1);
+
+  #ifdef __M5STACKUPDATER_H
+    if( hasHID() ) {
+      // build has buttons => enable SD Updater at boot
+      if(digitalRead(BUTTON_A_PIN) == 0) {
+        Serial.println("Will Load menu binary");
+        updateFromFS();
+        ESP.restart();
+      }
     }
-  }
+  #endif
 }
 
+/*
+#ifdef LOVYANGFX_HPP_
+
+#warning Using LOVYANGFX
+
+#undef tft_drawJpg
+#define tft_drawJpg tft_jpegRender
+
+
+static bool jpeg_is_rendering = false;
+static lgfx::jpeg_div_t JPEG_DIV_NONE;
+
+struct jpgParams {
+  const uint8_t *jpg_data;
+  uint32_t jpg_len;
+  int16_t x;
+  int16_t y;
+  int16_t maxWidth;
+  int16_t maxHeight;
+  int16_t offX;
+  int16_t offY;
+  lgfx::jpeg_div_t scale;
+  jpgParams(const uint8_t *_jpg_data, uint32_t _jpg_len, int16_t _x, int16_t _y,   int16_t _maxWidth,    int16_t _maxHeight, int16_t _offX, int16_t _offY,  lgfx::jpeg_div_t _scale)
+   :              jpg_data{_jpg_data}, jpg_len{_jpg_len},      x{_x},      y{_y}, maxWidth{_maxWidth}, maxHeight{_maxHeight},   offX{_offX},   offY{_offY},            scale(_scale) {
+  };
+};
+
+static void jpegRenderTask( void * p ) {
+  jpgParams* j = (jpgParams*)p;
+  jpeg_is_rendering = true;
+  tft.drawJpg( j->jpg_data, j->jpg_len, j->x, j->y, j->maxWidth, j->maxHeight, j->offX, j->offY, j->scale );
+  jpeg_is_rendering = false;
+  vTaskDelete( NULL );
+}
+
+static void tft_jpegRender( const uint8_t *jpg_data, uint32_t jpg_len, int16_t x=0, int16_t y=0, int16_t maxWidth=0, int16_t maxHeight=0, int16_t offX=0, int16_t offY=0, lgfx::jpeg_div_t scale=JPEG_DIV_NONE ) {
+  while( jpeg_is_rendering ) {
+    // wait for any previous render to finish
+    vTaskDelay(1);
+  }
+
+  jpgParams jpeg_params( jpg_data, jpg_len, x, y, maxWidth, maxHeight, offX, offY, scale );
+
+  xTaskCreatePinnedToCore( jpegRenderTask, "jpegRenderTask", 16384, &jpeg_params, 16, NULL, 1 ); // highest priority
+  while( jpeg_is_rendering ) {
+    // wait for this render to finish
+    vTaskDelay(1);
+  }
+  // jpeg is rendered !
+}
+
+#endif
+*/
 
 void tft_setBrightness( uint8_t brightness ) {
   tft.setBrightness( brightness );
@@ -142,15 +224,16 @@ void tft_setBrightness( uint8_t brightness ) {
 // emulating Adafruit's tft.getTextBounds()
 void tft_getTextBounds(const char *string, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h) {
   *w = tft.textWidth( string );
-  *h = tft.fontHeight( tft.textfont );
+  *h = tft.fontHeight();
 }
+/*
 void tft_getTextBounds(const __FlashStringHelper *s, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h) {
   *w = tft.textWidth( s );
-  *h = tft.fontHeight( tft.textfont );
-}
+  *h = tft.fontHeight();
+}*/
 void tft_getTextBounds(const String &str, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h) {
-  *w = tft.textWidth( str );
-  *h = tft.fontHeight( tft.textfont );
+  *w = tft.textWidth( str.c_str() );
+  *h = tft.fontHeight();
 }
 
 void tft_fillCircle( uint16_t x, uint16_t y, uint16_t r, uint16_t color) {
@@ -169,7 +252,7 @@ void tft_fillTriangle( uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint1
 
 void tft_setupScrollArea(uint16_t tfa, uint16_t vsa, uint16_t bfa) {
   bfa += SCROLL_OFFSET; // compensate for stubborn firmware
-  tft.writecommand(ILI9341_VSCRDEF); // Vertical scroll definition
+  tft.writecommand(0x33/*ILI9341_VSCRDEF*/); // Vertical scroll definition
   tft.writedata(tfa >> 8);           // Top Fixed Area line count
   tft.writedata(tfa);
   tft.writedata(vsa >> 8);  // Vertical Scrolling Area line count
@@ -181,36 +264,38 @@ void tft_setupScrollArea(uint16_t tfa, uint16_t vsa, uint16_t bfa) {
 
 
 void tft_scrollTo(uint16_t vsp) {
-  tft.writecommand(ILI9341_VSCRSADD); // Vertical scrolling pointer
+  tft.writecommand(0x37/*ILI9341_VSCRSADD*/); // Vertical scrolling pointer
   tft.writedata(vsp>>8);
   tft.writedata(vsp);
 }
 
-TFT_eSprite gradientSprite = TFT_eSprite( &tft );
-TFT_eSprite heapGraphSprite = TFT_eSprite( &tft );
-TFT_eSprite animSprite = TFT_eSprite( &tft );
 
 void tft_fillGradientHRect( uint16_t x, uint16_t y, uint16_t width, uint16_t height, RGBColor colorstart, RGBColor colorend ) {
+  log_v("tft_fillGradientHRect( %d, %d, %d, %d )\n", x, y, width, height );
   gradientSprite.setPsram( false ); // don't bother using psram for that
-  gradientSprite.setSwapBytes( false );
-  gradientSprite.createSprite( width, 1);
+  //gradientSprite.setSwapBytes( false );
   gradientSprite.setColorDepth( 16 );
+  gradientSprite.createSprite( width, 1);
+  tft.startWrite();
   gradientSprite.drawGradientHLine( 0, 0, width, colorstart, colorend );
   for( uint16_t h = 0; h < height; h++ ) {
     gradientSprite.pushSprite( x, y+h );
   }
+  tft.endWrite();
   gradientSprite.deleteSprite();
 }
 
 void tft_fillGradientVRect( uint16_t x, uint16_t y, uint16_t width, uint16_t height, RGBColor colorstart, RGBColor colorend ) {
   gradientSprite.setPsram( false ); // don't bother using psram for that
-  gradientSprite.setSwapBytes( false );
-  gradientSprite.createSprite( 1, height);
+  //gradientSprite.setSwapBytes( false );
   gradientSprite.setColorDepth( 16 );
+  gradientSprite.createSprite( 1, height);
+  tft.startWrite();
   gradientSprite.drawGradientVLine( 0, 0, height, colorstart, colorend );
   for( uint16_t w = 0; w < width; w++ ) {
     gradientSprite.pushSprite( x+w, y );
   }
+  tft.endWrite();
   gradientSprite.deleteSprite();
 }
 

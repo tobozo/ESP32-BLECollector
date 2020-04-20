@@ -198,11 +198,67 @@ class UIUtils {
       tft_begin();
       tft_initOrientation(); // messing with this may break the scroll
       tft_setBrightness( brightness );
+
+      //tft.showNonPrintableChars( true );
+      tft.setAttribute( lgfx::cp437_switch, true );
+
+      Out.init();
       setUISizePos(); // set position/dimensions for widgets and other UI items
       setIconBar(); // setup icon bar
 
       RGBColor colorstart = { 0x44, 0x44, 0x88 };
       RGBColor colorend   = { 0x22, 0x22, 0x44 };
+
+
+/*
+      struct DrawSet {
+        void drawJpg( const char* name, const unsigned char *jpeg, int32_t len, uint16_t x, uint16_t y, uint16_t w, uint16_t h ) {
+          Serial.printf("Rendering %s [%d*%d] at [%d, %d]\n", name, w, h, x, y);
+          delay(100);
+          tft.drawJpg( (const uint8_t *)jpeg, len, x, y, w, h );
+        }
+      } drawSet;
+
+      // 8x8 icons
+      drawSet.drawJpg(  "01", filter_jpeg,            filter_jpeg_len,            10, 10, 10, 8 );
+      drawSet.drawJpg(  "02", filter_unset_jpeg,      filter_unset_jpeg_len,      10, 10, 10, 8 );
+      drawSet.drawJpg(  "03", disk_jpeg,              disk_jpeg_len,              10, 10, 8,  8 );
+      drawSet.drawJpg(  "04", ghost_jpeg,             ghost_jpeg_len,             10, 10, 8,  8 );
+      drawSet.drawJpg(  "05", earth_jpeg,             earth_jpeg_len,             10, 10, 8,  8 );
+      drawSet.drawJpg(  "06", insert_jpeg,            insert_jpeg_len,            10, 10, 8,  8 );
+      drawSet.drawJpg(  "07", moai_jpeg,              moai_jpeg_len,              10, 10, 8,  8 );
+      drawSet.drawJpg(  "08", ram_jpeg,               ram_jpeg_len,               10, 10, 8,  8 );
+      drawSet.drawJpg(  "09", clock_jpeg,             clock_jpeg_len,             10, 10, 8,  8 );
+      drawSet.drawJpg(  "10", clock3_jpeg,            clock3_jpeg_len,            10, 10, 8,  8 );
+      drawSet.drawJpg(  "11", clock2_jpeg,            clock2_jpeg_len,            10, 10, 8,  8 );
+      drawSet.drawJpg(  "12", zzz_jpeg,               zzz_jpeg_len,               10, 10, 8,  8 );
+      drawSet.drawJpg(  "13", update_jpeg,            update_jpeg_len,            10, 10, 8,  8 );
+      drawSet.drawJpg(  "14", service_jpeg,           service_jpeg_len,           10, 10, 8,  8 );
+      drawSet.drawJpg(  "15", espressif_jpeg,         espressif_jpeg_len,         10, 10, 8,  8 );
+      drawSet.drawJpg(  "16", apple16_jpeg,           apple16_jpeg_len,           10, 10, 8,  8 );
+      drawSet.drawJpg(  "17", crosoft_jpeg,           crosoft_jpeg_len,           10, 10, 8,  8 );
+      drawSet.drawJpg(  "18", generic_jpeg,           generic_jpeg_len,           10, 10, 8,  8 );
+      // ?x8 icons
+      drawSet.drawJpg(  "19", nic16_jpeg,             nic16_jpeg_len,             10, 10, 13, 8 );
+      drawSet.drawJpg(  "20", ibm8_jpg,               ibm8_jpg_len,               10, 10, 20, 8 );
+      drawSet.drawJpg(  "21", speaker_icon_jpg,       speaker_icon_jpg_len,       10, 10, 6,  8 );
+      drawSet.drawJpg(  "22", name_jpeg,              name_jpeg_len,              10, 10, 7,  8 );
+      drawSet.drawJpg(  "23", BLECollector_Title_jpg, BLECollector_Title_jpg_len, 10, 10, 82, 8 );
+      // ?x? icons
+      drawSet.drawJpg(  "24", ble_jpeg,               ble_jpeg_len,               10, 10, 7,  11 );
+      drawSet.drawJpg(  "25", db_jpeg,                db_jpeg_len,                10, 10, 12, 11 );
+      drawSet.drawJpg(  "26", tbz_28x28_jpg,          tbz_28x28_jpg_len,          10, 10, 28, 28 );
+      drawSet.drawJpg(  "27", disk00_jpg,             disk00_jpg_len,             10, 10, 30, 30 );
+      drawSet.drawJpg(  "28", disk01_jpg,             disk01_jpg_len,             10, 10, 30, 30 );
+      drawSet.drawJpg(  "29", gps_jpg,                gps_jpg_len,                10, 10, 10, 10 );
+      drawSet.drawJpg(  "30", nogps_jpg,              nogps_jpg_len,              10, 10, 10, 10 );
+
+      while(1) {
+        ;
+      }
+      */
+
+      //tft.startWrite();
 
       if (clearScreen) {
         tft.fillScreen(BLE_BLACK);
@@ -257,6 +313,8 @@ class UIUtils {
       } else {
         Out.scrollNextPage();
       }
+
+      //tft.endWrite();
     }
 
     void begin() {
@@ -383,6 +441,7 @@ class UIUtils {
     }
 
     static void screenShow( void * fileName = NULL ) {
+      /*
       if( fileName == NULL ) return;
       isQuerying = true;
 
@@ -415,7 +474,7 @@ class UIUtils {
         }
         giveMuxSemaphore();
       }
-      isQuerying = false;
+      isQuerying = false;*/
     }
 
 
@@ -552,7 +611,7 @@ class UIUtils {
 
     static void PrintProgressBar(uint16_t width) {
       if( width > Out.width || width == 0 ) { // clear
-        tft.fillRect(0, progressBarY, Out.width, 2, BLE_DARKGREY);
+        tft.fillRect(0,     progressBarY, Out.width, 2, BLE_DARKGREY);
       } else {
         tft.fillRect(0,     progressBarY, width,           2, BLUETOOTH_COLOR);
         tft.fillRect(width, progressBarY, Out.width-width, 2, BLE_DARKGREY);
@@ -625,8 +684,12 @@ class UIUtils {
         animClear( x, y, hallOfMacItemWidth, hallOfMacItemHeight, FOOTER_BGCOLOR, BLE_WHITE );
       }
       giveMuxSemaphore();
+
+      heapGraphSprite.setPsram( false );
+      heapGraphSprite.setColorDepth( 8 );
+
       xTaskCreatePinnedToCore(clockSync, "clockSync", 2048, NULL, 2, NULL, 1); // RTC wants to run on core 1 or it fails
-      xTaskCreatePinnedToCore(drawableItems, "drawableItems", 1816, NULL, 2, NULL, 1); // RTC wants to run on core 1 or it fails
+      xTaskCreatePinnedToCore(drawableItems, "drawableItems", 6144, NULL, 2, NULL, 1);
       vTaskDelete(NULL);
     }
 
@@ -787,8 +850,6 @@ class UIUtils {
       lastWaketime = xTaskGetTickCount();
       devGraphFirstStatTime = millis();
 
-      heapGraphSprite.setPsram( false );
-
       int32_t *sorted     = (int32_t*)malloc( sizeof(int32_t) * hallOfMacSize );
       int32_t *lastsorted = (int32_t*)malloc( sizeof(int32_t) * hallOfMacSize );
 
@@ -868,7 +929,6 @@ class UIUtils {
       // draw graph
       takeMuxSemaphore();
 
-      heapGraphSprite.setColorDepth( 8 );
       heapGraphSprite.createSprite( graphLineWidth, graphLineHeight );
 
       for (uint8_t i = 0; i < graphLineWidth; i++) {
@@ -1319,7 +1379,7 @@ class UIUtils {
         break;
         default:
         case 0:
-          barColors[0] = RED; // want: RAINBOW
+          barColors[0] = BLE_RED; // want: RAINBOW
         break;
       }
       tft.fillRect(x,          y + 4*size, 2*size, 4*size, barColors[0]);
@@ -1382,7 +1442,7 @@ class UIUtils {
     }
 
 
-    static void alignTextAt(const char* text, uint16_t x, uint16_t y, int16_t color = BLE_YELLOW, int16_t bgcolor = BLE_TRANSPARENT, uint8_t textAlign = ALIGN_FREE) {
+    static void alignTextAt(const char* text, uint16_t x, uint16_t y, uint16_t color = BLE_YELLOW, uint16_t bgcolor = BLE_TRANSPARENT, uint8_t textAlign = ALIGN_FREE) {
       if( isEmpty( text ) ) return;
       if( bgcolor != BLE_TRANSPARENT ) {
         tft.setTextColor( color, bgcolor );

@@ -97,13 +97,13 @@ struct IconBar;
 
 
 bool IconRender( Icon *icon, uint16_t offsetX, uint16_t offsetY );
-void IconRender( IconSrc* src, uint16_t x, uint16_t y );
+void IconRender( const IconSrc* src, uint16_t x, uint16_t y );
 void IconRender( IconWidget* widget, uint16_t posX, uint16_t posY, uint16_t width, uint16_t height, uint16_t offsetX, uint16_t offsetY, uint16_t bgcolor );
 void IconRender( IconShape *shape, uint16_t posX, uint16_t posY, uint16_t width, uint16_t height, uint16_t offsetX, uint16_t offsetY );
 
 void (*rssiPointer)(int16_t x, int16_t y, int16_t rssi, uint16_t bgcolor, float size);
 void (*percentPointer)(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t percent, uint16_t barcolor, uint16_t bgcolor, uint16_t bordercolor);
-void (*textAlignPointer)(const char* text, uint16_t x, uint16_t y, int16_t color, int16_t bgcolor, uint8_t textAlign);
+void (*textAlignPointer)(const char* text, uint16_t x, uint16_t y, uint16_t color, uint16_t bgcolor, uint8_t textAlign);
 
 void (*fillCirclePointer)( uint16_t x, uint16_t y, uint16_t r, uint16_t color);
 void (*drawCirclePointer)( uint16_t x, uint16_t y, uint16_t r, uint16_t color);
@@ -113,9 +113,9 @@ void (*fillTrianglePointer)( uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1,
 
 struct IconSrcStatus {
   IconSrcStatusType status;
-  IconSrc           *src;
-  IconSrcStatus( IconSrcStatusType s, IconSrc *sr ) : status(s), src(sr) { };
-  IconSrcStatus( IconSrc *sr, IconSrcStatusType s ) : status(s), src(sr) { };
+  const IconSrc *src;
+  IconSrcStatus( IconSrcStatusType s, const IconSrc *sr ) : status(s), src(sr) { };
+  IconSrcStatus( const IconSrc *sr, IconSrcStatusType s ) : status(s), src(sr) { };
 };
 
 struct IconWidgetStatus {
@@ -242,8 +242,9 @@ struct IconBar {
   uint16_t    width;
   uint16_t    height;
   uint8_t     margin = 2;
-  size_t      totalIcons;
+  size_t      totalIcons = 0;
   Icon        **icons;
+  IconBar() { };
   void init() {
     if( totalIcons == 0 ) {
       log_e("Nothing to init!!");
@@ -277,6 +278,7 @@ struct IconBar {
     uint16_t posx = 0;
     uint8_t rendered = 0;
     for( byte i=0; i<totalIcons; i++ ) {
+      log_v("Rendering icon %s at [%d, %d]", icons[i]->name, x, y );
       if( IconRender( icons[i], x, y ) ) {
         rendered++;
       }
@@ -286,8 +288,8 @@ struct IconBar {
 };
 
 // renderers
-void IconRender( IconSrc* src, uint16_t x, uint16_t y ) {
-  tft.drawJpg( src->jpeg, src->jpeg_len, x, y );
+void IconRender( const IconSrc* src, uint16_t x, uint16_t y ) {
+  tft_drawJpg( src->jpeg, src->jpeg_len, x, y );
 }
 
 void IconRender( IconWidget* widget, uint16_t posX, uint16_t posY, uint16_t width, uint16_t height, uint16_t offsetX, uint16_t offsetY, uint16_t bgcolor ) {
@@ -353,6 +355,7 @@ bool IconRender( Icon *icon, uint16_t offsetX, uint16_t offsetY ) {
   takeMuxSemaphore();
   switch( icon->type ) {
     case ICON_TYPE_JPG:
+      //log_n("Will render icon '%s' with statusIndex %d", icon->name, statusIndex);
       IconRender( icon->srcStatus[statusIndex]->src, offsetX+icon->posX, offsetY+icon->posY );
     break;
     case ICON_TYPE_GEOMETRIC:
@@ -379,38 +382,38 @@ bool IconRender( Icon *icon, IconSrcStatusType status, uint16_t x, uint16_t y ) 
 // end struct/enum, begin data
 
 // 8x8 icons
-IconSrc *VendorFilterIcon_SET     = new IconSrc( filter_jpeg,            filter_jpeg_len,            10, 8 );
-IconSrc *VendorFilterIcon_UNSET   = new IconSrc( filter_unset_jpeg,      filter_unset_jpeg_len,      10, 8 );
-IconSrc *TextCounters_heap_src    = new IconSrc( disk_jpeg,              disk_jpeg_len,              8,  8 );
-IconSrc *TextCounters_entries_src = new IconSrc( ghost_jpeg,             ghost_jpeg_len,             8,  8 );
-IconSrc *TextCounters_last_src    = new IconSrc( earth_jpeg,             earth_jpeg_len,             8,  8 );
-IconSrc *TextCounters_seen_src    = new IconSrc( insert_jpeg,            insert_jpeg_len,            8,  8 );
-IconSrc *TextCounters_scans_src   = new IconSrc( moai_jpeg,              moai_jpeg_len,              8,  8 );
-IconSrc *TextCounters_uptime_src  = new IconSrc( ram_jpeg,               ram_jpeg_len,               8,  8 );
-IconSrc *TimeIcon_SET_src         = new IconSrc( clock_jpeg,             clock_jpeg_len,             8,  8 );
-IconSrc *TimeIcon_UNSET_src       = new IconSrc( clock3_jpeg,            clock3_jpeg_len,            8,  8 );
-IconSrc *TimeIcon_RTC_src         = new IconSrc( clock2_jpeg,            clock2_jpeg_len,            8,  8 );
-IconSrc *Icon8x8_zzz_src          = new IconSrc( zzz_jpeg,               zzz_jpeg_len,               8,  8 );
-IconSrc *Icon8x8_update_src       = new IconSrc( update_jpeg,            update_jpeg_len,            8,  8 );
-IconSrc *Icon8x8_service_src      = new IconSrc( service_jpeg,           service_jpeg_len,           8,  8 );
-IconSrc *Icon8x8_espressif_src    = new IconSrc( espressif_jpeg,         espressif_jpeg_len,         8,  8 );
-IconSrc *Icon8x8_apple16_src      = new IconSrc( apple16_jpeg,           apple16_jpeg_len,           8,  8 );
-IconSrc *Icon8x8_crosoft_src      = new IconSrc( crosoft_jpeg,           crosoft_jpeg_len,           8,  8 );
-IconSrc *Icon8x8_generic_src      = new IconSrc( generic_jpeg,           generic_jpeg_len,           8,  8 );
+const IconSrc *VendorFilterIcon_SET     = new IconSrc( filter_jpeg,            filter_jpeg_len,            10, 8 );
+const IconSrc *VendorFilterIcon_UNSET   = new IconSrc( filter_unset_jpeg,      filter_unset_jpeg_len,      10, 8 );
+const IconSrc *TextCounters_heap_src    = new IconSrc( disk_jpeg,              disk_jpeg_len,              8,  8 );
+const IconSrc *TextCounters_entries_src = new IconSrc( ghost_jpeg,             ghost_jpeg_len,             8,  8 );
+const IconSrc *TextCounters_last_src    = new IconSrc( earth_jpeg,             earth_jpeg_len,             8,  8 );
+const IconSrc *TextCounters_seen_src    = new IconSrc( insert_jpeg,            insert_jpeg_len,            8,  8 );
+const IconSrc *TextCounters_scans_src   = new IconSrc( moai_jpeg,              moai_jpeg_len,              8,  8 );
+const IconSrc *TextCounters_uptime_src  = new IconSrc( ram_jpeg,               ram_jpeg_len,               8,  8 );
+const IconSrc *TimeIcon_SET_src         = new IconSrc( clock_jpeg,             clock_jpeg_len,             8,  8 );
+const IconSrc *TimeIcon_UNSET_src       = new IconSrc( clock3_jpeg,            clock3_jpeg_len,            8,  8 );
+const IconSrc *TimeIcon_RTC_src         = new IconSrc( clock2_jpeg,            clock2_jpeg_len,            8,  8 );
+const IconSrc *Icon8x8_zzz_src          = new IconSrc( zzz_jpeg,               zzz_jpeg_len,               8,  8 );
+const IconSrc *Icon8x8_update_src       = new IconSrc( update_jpeg,            update_jpeg_len,            8,  8 );
+const IconSrc *Icon8x8_service_src      = new IconSrc( service_jpeg,           service_jpeg_len,           8,  8 );
+const IconSrc *Icon8x8_espressif_src    = new IconSrc( espressif_jpeg,         espressif_jpeg_len,         8,  8 );
+const IconSrc *Icon8x8_apple16_src      = new IconSrc( apple16_jpeg,           apple16_jpeg_len,           8,  8 );
+const IconSrc *Icon8x8_crosoft_src      = new IconSrc( crosoft_jpeg,           crosoft_jpeg_len,           8,  8 );
+const IconSrc *Icon8x8_generic_src      = new IconSrc( generic_jpeg,           generic_jpeg_len,           8,  8 );
 // ?x8 icons
-IconSrc *Icon8h_nic16_src         = new IconSrc( nic16_jpeg,             nic16_jpeg_len,             13, 8 );
-IconSrc *Icon8h_ibm8_src          = new IconSrc( ibm8_jpg,               ibm8_jpg_len,               20, 8 );
-IconSrc *Icon8h_speaker_src       = new IconSrc( speaker_icon_jpg,       speaker_icon_jpg_len,       6,  8 );
-IconSrc *Icon8h_name_src          = new IconSrc( name_jpeg,              name_jpeg_len,              7,  8 );
-IconSrc *Icon8h_BLECollector_src  = new IconSrc( BLECollector_Title_jpg, BLECollector_Title_jpg_len, 82, 8 );
+const IconSrc *Icon8h_nic16_src         = new IconSrc( nic16_jpeg,             nic16_jpeg_len,             13, 8 );
+const IconSrc *Icon8h_ibm8_src          = new IconSrc( ibm8_jpg,               ibm8_jpg_len,               20, 8 );
+const IconSrc *Icon8h_speaker_src       = new IconSrc( speaker_icon_jpg,       speaker_icon_jpg_len,       6,  8 );
+const IconSrc *Icon8h_name_src          = new IconSrc( name_jpeg,              name_jpeg_len,              7,  8 );
+const IconSrc *Icon8h_BLECollector_src  = new IconSrc( BLECollector_Title_jpg, BLECollector_Title_jpg_len, 82, 8 );
 // ?x? icons
-IconSrc *Icon_ble_src             = new IconSrc( ble_jpeg,               ble_jpeg_len,               7,  11 );
-IconSrc *Icon_db_src              = new IconSrc( db_jpeg,                db_jpeg_len,                12, 11 );
-IconSrc *Icon_tbz_src             = new IconSrc( tbz_28x28_jpg,          tbz_28x28_jpg_len,          28, 28 );
-IconSrc *SDLoaderIcon_SET_src     = new IconSrc( disk00_jpg,             disk00_jpg_len,             30, 30 );
-IconSrc *SDLoaderIcon_UNSET_src   = new IconSrc( disk01_jpg,             disk01_jpg_len,             30, 30 );
-IconSrc *GPSIcon_SET_src          = new IconSrc( gps_jpg,                gps_jpg_len,                10, 10 );
-IconSrc *GPSIcon_UNSET_src        = new IconSrc( nogps_jpg,              nogps_jpg_len,              10, 10 );
+const IconSrc *Icon_ble_src             = new IconSrc( ble_jpeg,               ble_jpeg_len,               7,  11 );
+const IconSrc *Icon_db_src              = new IconSrc( db_jpeg,                db_jpeg_len,                12, 11 );
+const IconSrc *Icon_tbz_src             = new IconSrc( tbz_28x28_jpg,          tbz_28x28_jpg_len,          28, 28 );
+const IconSrc *SDLoaderIcon_SET_src     = new IconSrc( disk00_jpg,             disk00_jpg_len,             30, 30 );
+const IconSrc *SDLoaderIcon_UNSET_src   = new IconSrc( disk01_jpg,             disk01_jpg_len,             30, 30 );
+const IconSrc *GPSIcon_SET_src          = new IconSrc( gps_jpg,                gps_jpg_len,                10, 10 );
+const IconSrc *GPSIcon_UNSET_src        = new IconSrc( nogps_jpg,              nogps_jpg_len,              10, 10 );
 
 // shape based icons
 IconShape *Shape_BLE_OFF             = new IconShape( ICON_SHAPE_DISC, BLE_DARKBLUE );

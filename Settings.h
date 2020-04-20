@@ -45,10 +45,10 @@
 
 
 // edit these values to fit your mode (can be #undef from Display.ESP32Chimeracore.h)
-#define HAS_EXTERNAL_RTC   false // uses I2C, search this file for RTC_SDA or RTC_SCL to change pins
-#define HAS_GPS            false // uses hardware serial, search this file for GPS_RX and GPS_TX to change pins
-#define TIME_UPDATE_SOURCE TIME_UPDATE_NONE // TIME_UPDATE_GPS // soon deprecated, will be implicit
-int8_t timeZone = 1; // 1 = GMT+1, 2 = GMT+2, etc
+#define HAS_EXTERNAL_RTC   true // uses I2C, search this file for RTC_SDA or RTC_SCL to change pins
+#define HAS_GPS            true // uses hardware serial, search this file for GPS_RX and GPS_TX to change pins
+#define TIME_UPDATE_SOURCE TIME_UPDATE_GPS // TIME_UPDATE_GPS // soon deprecated, will be implicit
+int8_t timeZone = 2; // 1 = GMT+1, 2 = GMT+2, etc
 const char* NTP_SERVER = "europe.pool.ntp.org";
 
 byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
@@ -186,16 +186,32 @@ Preferences preferences;
   char WiFi_PASS[32];
 #endif
 
-// BLE stack
-#include <BLEDevice.h>
-#include <BLEUtils.h>
-#include <BLEScan.h>
-#include <BLEAdvertisedDevice.h>
-#include <BLEClient.h>
-#include <BLE2902.h>
+#define LIB_NATIVE_BLE    0 // native BLE Library from ESP32 SDK (buggy, some methods are unexposed)
+#define LIB_CUSTOM_BLE    1 // custom BLE Library modified from native (works better with psram)
+#define LIB_CUSTOM_NIMBLE 2 // NimBLE Library from https://github.com/h2zero/NimBLE-Arduino
+#define BLE_LIB LIB_CUSTOM_NIMBLE
 
+#if BLE_LIB==LIB_CUSTOM_BLE
+  // Custom BLE stack from
+  #include <BLEDevice.h>
+  #include <BLEUtils.h>
+  #include <BLEScan.h>
+  #include <BLEAdvertisedDevice.h>
+  #include <BLEClient.h>
+  #include <BLE2902.h>
+#else // BLE_LIB==LIB_CUSTOM_NIMBLE
+  // NimBLE Stack from https://github.com/h2zero/NimBLE-Arduino
+  #include <NimBLEDevice.h>
+  #include <NimBLEAdvertisedDevice.h>
+  #include "NimBLEEddystoneURL.h"
+  #include "NimBLEEddystoneTLM.h"
+  #include "NimBLEBeacon.h"
+  #include "NimBLE2902.h"
+#endif
 // SQLite stack
 #include <sqlite3.h> // https://github.com/siara-cc/esp32_arduino_sqlite3_lib
+
+//#include "ncurses/curses.h"
 
 // used to disable brownout detector
 #include "soc/soc.h"

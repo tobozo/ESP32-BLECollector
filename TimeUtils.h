@@ -161,7 +161,7 @@ static void timeHousekeeping() {
 
   nowDateTime = internalDateTime;
   uptimeSet();
-  log_d("Time: %s, Uptime: %s", hhmmString, UpTimeString );
+  log_v("Time: %s, Uptime: %s", hhmmString, UpTimeString );
 }
 
 

@@ -37,8 +37,8 @@ static bool isInScroll() {
 
 class ScrollableOutput {
   public:
-    uint16_t height = scrollpanel_height();
-    uint16_t width  = scrollpanel_width();
+    uint16_t height;// = scrollpanel_height();
+    uint16_t width;//  = scrollpanel_width();
     // scroll control variables
     uint16_t scrollTopFixedArea = 0;
     uint16_t scrollBottomFixedArea = 0;
@@ -52,6 +52,11 @@ class ScrollableOutput {
     //uint16_t BgColor;
     RGBColor BGColorStart;
     RGBColor BGColorEnd;
+
+    void init() {
+      height = scrollpanel_height();
+      width  = scrollpanel_width();
+    }
 
     int println() {
       return println(" ");
@@ -104,7 +109,7 @@ class ScrollableOutput {
       int yStart = translate(y, 0); // get the scrollview-translated y position
       if ( yStart >= scrollTopFixedArea && (yStart+_height)<(height-scrollBottomFixedArea) ) {
         // no scroll loop point overlap, just render the translated box using the native method
-        log_d("Rendering native x:%d, y:%d, width:%d, height:%d, radius:%d", x, y, _width, _height, radius);
+        log_v("Rendering native x:%d, y:%d, width:%d, height:%d, radius:%d", x, y, _width, _height, radius);
         if( fill ) {
           tft.fillRoundRect(x, yStart, _width, _height, radius, bordercolor);
         } else {
@@ -120,7 +125,7 @@ class ScrollableOutput {
         int leftHLinePosX    = leftVlinePosX + radius;
         int rightHlinePosX   = rightVlinePosX - radius;
         int hLineWidth       = _width - 2 * radius;
-        log_d("Rendering split x:%d, y:%d, width:%d, height:%d, radius:%d", x, y, _width, _height, radius);
+        log_v("Rendering split x:%d, y:%d, width:%d, height:%d, radius:%d", x, y, _width, _height, radius);
         log_v("                yStart:%d, yEnd:%d, upperBlockHeight:%d, lowerBlockHeight:%d", yStart, yEnd, upperBlockHeight, lowerBlockHeight);
 
         tft.drawFastHLine(leftHLinePosX, yStart, hLineWidth, bordercolor); // upper hline
