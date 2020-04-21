@@ -1,16 +1,5 @@
-
-
 #include <ESP32-Chimera-Core.h> // https://github.com/tobozo/ESP32-Chimera-Core
 #include <M5StackUpdater.h> // https://github.com/tobozo/M5Stack-SD-Updater
-
-//#include <LGFX_TFT_eSPI.hpp>
-//#include <driver/ledc.h>
-//static TFT_eSPI tft;
-/*
-TFT_eSprite gradientSprite = TFT_eSprite( &tft );
-TFT_eSprite heapGraphSprite = TFT_eSprite( &tft );
-TFT_eSprite animSprite = TFT_eSprite( &tft );
-*/
 
 #ifndef _CHIMERA_CORE_
   #warning "This app needs ESP32 Chimera Core but M5Stack Core was selected, check your library path !!"
@@ -163,59 +152,6 @@ void tft_begin() {
   #endif
 }
 
-/*
-#ifdef LOVYANGFX_HPP_
-
-#warning Using LOVYANGFX
-
-#undef tft_drawJpg
-#define tft_drawJpg tft_jpegRender
-
-
-static bool jpeg_is_rendering = false;
-static lgfx::jpeg_div_t JPEG_DIV_NONE;
-
-struct jpgParams {
-  const uint8_t *jpg_data;
-  uint32_t jpg_len;
-  int16_t x;
-  int16_t y;
-  int16_t maxWidth;
-  int16_t maxHeight;
-  int16_t offX;
-  int16_t offY;
-  lgfx::jpeg_div_t scale;
-  jpgParams(const uint8_t *_jpg_data, uint32_t _jpg_len, int16_t _x, int16_t _y,   int16_t _maxWidth,    int16_t _maxHeight, int16_t _offX, int16_t _offY,  lgfx::jpeg_div_t _scale)
-   :              jpg_data{_jpg_data}, jpg_len{_jpg_len},      x{_x},      y{_y}, maxWidth{_maxWidth}, maxHeight{_maxHeight},   offX{_offX},   offY{_offY},            scale(_scale) {
-  };
-};
-
-static void jpegRenderTask( void * p ) {
-  jpgParams* j = (jpgParams*)p;
-  jpeg_is_rendering = true;
-  tft.drawJpg( j->jpg_data, j->jpg_len, j->x, j->y, j->maxWidth, j->maxHeight, j->offX, j->offY, j->scale );
-  jpeg_is_rendering = false;
-  vTaskDelete( NULL );
-}
-
-static void tft_jpegRender( const uint8_t *jpg_data, uint32_t jpg_len, int16_t x=0, int16_t y=0, int16_t maxWidth=0, int16_t maxHeight=0, int16_t offX=0, int16_t offY=0, lgfx::jpeg_div_t scale=JPEG_DIV_NONE ) {
-  while( jpeg_is_rendering ) {
-    // wait for any previous render to finish
-    vTaskDelay(1);
-  }
-
-  jpgParams jpeg_params( jpg_data, jpg_len, x, y, maxWidth, maxHeight, offX, offY, scale );
-
-  xTaskCreatePinnedToCore( jpegRenderTask, "jpegRenderTask", 16384, &jpeg_params, 16, NULL, 1 ); // highest priority
-  while( jpeg_is_rendering ) {
-    // wait for this render to finish
-    vTaskDelay(1);
-  }
-  // jpeg is rendered !
-}
-
-#endif
-*/
 
 void tft_setBrightness( uint8_t brightness ) {
   tft.setBrightness( brightness );

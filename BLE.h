@@ -471,16 +471,22 @@ class BLEScanUtils {
     static void setTimeServerOn( void * param ) {
       if( !timeServerStarted ) {
         timeServerStarted = true;
-        xTaskCreatePinnedToCore( startTimeServer, "startTimeServer", 2048, param, 0, NULL, 0 ); // last = Task Core
+        xTaskCreatePinnedToCore( startTimeServer, "startTimeServer", 8192, param, 0, NULL, 0 ); // last = Task Core
       }
     }
 
     static void startTimeServer( void * param ) {
+      bool scanWasRunning = scanTaskRunning;
+      if ( scanTaskRunning ) stopScanCB();
       // timeServer runs forever
       timeServerIsRunning = true;
       BLERoleIcon.setStatus(ICON_STATUS_ROLE_CLOCK_SHARING );
-      xTaskCreatePinnedToCore( TimeServerTask, "TimeServerTask", 2048, NULL, 1, NULL, 1 ); // TimeServerTask prefers core 1
+      xTaskCreatePinnedToCore( TimeServerTask, "TimeServerTask", 4096, NULL, 1, NULL, 1 ); // TimeServerTask prefers core 1
       log_w("TimeServerTask started");
+      if ( scanWasRunning ) {
+        vTaskDelay(1000);
+        startScanCB();
+      }
       vTaskDelete( NULL );
     }
 
@@ -699,9 +705,9 @@ class BLEScanUtils {
       #if HAS_EXTERNAL_RTC
       if( TimeIsSet ) {
         // auto share time if available
-        #if BLE_LIB==LIB_CUSTOM_BLE
-        runCommand( (char*)"bleclock" );
-        #endif
+        //#if BLE_LIB==LIB_CUSTOM_BLE
+        //runCommand( (char*)"bleclock" );
+        //#endif
       }
       #endif
 

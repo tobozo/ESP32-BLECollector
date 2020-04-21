@@ -57,6 +57,7 @@ before_install:
   - install_library M5Stack-SD-Updater
   - install_library Sqlite3Esp32
   - install_library https://github.com/tobozo/ESP32-BLECollector/releases/download/1.3/BLE.zip
+  - install_library https://github.com/tobozo/NimBLE-Arduino
   - install_package "esp32:esp32" "https://dl.espressif.com/dl/package_esp32_index.json" #  # esp32:esp32:m5stack-core-esp32
   - pip install pyserial
 

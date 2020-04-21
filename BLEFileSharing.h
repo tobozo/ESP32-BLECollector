@@ -347,6 +347,9 @@ static void TimeServerTask( void * param ) {
 
   #if BLE_LIB==LIB_CUSTOM_BLE
   BLESharing2902Descriptor = new BLE2902();
+  BLESharing2902Descriptor->setNotifications( true );
+  #else
+  log_w("MTU set");
   #endif
 
   TimeServerCallback = new TimeServerCallbacks();
@@ -366,17 +369,17 @@ static void TimeServerTask( void * param ) {
       BLECharacteristic::PROPERTY_NOTIFY   |
       BLECharacteristic::PROPERTY_READ
     #else
-      NIMBLE_PROPERTY::NOTIFY |
-      NIMBLE_PROPERTY::READ
+      NIMBLE_PROPERTY::READ  |
+      NIMBLE_PROPERTY::NOTIFY
     #endif
   );
-
-  BLESharing2902Descriptor->setNotifications( true );
 
   #if BLE_LIB==LIB_CUSTOM_BLE
     TimeServerChar->addDescriptor( BLESharing2902Descriptor );
   #else
+    log_w("Will create descriptor");
     TimeServerChar->createDescriptor("2902" /** , NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE **/);
+    log_w("Descriptor created");
   #endif
 
   TimeSharingService->start();
