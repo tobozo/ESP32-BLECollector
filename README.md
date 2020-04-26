@@ -30,8 +30,8 @@ Hardware requirements
   - [mandatory] Micro SD (FAT32 formatted, **max 4GB**)
   - [mandatory] [mac-oui-light.db](https://github.com/tobozo/ESP32-BLECollector/blob/master/SD/mac-oui-light.db) and [ble-oui.db](https://github.com/tobozo/ESP32-BLECollector/blob/master/SD/ble-oui.db) files copied on the Micro SD Card root
   - [mandatory] ST7789/ILI9341 320x240 TFT (or bundled in Wrover-Kit, M5Stack, Odroid-Go, LoLinD32 Pro)
-  - [optional] (but recommended) I2C RTC Module (see "#define HAS_EXTERNAL_RTC" in Settings.h)
-  - [optional] Serial GPS Module (see "#define HAS_GPS" in Settings.h)
+  - [optional] (but recommended) I2C RTC Module (see `#define HAS_EXTERNAL_RTC` in Settings.h)
+  - [optional] Serial GPS Module (see `#define HAS_GPS` in Settings.h)
 
 Software requirements
 ---------------------
@@ -75,6 +75,37 @@ File Sharing (still experimental)
   - Sending files is still a manual operation, just issue the `blesend` command when another BLECollector is ready to receive the files.
   - Possible outcomes of this feature: sharing/propagating the collected data (e.g. whitelists/blacklists)
 
+
+Serial command interface
+------------
+
+  Available Commands:
+
+    01)             help : Print this list
+    02)            start : Start/resume scan
+    03)             stop : Stop scan
+    04)     toggleFilter : Toggle vendor filter on the TFT (persistent)
+    05)       toggleEcho : Toggle BLECards in the Serial Console (persistent)
+    06)             dump : Dump returning BLE devices to the display and updates DB
+    07)    setBrightness : Set brightness to [value] (0-255)
+    08)               ls : Show [dir] Content on the SD
+    09)               rm : Delete [file] from the SD
+    10)          restart : Restart BLECollector ('restart now' to skip replication)
+    11)         bleclock : Broadcast time to another BLE Device (implicit)
+    12)          bletime : Get time from another BLE Device (explicit)
+    13)       blereceive : Update .db files from another BLE app
+    14)          blesend : Share .db files with anothe BLE app
+    15)       screenshot : Make a screenshot and save it on the SD
+    16)       screenshow : Show screenshot
+    17)           toggle : toggle a bool value
+    18)          gpstime : sync time from GPS
+    19)          resetDB : Hard Reset DB + forced restart
+    20)          pruneDB : Soft Reset DB without restarting (hopefully)
+    21)          stopBLE : Stop BLE and start WiFi (experimental)
+    22)      setWiFiSSID : Set WiFi SSID
+    23)      setWiFiPASS : Set WiFi Password
+
+
 Ftp Server (still experimental)
 ------------
 
@@ -94,8 +125,8 @@ Ftp Server (still experimental)
 
 Limitations:
 
-  /!\ This ftp Server has only been tested with lftp as a client
-  /!\ This ftp Server can only be started from the serial interface
+  - /!\ This ftp Server has only been tested with lftp as a client
+  - /!\ This ftp Server can only be started from the serial interface
 
 
 Contributions are welcome :-)
