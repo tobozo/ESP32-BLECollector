@@ -494,9 +494,9 @@ class DBUtils {
 
       }
       if( DBneedsReplication ) {
-        log_w("Replicating DB");
         DBneedsReplication = false;
-        //updateDBFromCache( BLEDevRAMCache, false, false );
+        log_w("Replicating DB");
+        updateDBFromCache( BLEDevRAMCache, false, false );
       }
       if( needsRestart ) {
         ESP.restart();
@@ -607,7 +607,7 @@ class DBUtils {
       open(BLE_COLLECTOR_DB);
       log_v("will run on template %s", searchDeviceTemplate );
       sprintf(searchDeviceQuery, searchDeviceTemplate, "%s", "%s", address);
-      log_w( "[SEARCH QUERY] : %s", searchDeviceQuery );
+      log_d( "[SEARCH QUERY] : %s", searchDeviceQuery );
       int rc = sqlite3_exec(BLECollectorDB, searchDeviceQuery, BLEDevDBCacheCallback, (void*)dataBLE, &zErrMsg);
       if (rc != SQLITE_OK) {
         error(zErrMsg);
@@ -750,7 +750,7 @@ class DBUtils {
         YYYYMMDD_HHMMSS_Str,
         CacheItem->hits
       );
-      log_w( "[INSERT QUERY] : %s", insertQuery );
+      log_d( "[INSERT QUERY] : %s", insertQuery );
       int rc = DBExec( BLECollectorDB, insertQuery );
       if (rc != SQLITE_OK) {
         log_e("SQlite Error occured when heap level was at %d : %s", freeheap, insertQuery);

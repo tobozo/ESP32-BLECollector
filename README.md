@@ -36,8 +36,8 @@ Hardware requirements
 Software requirements
 ---------------------
   - [mandatory] Arduino IDE
-  - [mandatory] [BLE Library](https://github.com/tobozo/ESP32-BLECollector/releases/download/1.2/BLE.zip) exposing a private method (supersedes the BLE (legacy) version, install it via the library manager)
-  - [mandatory] [ESP32-Chimera-Core](https://github.com/tobozo/ESP32-Chimera-Core) (a substitute to M5Stack Core)
+  - [mandatory] [NimBLE Library](https://github.com/h2zero/NimBLE-Arduino/archive/master.zip) supersedes the BLE (legacy or custom) version, install it manually in the Arduino/Libraries folder
+  - [mandatory] [ESP32-Chimera-Core 'LGFX'](https://github.com/tobozo/ESP32-Chimera-Core/archive/lgfx_test.zip) (replaces M5Stack core, still in beta-testing)
   - [mandatory] https://github.com/tobozo/M5Stack-SD-Updater
   - [mandatory] https://github.com/PaulStoffregen/Time
   - [mandatory] https://github.com/siara-cc/esp32_arduino_sqlite3_lib
@@ -75,6 +75,29 @@ File Sharing (still experimental)
   - Sending files is still a manual operation, just issue the `blesend` command when another BLECollector is ready to receive the files.
   - Possible outcomes of this feature: sharing/propagating the collected data (e.g. whitelists/blacklists)
 
+Ftp Server (still experimental)
+------------
+
+  This feature will run a ftp server so the .db files can be retrieved from a ftp client over the WiFi network.
+  Since FTP sends password as clear text, the username and password are "esp32" and "esp32" (without the quotes).
+  This feature assumes the ESP32 had a previous successful connection to a known AP, or had its ssid/password previously set using `setWiFiSSID` and `setWiFiPASS` serial interface commands.
+  To start the ftp server, just issue the `stopBLE` command line from the serial interface.
+  Required lftp commands, "/path/to/your/local/folder" refers to your PC/Mac :
+
+    $ lftp ftp://esp32@esp32-blecollector
+    Password: esp32
+    lftp:~> set ftp:passive-mode on
+    lftp:~> set ftp:use-feat false
+    lftp:~> set ftp:ssl-allow false
+    lftp:~> lcd /path/to/your/local/folder
+    lftp:~> mirror /
+
+Limitations:
+
+  /!\ This ftp Server has only been tested with lftp as a client
+  /!\ This ftp Server can only be started from the serial interface
+
+
 Contributions are welcome :-)
 
 
@@ -103,4 +126,5 @@ Credits/requirements:
 ---------------------
 
 - https://github.com/siara-cc/esp32_arduino_sqlite3_lib
-- thanks to https://github.com/chegewara for maintaining the [BLE library](https://github.com/tobozo/ESP32-BLECollector/releases/download/1.2/BLE.zip)
+- https://github.com/fa1ke5/ESP32_FTPServer_SD_MMC
+- huge thanks to https://github.com/chegewara for maintaining the initial [BLE library](https://github.com/tobozo/ESP32-BLECollector/releases/download/1.2/BLE.zip) that made this project possible

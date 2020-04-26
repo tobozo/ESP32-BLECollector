@@ -49,6 +49,7 @@
 #define HAS_GPS            true // uses hardware serial, search this file for GPS_RX and GPS_TX to change pins
 #define TIME_UPDATE_SOURCE TIME_UPDATE_GPS // TIME_UPDATE_GPS // soon deprecated, will be implicit
 int8_t timeZone = 2; // 1 = GMT+1, 2 = GMT+2, etc
+#define WITH_WIFI 1
 const char* NTP_SERVER = "europe.pool.ntp.org";
 
 byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
@@ -105,7 +106,7 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN 4
 #define MAX_BLECARDS_WITHOUT_TIMESTAMPS_ON_SCREEN 5
 #define BLEDEVCACHE_PSRAM_SIZE 1024 // use PSram to cache BLECards
-#define BLEDEVCACHE_HEAP_SIZE 12 // use some heap to cache BLECards. min = 5, max = 64, higher value = less SD/SD_MMC sollicitation
+#define BLEDEVCACHE_HEAP_SIZE 32 // use some heap to cache BLECards. min = 5, max = 64, higher value = less SD/SD_MMC sollicitation
 #define MAX_DEVICES_PER_SCAN MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN // also max displayed devices on the screen, affects initial scan duration
 
 #define MENU_FILENAME "/" BUILD_TYPE ".bin"
@@ -181,9 +182,8 @@ Preferences preferences;
 
 // RF stack
 #ifdef WITH_WIFI
-  #include <WiFi.h>
-  char WiFi_SSID[32];
-  char WiFi_PASS[32];
+  // minimal spiffs partition size is required for that
+  #include "FTPService.h"
 #endif
 
 #define LIB_NATIVE_BLE    0 // native BLE Library from ESP32 SDK (buggy, some methods are unexposed)
@@ -207,6 +207,7 @@ Preferences preferences;
   #include "NimBLEEddystoneTLM.h"
   #include "NimBLEBeacon.h"
   #include "NimBLE2902.h"
+
 #endif
 // SQLite stack
 #include <sqlite3.h> // https://github.com/siara-cc/esp32_arduino_sqlite3_lib

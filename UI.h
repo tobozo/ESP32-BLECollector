@@ -182,7 +182,8 @@ class UIUtils {
     void init() {
       Serial.begin(115200);
       Serial.println(welcomeMessage);
-      Serial.printf("RTC_PROFILE: %s\nHAS_EXTERNAL_RTC: %s\nHAS_GPS: %s\nTIME_UPDATE_SOURCE: %d\n",
+      Serial.printf("HAS PSRAM: %s\nRTC_PROFILE: %s\nHAS_EXTERNAL_RTC: %s\nHAS_GPS: %s\nTIME_UPDATE_SOURCE: %d\n",
+        psramInit() ? "true" : "false",
         RTC_PROFILE,
         HAS_EXTERNAL_RTC ? "true" : "false",
         HAS_GPS ? "true" : "false",
@@ -199,7 +200,7 @@ class UIUtils {
       tft_initOrientation(); // messing with this may break the scroll
       tft_setBrightness( brightness );
 
-      //tft.showNonPrintableChars( true );
+      // make sure non-printable chars aren't printed
       tft.setAttribute( lgfx::cp437_switch, true );
 
       Out.init();
@@ -258,8 +259,6 @@ class UIUtils {
       }
       */
 
-      //tft.startWrite();
-
       if (clearScreen) {
         tft.fillScreen(BLE_BLACK);
         tft_fillGradientHRect( 0, headerHeight, Out.width/2, scrollHeight, colorstart, colorend );
@@ -300,6 +299,7 @@ class UIUtils {
       } else {
         headerStats("Init SD");
       }
+
       Out.setupScrollArea( headerHeight, footerHeight, colorstart, colorend );
 
       SDSetup();
@@ -313,8 +313,6 @@ class UIUtils {
       } else {
         Out.scrollNextPage();
       }
-
-      //tft.endWrite();
     }
 
     void begin() {
@@ -372,109 +370,61 @@ class UIUtils {
 
 
     static void screenShot() {
-/*
+
       takeMuxSemaphore();
       isQuerying = true;
-      if( snapNeedsScrollReset() ) {
-        // reset scroll before snapping to avoid messing up the chunks order
-        tft_setupScrollArea(0, tft.height(), 0);
-        tft_scrollTo(0);
-      }
-      M5.ScreenShot.snap("BLECollector", true);
-      if( snapNeedsScrollReset() ) {
-        // restore initial scroll setup
-        tft_setupScrollArea(headerHeight, tft.height()-(headerHeight+footerHeight), footerHeight);
-      }
+
+      int16_t yRef = Out.yRef - Out.scrollTopFixedArea;
+      // match pixel copy area with scroll area
+      tft.setScrollRect(0, Out.scrollTopFixedArea, Out.width, Out.yArea);
+      tft_hScrollTo( Out.scrollTopFixedArea ); // reset hardware scroll position before capturing
+      tft_scrollTo( -yRef ); // reverse software-scroll to compensate hardware scroll offset
+
+      //M5.ScreenShot.snapBMP("BLECollector", false);
+      //M5.ScreenShot.snapJPG("BLECollector", false);
+      M5.ScreenShot.snap("BLECollector", false); // filename prefix, show image after capture
+
+      // restore scroll states
+      tft_scrollTo( yRef ); // restore software scroll
+      tft_hScrollTo( Out.yRef ); // restore hardware scroll
+
       isQuerying = false;
       giveMuxSemaphore();
-*/
-/*
-      if( psramInit() ) {
-        char screenshotFilenameStr[42] = {'\0'};
-        const char* screenshotFilenameTpl = "/screenshot-%04d-%02d-%02d_%02dh%02dm%02ds.jpg";
-        sprintf(screenshotFilenameStr, screenshotFilenameTpl, year(), month(), day(), hour(), minute(), second());
-
-        takeMuxSemaphore();
-        uint8_t *imgBuffer = (uint8_t*)calloc( (Out.width*3)+1, sizeof( uint8_t ) );
-
-        for(uint16_t y=0; y<headerHeight; y++) { // header portion
-          tft.readRectRGB(0, y, Out.width, 1, imgBuffer);
-          for( int j=0; j<Out.width*3; j++ ) {
-            uint32_t rgb888Index = ( y* Out.width ) + j;
-            M5.ScreenShot.rgb888Buffer[rgb888Index]   = imgBuffer[j];
-          }
-        }
-        for(uint16_t y=Out.yStart; y<Out.height-footerHeight; y++) { // lower scroll portion
-          tft.readRectRGB(0, y, Out.width, 1, imgBuffer);
-          for( int j=0; j<Out.width*3; j++ ) {
-            uint32_t rgb888Index = ( y* Out.width ) + j;
-            M5.ScreenShot.rgb888Buffer[rgb888Index]   = imgBuffer[j];
-          }
-        }
-        for(uint16_t y=headerHeight; y<Out.yStart; y++) { // upper scroll portion
-          tft.readRectRGB(0, y, Out.width, 1, imgBuffer);
-          for( int j=0; j<Out.width*3; j++ ) {
-            uint32_t rgb888Index = ( y* Out.width ) + j;
-            M5.ScreenShot.rgb888Buffer[rgb888Index]   = imgBuffer[j];
-          }
-        }
-        for(uint16_t y=Out.height-footerHeight; y<Out.height; y++) { // footer portion
-          tft.readRectRGB(0, y, Out.width, 1, imgBuffer);
-          for( int j=0; j<Out.width*3; j++ ) {
-            uint32_t rgb888Index = ( y* Out.width ) + j;
-            M5.ScreenShot.rgb888Buffer[rgb888Index]   = imgBuffer[j];
-          }
-        }
-
-        if ( !M5.ScreenShot.JPEGEncoder.encodeToFile( screenshotFilenameStr, Out.width, Out.height, 3, M5.ScreenShot.rgb888Buffer ) ) {
-          log_e( "[ERROR] Could not write JPG file to: %s", screenshotFilenameStr );
-        } else {
-          Serial.printf( "Screenshot saved as %s\n", screenshotFilenameStr );
-        }
-        //free( rgb888Buffer );
-        free( imgBuffer );
-
-        giveMuxSemaphore();
-      }
-*/
 
     }
 
     static void screenShow( void * fileName = NULL ) {
-      /*
+
       if( fileName == NULL ) return;
       isQuerying = true;
+
+      // reset hardware scroll position before printing
+      tft_hScrollTo( Out.scrollTopFixedArea );
 
       if( String( (const char*)fileName ).endsWith(".jpg" ) ) {
         if( !BLE_FS.exists( (const char*)fileName ) ) {
           log_e("File %s does not exist\n", (const char*)fileName );
-          isQuerying = false;
-          return;
+        } else {
+          takeMuxSemaphore();
+          Out.scrollNextPage(); // reset scroll position to zero otherwise image will have offset
+          tft.drawJpgFile( BLE_FS, (const char*)fileName, 0, 0, Out.width, Out.height, 0, 0, JPEG_DIV_NONE );
+          giveMuxSemaphore();
+          vTaskDelay( 5000 );
         }
-        takeMuxSemaphore();
-        Out.scrollNextPage(); // reset scroll position to zero otherwise image will have offset
-        tft.drawJpgFile( BLE_FS, (const char*)fileName, 0, 0, Out.width, Out.height, 0, 0, JPEG_DIV_NONE );
-        giveMuxSemaphore();
-        vTaskDelay( 5000 );
-        return;
       }
-      if( String( (const char*)fileName ).endsWith(".565" ) ) {
-        File screenshotFile = BLE_FS.open( (const char*)fileName );
-        if(!screenshotFile) {
-          Serial.printf("Failed to open file %s\n", (const char*)fileName );
-          screenshotFile.close();
-          return;
+      if( String( (const char*)fileName ).endsWith(".bmp" ) ) {
+        if( !BLE_FS.exists( (const char*)fileName ) ) {
+          log_e("File %s does not exist\n", (const char*)fileName );
+        } else {
+          takeMuxSemaphore();
+          Out.scrollNextPage(); // reset scroll position to zero otherwise image will have offset
+          tft.drawBmpFile( BLE_FS, (const char*)fileName, 0, 0 );
+          giveMuxSemaphore();
+          vTaskDelay( 5000 );
         }
-        takeMuxSemaphore();
-        Out.scrollNextPage(); // reset scroll position to zero otherwise image will have offset
-        uint16_t imgBuffer[320]; // one scan line used for screen capture
-        for(uint16_t y=0; y<Out.height; y++) {
-          screenshotFile.read( (uint8_t*)imgBuffer, sizeof(uint16_t)*Out.width );
-          tft_drawBitmap(0, y, Out.width, 1, imgBuffer);
-        }
-        giveMuxSemaphore();
       }
-      isQuerying = false;*/
+
+      isQuerying = false;
     }
 
 
@@ -496,7 +446,7 @@ class UIUtils {
                 randomAddress[4],
                 randomAddress[5]
         );
-        log_w("Generated fake mac: %s", randomAddressStr);
+        log_d("Generated fake mac: %s", randomAddressStr);
         x = hallOfMacPosX + (counter%hallofMacCols) * hallOfMacItemWidth;
         y = hallOfMacPosY + ((counter/hallofMacCols)%hallofMacRows) * hallOfMacItemHeight;
         MacAddressColors AvatarizedMAC( randomAddressStr, 2, 1 );
@@ -696,6 +646,13 @@ class UIUtils {
 
     static void drawableItems( void * param ) {
       while(1) {
+        if( freeheap != lastfreeheap ) {
+          takeMuxSemaphore();
+          heapmap[heapindex++] = freeheap;
+          heapindex = heapindex % heapMapBuffLen;
+          lastfreeheap = freeheap;
+          giveMuxSemaphore();
+        }
         PrintBlinkableWidgets();
         BLECollectorIconBar.draw( BLECollectorIconBarX, BLECollectorIconBarY );
         vTaskDelay( 100 );
@@ -889,9 +846,11 @@ class UIUtils {
         return;
       }
       devCountWasUpdated = false;
+/*
       heapmap[heapindex++] = freeheap;
       heapindex = heapindex % heapMapBuffLen;
       lastfreeheap = freeheap;
+*/
 
       // render heatmap
       uint16_t GRAPH_COLOR = BLE_WHITE;
@@ -900,9 +859,10 @@ class UIUtils {
       uint32_t toleranceline = graphLineHeight;
       uint32_t minline = 0;
       uint16_t GRAPH_BG_COLOR = BLE_BLACK;
+      uint16_t currentheapindex = heapindex;
       // dynamic scaling
       for (uint8_t i = 0; i < graphLineWidth; i++) {
-        int thisindex = int(heapindex - graphLineWidth + i + heapMapBuffLen) % heapMapBuffLen;
+        int thisindex = int(currentheapindex - graphLineWidth + i + heapMapBuffLen) % heapMapBuffLen;
         uint32_t heapval = heapmap[thisindex];
         if (heapval != 0 && heapval < graphMin) {
           graphMin =  heapval;
@@ -929,10 +889,11 @@ class UIUtils {
       // draw graph
       takeMuxSemaphore();
 
+      heapGraphSprite.setPsram( false );
       heapGraphSprite.createSprite( graphLineWidth, graphLineHeight );
 
       for (uint8_t i = 0; i < graphLineWidth; i++) {
-        int thisindex = int(heapindex - graphLineWidth + i + heapMapBuffLen) % heapMapBuffLen;
+        int thisindex = int(currentheapindex - graphLineWidth + i + heapMapBuffLen) % heapMapBuffLen;
         uint32_t heapval = heapmap[thisindex];
         if ( heapval > toleranceheap ) {
           // nominal, all green
@@ -1712,10 +1673,21 @@ class UIUtils {
       dcpmFirstY = baseCoordY;
       dcpmppFirstY = baseCoordY;
 
-      log_w("Will allocate heapgraph buffer to %d", heapMapBuffLen );
+      log_w("Allocating heapgraph buffers (%d and %d bytes)", heapMapBuffLen*sizeof( uint16_t ),  heapMapBuffLen*sizeof( uint32_t ));
+
       devCountPerMinutePerPeriod = (uint16_t*)calloc( heapMapBuffLen, sizeof( uint16_t ) );
+      if( devCountPerMinutePerPeriod != NULL ) {
+        log_d("'devCountPerMinutePerPeriod' allocation successful");
+      } else {
+        log_e("'devCountPerMinutePerPeriod' allocation of %d bytes failed!", heapMapBuffLen*sizeof( uint32_t ) );
+      }
+
       heapmap = (uint32_t*)calloc( heapMapBuffLen, sizeof( uint32_t ) );
-      log_w("Allocation successful");
+      if( heapmap != NULL ) {
+        log_d("'heapmap' allocation successful");
+      } else {
+        log_e("'heapmap' allocation of %d bytes failed!", heapMapBuffLen*sizeof( uint32_t ) );
+      }
 
     }
 

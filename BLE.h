@@ -60,6 +60,10 @@ char scantimesign[5]; // unicode sign terminated
 BLEScanResults bleresults;
 BLEScan *pBLEScan;
 
+TaskHandle_t TimeServerTaskHandle;
+TaskHandle_t TimeClientTaskHandle;
+TaskHandle_t FileServerTaskHandle;
+TaskHandle_t FileClientTaskHandle;
 
 static uint16_t processedDevicesCount = 0;
 bool foundDeviceToggler = true;
@@ -71,6 +75,11 @@ enum AfterScanSteps {
   RENDER    = 2,
   PROPAGATE = 3
 };
+
+
+static void ESP_Restart() {
+  ESP.restart();
+}
 
 /*
 // work in progress: MAC blacklist/whitelist
@@ -283,13 +292,45 @@ class BLEScanUtils {
       xTaskCreatePinnedToCore( stopBLE, "stopBLE", 8192, NULL, 5, NULL, 1 ); /* last = Task Core */
     }
 
+
+    static void destroyTaskNow( TaskHandle_t &task ) {
+      vTaskSuspendAll();
+      TaskHandle_t xTask = task;
+      if( task != NULL ) {
+        task = NULL; // The task is going to be deleted, Set the handle to NULL.
+        vTaskDelete( xTask ); // Delete using the copy of the handle.
+      }
+      xTaskResumeAll();
+    }
+
+
     static void stopBLE( void * param = NULL ) {
-      Serial.println(F("Shutting BT Down ..."));
-      Serial.print("esp_bt_controller_disable");
-      esp_bt_controller_disable() ;
-      Serial.print("esp_bt_controller_deinit ");
-      esp_bt_controller_deinit();
-      Serial.print("BT Shutdown finished");
+      log_w("[Free Heap: %d] Killing BLE Tasks", freeheap);
+
+      destroyTaskNow( TimeServerTaskHandle );
+      destroyTaskNow( TimeClientTaskHandle );
+      destroyTaskNow( FileServerTaskHandle );
+      destroyTaskNow( FileClientTaskHandle );
+
+      log_w("[Free Heap: %d] Shutting Down BlueTooth LE", freeheap);
+
+      log_w("[Free Heap: %d] esp_bt_controller_disable()", freeheap);
+      esp_bt_controller_disable();
+
+      log_w("[Free Heap: %d] esp_bt_controller_deinit()", freeheap);
+      esp_bt_controller_deinit() ;
+
+      log_w("[Free Heap: %d] esp_bt_mem_release(ESP_BT_MODE_BTDM)", freeheap);
+      esp_bt_mem_release(ESP_BT_MODE_BTDM);
+
+      log_w("[Free Heap: %d] BT Shutdown finished", freeheap);
+
+      xTaskCreatePinnedToCore( startWifi, "startWifi", 16384, NULL, 16, NULL, 1 ); /* last = Task Core */
+      vTaskDelete( NULL );
+    }
+
+
+    static void startWifi( void * param ) {
       WiFi.mode(WIFI_STA);
       Serial.println(WiFi.macAddress());
       if( String( WiFi_SSID ) !="" && String( WiFi_PASS ) !="" ) {
@@ -307,8 +348,30 @@ class BLEScanUtils {
       Serial.print("IP address: ");
       Serial.println(WiFi.localIP());
       Serial.println("");
+      xTaskCreatePinnedToCore( startFtpServer, "startFtpServer", 16384, NULL, 16, NULL, 1 ); /* last = Task Core */
       vTaskDelete( NULL );
     }
+
+
+    static void startFtpServer( void * param ) {
+      /*
+        $ lftp ftp://esp32@esp32-blecollector
+        Password: esp32
+        lftp:~> set ftp:passive-mode on
+        lftp:~> set ftp:use-feat false
+        lftp:~> set ftp:ssl-allow false
+        lftp:~> mirror /db
+      */
+      FtpServer ftpSrv( BLE_FS );
+      ftpSrv.onDisconnect = ESP_Restart;
+      ftpSrv.begin("esp32","esp32"); // username, password for ftp.  set ports in ESP32FtpServer.h  (default 21, 50009 for PASV)
+      while (1) {
+        ftpSrv.handleFTP();
+        vTaskDelay(1);
+      }
+    }
+
+
     #endif
 
     static void startScanCB( void * param = NULL ) {
@@ -364,7 +427,7 @@ class BLEScanUtils {
 
     static void restartCB( void * param = NULL ) {
       stopScanCB();
-      xTaskCreatePinnedToCore( doRestart, "doRestart", 8192, param, 5, NULL, 1 ); // last = Task Core
+      xTaskCreatePinnedToCore( doRestart, "doRestart", 16384, param, 5, NULL, 1 ); // last = Task Core
     }
 
     static void doRestart( void * param = NULL ) {
@@ -393,7 +456,7 @@ class BLEScanUtils {
       if ( scanTaskRunning ) stopScanCB();
       fileSharingServerTaskIsRunning = true;
       BLERoleIcon.setStatus( ICON_STATUS_ROLE_FILE_SEEKING );
-      xTaskCreatePinnedToCore( FileSharingServerTask, "FileSharingServerTask", 12000, NULL, 5, NULL, 0 );
+      xTaskCreatePinnedToCore( FileSharingServerTask, "FileSharingServerTask", 12000, NULL, 5, &FileServerTaskHandle, 0 );
       if ( scanWasRunning ) {
         while ( fileSharingServerTaskIsRunning ) {
           vTaskDelay( 1000 );
@@ -419,7 +482,7 @@ class BLEScanUtils {
       if ( scanTaskRunning ) stopScanCB();
       fileSharingClientTaskIsRunning = true;
       BLERoleIcon.setStatus( ICON_STATUS_ROLE_FILE_SHARING );
-      xTaskCreatePinnedToCore( FileSharingClientTask, "FileSharingClientTask", 12000, param, 5, NULL, 0 ); // last = Task Core
+      xTaskCreatePinnedToCore( FileSharingClientTask, "FileSharingClientTask", 12000, param, 5, &FileClientTaskHandle, 0 ); // last = Task Core
       if ( scanWasRunning ) {
         while ( fileSharingClientTaskIsRunning ) {
           vTaskDelay( 1000 );
@@ -452,7 +515,7 @@ class BLEScanUtils {
       }
       if ( scanTaskRunning ) stopScanCB();
       BLERoleIcon.setStatus( ICON_STATUS_ROLE_CLOCK_SEEKING );
-      xTaskCreatePinnedToCore( TimeClientTask, "TimeClientTask", 2560, NULL, 5, NULL, 0 ); // TimeClient task prefers core 0
+      xTaskCreatePinnedToCore( TimeClientTask, "TimeClientTask", 2560, NULL, 5, &TimeClientTaskHandle, 0 ); // TimeClient task prefers core 0
       if ( scanWasRunning ) {
         while ( timeClientisRunning ) {
           vTaskDelay( 1000 );
@@ -481,7 +544,7 @@ class BLEScanUtils {
       // timeServer runs forever
       timeServerIsRunning = true;
       BLERoleIcon.setStatus(ICON_STATUS_ROLE_CLOCK_SHARING );
-      xTaskCreatePinnedToCore( TimeServerTask, "TimeServerTask", 4096, NULL, 1, NULL, 1 ); // TimeServerTask prefers core 1
+      xTaskCreatePinnedToCore( TimeServerTask, "TimeServerTask", 4096, NULL, 1, &TimeServerTaskHandle, 1 ); // TimeServerTask prefers core 1
       log_w("TimeServerTask started");
       if ( scanWasRunning ) {
         vTaskDelay(1000);
@@ -576,13 +639,12 @@ class BLEScanUtils {
     }
 
     static void screenShotTask( void * param = NULL ) {
-      /*
       if( !UI.ScreenShotLoaded ) {
         M5.ScreenShot.init( &tft, BLE_FS );
         M5.ScreenShot.begin();
         UI.ScreenShotLoaded = true;
       }
-      UI.screenShot();*/
+      UI.screenShot();
       vTaskDelete(NULL);
     }
 
@@ -1131,7 +1193,7 @@ class BLEScanUtils {
       lastheap = freeheap;
       lastscanduration = SCAN_DURATION;
 
-      log_i("%s[Scan#%02d][%s][Duration%s%d][Processed:%d of %d][Heap%s%d / %d] [Cache hits][BLEDevCards:%d][Anonymous:%d][Oui:%d][Vendor:%d]\n",
+      log_i("%s[Scan#%02d][%s][Duration%s%d][Processed:%d of %d][Heap%s%d / %d] [Cache hits][BLEDevCards:%d][Anonymous:%d][Oui:%d][Vendor:%d]",
         prefixStr,
         scan_rounds,
         hhmmssString,

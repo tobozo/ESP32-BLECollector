@@ -205,7 +205,7 @@ struct Icon {
     posX = 0;
     posY = 0;
     bgcolor = HEADER_BGCOLOR;
-    log_w("Inited icon '%s' [%d*%d] using %d states", name, width, height, statuses);
+    log_d("Inited icon '%s' [%d*%d] using %d states", name, width, height, statuses);
   }
   void setRender( bool _render = true ) {
     render = _render;

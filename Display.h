@@ -130,6 +130,8 @@ static bool isInQuery() {
 void tft_begin() {
   M5.begin( true, true, false, false, false ); // don't start Serial
   //tft.init();
+  //M5.ScreenShot.init( &tft, BLE_FS );
+  //M5.ScreenShot.begin();
 
   #if HAS_EXTERNAL_RTC
     //Wire.begin(RTC_SDA, RTC_SCL);
@@ -186,7 +188,65 @@ void tft_fillTriangle( uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint1
 }
 
 
+// software scroll
+/*
 void tft_setupScrollArea(uint16_t tfa, uint16_t vsa, uint16_t bfa) {
+  log_w("Init Software Scroll area with tft.setScrollRect( 0, %d, %d, %d )", tfa, tft.width(), vsa);
+  tft.setScrollRect( 0, tfa, tft.width(), vsa );
+  //tft.getScrollRect( &s_x_tmp, &s_y_tmp, &s_w_tmp, &s_h_tmp );
+}
+*/
+
+// software scroll
+static int32_t s_x_tmp, s_y_tmp, s_w_tmp, s_h_tmp;
+static uint16_t circularScrollBufferHSize = 240;
+static uint16_t circularScrollBufferVSize = 16;
+static uint16_t circularScrollBufferSize = circularScrollBufferHSize*circularScrollBufferVSize;
+void tft_scrollTo(int32_t vsp) {
+  if( vsp == 0 ) return;
+  //tft.getScrollRect( &s_x_tmp, &s_y_tmp, &s_w_tmp, &s_h_tmp );
+  int32_t direction   = vsp>0 ? 1 : -1;
+  int32_t blockHeight = abs(vsp);
+  int32_t blockSize   = s_w_tmp*blockHeight;
+  int32_t bottomY     = (s_y_tmp+s_h_tmp)-blockHeight;
+
+  if( blockSize <= circularScrollBufferSize ) {
+    // scroll area fits into buffer
+    RGBColor * scrollArea = new RGBColor[s_w_tmp*blockHeight];
+    int32_t ySrc        = 0;
+    int32_t yDest       = 0;
+    if( vsp < 0 ) {
+      ySrc  = s_y_tmp;
+      yDest = bottomY;
+    } else {
+      ySrc  = bottomY;
+      yDest = s_y_tmp;
+    }
+    tft.readRectRGB( s_x_tmp, ySrc,  s_w_tmp, blockHeight, scrollArea );
+    tft.scroll(0, vsp);
+    tft.pushImage(   s_x_tmp, yDest, s_w_tmp, blockHeight, scrollArea );
+    log_v("[block] tft.scroll(0, %d); scrollRect( %d, %d, %d, %d ) ", vsp, s_x_tmp, s_y_tmp, s_w_tmp, s_h_tmp );
+    free( scrollArea );
+  } else {
+    // scroll area doesn't fit into buffer, need to split
+    log_v("[split] tft.scroll(0, %d); scrollRect( %d, %d, %d, %d ) ", vsp, s_x_tmp, s_y_tmp, s_w_tmp, s_h_tmp );
+    // how many scan lines can the buffer fit ?
+    int scanLines = floor( circularScrollBufferSize / s_w_tmp );
+    // how many iterations these scanLines will be required to cover the current scroll zone
+    int iterations = floor( blockHeight / scanLines );
+    // are there any leftover lines
+    int leftover = blockHeight%scanLines;
+    // go recursive
+    while( iterations-- > 0 ) {
+      tft_scrollTo( scanLines * direction );
+    }
+    // do leftover lines if any
+    tft_scrollTo( leftover * direction );
+  }
+}
+
+// hardware scroll
+void tft_setupHScrollArea(uint16_t tfa, uint16_t vsa, uint16_t bfa) {
   bfa += SCROLL_OFFSET; // compensate for stubborn firmware
   tft.writecommand(0x33/*ILI9341_VSCRDEF*/); // Vertical scroll definition
   tft.writedata(tfa >> 8);           // Top Fixed Area line count
@@ -195,11 +255,10 @@ void tft_setupScrollArea(uint16_t tfa, uint16_t vsa, uint16_t bfa) {
   tft.writedata(vsa);
   tft.writedata(bfa >> 8);           // Bottom Fixed Area line count
   tft.writedata(bfa);
-  log_w("Init Scroll area with tfa/bfa %d/%d on w/h %d/%d", tfa, bfa, scrollpanel_width(), scrollpanel_height());
+  log_w("Init Hardware Scroll area with tfa/bfa %d/%d on w/h %d/%d", tfa, bfa, scrollpanel_width(), scrollpanel_height());
 }
-
-
-void tft_scrollTo(uint16_t vsp) {
+// hardware scroll
+void tft_hScrollTo(uint16_t vsp) {
   tft.writecommand(0x37/*ILI9341_VSCRSADD*/); // Vertical scrolling pointer
   tft.writedata(vsp>>8);
   tft.writedata(vsp);
