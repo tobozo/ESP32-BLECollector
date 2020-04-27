@@ -45,9 +45,9 @@
 
 
 // edit these values to fit your mode (can be #undef from Display.ESP32Chimeracore.h)
-#define HAS_EXTERNAL_RTC   true // uses I2C, search this file for RTC_SDA or RTC_SCL to change pins
-#define HAS_GPS            true // uses hardware serial, search this file for GPS_RX and GPS_TX to change pins
-#define TIME_UPDATE_SOURCE TIME_UPDATE_GPS // TIME_UPDATE_GPS // soon deprecated, will be implicit
+#define HAS_EXTERNAL_RTC   false // uses I2C, search this file for RTC_SDA or RTC_SCL to change pins
+#define HAS_GPS            false // uses hardware serial, search this file for GPS_RX and GPS_TX to change pins
+#define TIME_UPDATE_SOURCE TIME_UPDATE_NONE // TIME_UPDATE_GPS // soon deprecated, will be implicit
 int8_t timeZone = 2; // 1 = GMT+1, 2 = GMT+2, etc
 #define WITH_WIFI 1
 const char* NTP_SERVER = "europe.pool.ntp.org";

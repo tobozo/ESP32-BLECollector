@@ -255,7 +255,7 @@ void tft_setupHScrollArea(uint16_t tfa, uint16_t vsa, uint16_t bfa) {
   tft.writedata(vsa);
   tft.writedata(bfa >> 8);           // Bottom Fixed Area line count
   tft.writedata(bfa);
-  log_w("Init Hardware Scroll area with tfa/bfa %d/%d on w/h %d/%d", tfa, bfa, scrollpanel_width(), scrollpanel_height());
+  log_w("Init Hardware Scroll area with tfa/vsa/bfa %d/%d/%d on w/h %d/%d", tfa, vsa, bfa, scrollpanel_width(), scrollpanel_height());
 }
 // hardware scroll
 void tft_hScrollTo(uint16_t vsp) {

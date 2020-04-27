@@ -85,11 +85,13 @@ class ScrollableOutput {
       BGColorStart = colorstart;
       BGColorEnd = colorend;
       tft.setCursor(0, TFA);
-      uint16_t VSA = scrollpanel_width()-TFA-BFA;
-      scrollPosY = TFA;
-      scrollTopFixedArea = TFA;
+      uint16_t VSA = height-TFA-BFA;
+
+      scrollTopFixedArea    = TFA;
       scrollBottomFixedArea = BFA;
-      yRef = scrollTopFixedArea;
+
+      yRef       = scrollTopFixedArea;
+      scrollPosY = scrollTopFixedArea;
       yArea = height - scrollTopFixedArea - scrollBottomFixedArea;
 
       tft_setupHScrollArea(TFA, VSA, BFA);

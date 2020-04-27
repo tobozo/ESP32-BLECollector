@@ -890,7 +890,10 @@ class UIUtils {
       takeMuxSemaphore();
 
       heapGraphSprite.setPsram( false );
-      heapGraphSprite.createSprite( graphLineWidth, graphLineHeight );
+      if( ! heapGraphSprite.createSprite( graphLineWidth, graphLineHeight ) ) {
+        log_e("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+      }
+
 
       for (uint8_t i = 0; i < graphLineWidth; i++) {
         int thisindex = int(currentheapindex - graphLineWidth + i + heapMapBuffLen) % heapMapBuffLen;
