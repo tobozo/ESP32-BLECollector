@@ -175,6 +175,7 @@ OUIPsramCacheStruct** OuiPsramCache = NULL;
 #define BLE_COLLECTOR_DB_FILE    "blemacs.db" // default filename for storing collected data
 #define MAC_OUI_NAMES_DB_FILE    "mac-oui-light.db" // oui list of known mac addresses
 #define BLE_VENDOR_NAMES_DB_FILE "ble-oui.db" // ble device/service names by mac address
+#define BLE_DB_FILES_URL_PREFIX  "https://github.com/tobozo/ESP32-BLECollector/releases/download/1.0.0/"
 
 #define BLE_COLLECTOR_DB_SQLITE_PATH     "/" BLE_FS_TYPE "/" BLE_COLLECTOR_DB_FILE
 #define MAC_OUI_NAMES_DB_SQLITE_PATH     "/" BLE_FS_TYPE "/" MAC_OUI_NAMES_DB_FILE
@@ -182,6 +183,8 @@ OUIPsramCacheStruct** OuiPsramCache = NULL;
 #define BLE_COLLECTOR_DB_FS_PATH         "/" BLE_COLLECTOR_DB_FILE
 #define MAC_OUI_NAMES_DB_FS_PATH         "/" MAC_OUI_NAMES_DB_FILE
 #define BLE_VENDOR_NAMES_DB_FS_PATH      "/" BLE_VENDOR_NAMES_DB_FILE
+#define MAC_OUI_NAMES_DB_URL             BLE_DB_FILES_URL_PREFIX MAC_OUI_NAMES_DB_FILE
+#define BLE_VENDOR_NAMES_DB_URL          BLE_DB_FILES_URL_PREFIX BLE_VENDOR_NAMES_DB_FILE
 #define MAC_OUI_NAMES_DB_FS_SIZE         933888 // change this according to the file size
 #define BLE_VENDOR_NAMES_DB_FS_SIZE      73728 // change this according to the file size
 
@@ -443,7 +446,8 @@ class DBUtils {
       BLEDevDBCache = (BlueToothDevice*)calloc(1, sizeof( BlueToothDevice ) );
       BLEDevHelper.init( BLEDevTmp, false ); // false = make sure the copy placeholder isn't using SPI ram
       BLEDevHelper.init( BLEDevDBCache, false ); // false = make sure the copy placeholder isn't using SPI ram
-      return true;
+      initDone = true;
+      return initDone;
     }
 
 

@@ -572,7 +572,7 @@ class FileSharingCallbacks : public BLEServerCallbacks {
     void onConnect(BLEServer *SharingServer, esp_ble_gatts_cb_param_t *param)
   #endif
     {
-      log_v("A client is connected, stopping advertising");
+      log_w("A client is connected, stopping advertising");
       isFileSharingClientConnected = true;
       UI.headerStats("Connected :-)");
       takeMuxSemaphore();
@@ -588,7 +588,7 @@ class FileSharingCallbacks : public BLEServerCallbacks {
       #endif
     }
     void onDisconnect(BLEServer* SharingServer) {
-      log_v("A client disconnected, restarting advertising");
+      log_w("A client disconnected, restarting advertising");
       isFileSharingClientConnected = false;
       UI.headerStats("Advertising (_x_)");
       takeMuxSemaphore();
@@ -673,11 +673,11 @@ static void FileSharingServerTask(void* p) {
   FileSharingRouteChar->setCallbacks( FileSharingRouteCallback );
   FileSharingWriteChar->setCallbacks( FileSharingWriteCallback );
 
-  BLESharing2902Descriptor->setNotifications(true);
   #if BLE_LIB==LIB_CUSTOM_BLE
+  BLESharing2902Descriptor->setNotifications(true);
   FileSharingRouteChar->addDescriptor( BLESharing2902Descriptor );
   #else
-  FileSharingRouteChar->createDescriptor("2902" /** , NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE **/);
+  FileSharingRouteChar->createDescriptor("2902", NIMBLE_PROPERTY::NOTIFY/** | NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE **/);
   #endif
 
   FileSharingService->start();

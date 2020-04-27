@@ -558,6 +558,9 @@ class UIUtils {
     static void PrintFatalError( const char* message, uint16_t yPos = AMIGABALL_YPOS ) {
       alignTextAt( message, 0, yPos, BLE_YELLOW, BLECARD_BGCOLOR, ALIGN_CENTER );
     }
+    static void PrintProgressBar(float progress, float magnitude) {
+      PrintProgressBar( (Out.width * progress) / magnitude );
+    }
 
     static void PrintProgressBar(uint16_t width) {
       if( width > Out.width || width == 0 ) { // clear
@@ -795,7 +798,7 @@ class UIUtils {
               mincdpmpp = devCountPerMinutePerPeriod[i];
             }
           }
-          log_i( "%d devices per minute per %d seconds  (%.2f), min(%d), max(%d)", totalCount, (devGraphPeriodLong/1000), (float)totalCount/60, mincdpmpp, maxcdpmpp );
+          log_v( "%d devices per minute per %d seconds  (%.2f), min(%d), max(%d)", totalCount, (devGraphPeriodLong/1000), (float)totalCount/60, mincdpmpp, maxcdpmpp );
         }
         devCountWasUpdated = true;
     }

@@ -266,7 +266,17 @@ class BLEScanUtils {
         UI.PrintFatalError( "[ERROR]: .db files not found" );
         //Out.println( "[ERROR]: .db files not found" );
         giveMuxSemaphore();
+        UI.begin();
+        unsigned long beggingStart = millis();
         setFileSharingServerOn( NULL );
+        while(! isFileSharingClientConnected ) {
+          if( beggingStart + 60000 < millis() ) {
+            // waited 1mn for db file via ble, nothing came out, try WiFi
+            stopBLE();
+            break;
+          }
+          vTaskDelay(100);
+        }
         //startFileSharingServer();
         return;
       }
@@ -292,11 +302,19 @@ class BLEScanUtils {
       xTaskCreatePinnedToCore( stopBLE, "stopBLE", 8192, NULL, 5, NULL, 1 ); /* last = Task Core */
     }
 
+    static void stopBLETasks( void * param = NULL ) {
+      if( timeServerIsRunning )            destroyTaskNow( TimeServerTaskHandle );
+      if( timeClientisStarted )            destroyTaskNow( TimeClientTaskHandle );
+      if( fileSharingServerTaskIsRunning ) destroyTaskNow( FileServerTaskHandle );
+      if( fileSharingClientTaskIsRunning ) destroyTaskNow( FileClientTaskHandle );
+    }
+
 
     static void destroyTaskNow( TaskHandle_t &task ) {
       vTaskSuspendAll();
       TaskHandle_t xTask = task;
       if( task != NULL ) {
+        //log_w("[Free Heap: %d] Killing BLE Task %s", freeheap, task);
         task = NULL; // The task is going to be deleted, Set the handle to NULL.
         vTaskDelete( xTask ); // Delete using the copy of the handle.
       }
@@ -305,12 +323,9 @@ class BLEScanUtils {
 
 
     static void stopBLE( void * param = NULL ) {
-      log_w("[Free Heap: %d] Killing BLE Tasks", freeheap);
+      log_w("[Free Heap: %d] Deleting BLE Tasks", freeheap);
 
-      destroyTaskNow( TimeServerTaskHandle );
-      destroyTaskNow( TimeClientTaskHandle );
-      destroyTaskNow( FileServerTaskHandle );
-      destroyTaskNow( FileClientTaskHandle );
+      stopBLETasks();
 
       log_w("[Free Heap: %d] Shutting Down BlueTooth LE", freeheap);
 
@@ -348,7 +363,13 @@ class BLEScanUtils {
       Serial.print("IP address: ");
       Serial.println(WiFi.localIP());
       Serial.println("");
-      xTaskCreatePinnedToCore( startFtpServer, "startFtpServer", 16384, NULL, 16, NULL, 1 ); /* last = Task Core */
+
+      if( DB.initDone ) {
+        xTaskCreatePinnedToCore( startFtpServer, "startFtpServer", 16384, NULL, 16, NULL, 1 ); /* last = Task Core */
+      } else {
+        log_w("HOBO mode: some db files are missing, will download...");
+        xTaskCreatePinnedToCore( runWifiDownloader, "runWifiDownloader", 16384, NULL, 16, NULL, 1 ); /* last = Task Core */
+      }
       vTaskDelete( NULL );
     }
 
@@ -369,6 +390,49 @@ class BLEScanUtils {
         ftpSrv.handleFTP();
         vTaskDelay(1);
       }
+    }
+
+
+
+    static void runWifiDownloader( void * param ) {
+      /*
+      #define MAC_OUI_NAMES_DB_FILE    "mac-oui-light.db" // oui list of known mac addresses
+      #define BLE_VENDOR_NAMES_DB_FILE "ble-oui.db" // ble device/service names by mac address
+      #define BLE_DB_FILES_URL_PREFIX  "https://github.com/tobozo/ESP32-BLECollector/releases/download/1.0.0/"
+      #define MAC_OUI_NAMES_DB_FS_PATH         "/" MAC_OUI_NAMES_DB_FILE
+      #define BLE_VENDOR_NAMES_DB_FS_PATH      "/" BLE_VENDOR_NAMES_DB_FILE
+      #define MAC_OUI_NAMES_DB_FS_SIZE         933888 // change this according to the file size
+      #define BLE_VENDOR_NAMES_DB_FS_SIZE      73728 // change this according to the file size
+      #define MAC_OUI_NAMES_DB_URL             BLE_DB_FILES_URL_PREFIX MAC_OUI_NAMES_DB_FILE
+      #define BLE_VENDOR_NAMES_DB_URL          BLE_DB_FILES_URL_PREFIX BLE_VENDOR_NAMES_DB_FILE
+      */
+      vTaskDelay(100);
+      BLE_FS.begin();
+      PrintProgressBar = UI.PrintProgressBar;
+
+      if( !DB.checkOUIFile() ) {
+        if( ! wget( MAC_OUI_NAMES_DB_URL, BLE_FS, MAC_OUI_NAMES_DB_FS_PATH ) ) {
+          log_e("Failed to download %s from url %s", MAC_OUI_NAMES_DB_FS_PATH, MAC_OUI_NAMES_DB_URL );
+        } else {
+          log_w("Successfully downloaded %s from url %s", MAC_OUI_NAMES_DB_FS_PATH, MAC_OUI_NAMES_DB_URL );
+        }
+      } else {
+        log_w("Skipping download for %s file ", MAC_OUI_NAMES_DB_FS_PATH );
+      }
+
+      if( !DB.checkVendorFile() ) {
+        if( ! wget( BLE_VENDOR_NAMES_DB_URL, BLE_FS, BLE_VENDOR_NAMES_DB_FS_PATH ) ) {
+          log_e("Failed to download %s from url %s", BLE_VENDOR_NAMES_DB_FS_PATH, BLE_VENDOR_NAMES_DB_URL );
+        } else {
+          log_w("Successfully downloaded %s from url %s", BLE_VENDOR_NAMES_DB_FS_PATH, BLE_VENDOR_NAMES_DB_URL );
+        }
+      } else {
+        log_w("Skipping download for %s file ", MAC_OUI_NAMES_DB_FS_PATH );
+      }
+
+      ESP_Restart();
+      vTaskDelete( NULL );
+
     }
 
 
@@ -454,6 +518,9 @@ class BLEScanUtils {
         return;
       }
       if ( scanTaskRunning ) stopScanCB();
+
+      stopBLETasks();
+
       fileSharingServerTaskIsRunning = true;
       BLERoleIcon.setStatus( ICON_STATUS_ROLE_FILE_SEEKING );
       xTaskCreatePinnedToCore( FileSharingServerTask, "FileSharingServerTask", 12000, NULL, 5, &FileServerTaskHandle, 0 );
@@ -466,7 +533,7 @@ class BLEScanUtils {
         startScanCB();
         BLERoleIcon.setStatus( oldrole );
       } else {
-        log_w("FileSharingServerTask started with nothing to resume");
+        log_w("FileSharingServerTask started with no held task");
       }
       vTaskDelete( NULL );
     }
@@ -492,7 +559,7 @@ class BLEScanUtils {
         startScanCB();
         BLERoleIcon.setStatus( oldrole );
       } else {
-        log_w("FileSharingClientTask spawned with nothing to resume");
+        log_w("FileSharingClientTask spawned with no held task");
       }
       vTaskDelete( NULL );
     }
@@ -526,7 +593,7 @@ class BLEScanUtils {
         startScanCB();
         BLERoleIcon.setStatus( oldrole );
       } else {
-        log_w("TimeClientTask started with nothing to resume");
+        log_w("TimeClientTask started with no held task");
       }
       vTaskDelete( NULL );
     }
@@ -768,7 +835,7 @@ class BLEScanUtils {
       if( TimeIsSet ) {
         // auto share time if available
         //#if BLE_LIB==LIB_CUSTOM_BLE
-        //runCommand( (char*)"bleclock" );
+        runCommand( (char*)"bleclock" );
         //#endif
       }
       #endif
@@ -1120,7 +1187,7 @@ class BLEScanUtils {
         if( ! timeClientisStarted ) {
           if( timeServerBLEAddress != "" ) {
             UI.headerStats("BLE Time sync ...");
-            log_w("Launching BLE TimeClient Task");
+            log_w("HOBO mode: found a peer with time provider service, launching BLE TimeClient Task");
             xTaskCreatePinnedToCore(startTimeClient, "startTimeClient", 2048, NULL, 0, NULL, 0); /* last = Task Core */
             while( scanTaskRunning ) {
               vTaskDelay( 10 );
