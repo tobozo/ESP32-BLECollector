@@ -639,7 +639,8 @@ class UIUtils {
       giveMuxSemaphore();
 
       heapGraphSprite.setPsram( false );
-      heapGraphSprite.setColorDepth( 8 );
+      heapGraphSprite.setColorDepth( 16 );
+      heapGraphSprite.createSprite( graphLineWidth, graphLineHeight );
 
       xTaskCreatePinnedToCore(clockSync, "clockSync", 2048, NULL, 2, NULL, 1); // RTC wants to run on core 1 or it fails
       xTaskCreatePinnedToCore(drawableItems, "drawableItems", 6144, NULL, 2, NULL, 1);
@@ -892,10 +893,13 @@ class UIUtils {
       // draw graph
       takeMuxSemaphore();
 
+      heapGraphSprite.fillSprite( BLE_BLACK );
+      /*
       heapGraphSprite.setPsram( false );
       if( ! heapGraphSprite.createSprite( graphLineWidth, graphLineHeight ) ) {
         log_e("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
       }
+      */
 
 
       for (uint8_t i = 0; i < graphLineWidth; i++) {
@@ -979,7 +983,7 @@ class UIUtils {
         heapGraphSprite.drawLine( dcpmLastX, dcpmLastY, graphLineWidth, dcpmFirstY, BLE_DARKBLUE );
       }
       heapGraphSprite.pushSprite( graphX, graphY );
-      heapGraphSprite.deleteSprite();
+      //heapGraphSprite.deleteSprite();
       giveMuxSemaphore();
     }
 
