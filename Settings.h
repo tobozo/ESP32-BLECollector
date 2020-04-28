@@ -49,7 +49,7 @@
 #define HAS_GPS            false // uses hardware serial, search this file for GPS_RX and GPS_TX to change pins
 #define TIME_UPDATE_SOURCE TIME_UPDATE_NONE // TIME_UPDATE_GPS // soon deprecated, will be implicit
 int8_t timeZone = 2; // 1 = GMT+1, 2 = GMT+2, etc
-#define WITH_WIFI 1
+#define WITH_WIFI          1 // enable this on first run to download oui databases, or for sharing other .db files
 const char* NTP_SERVER = "europe.pool.ntp.org";
 
 byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
@@ -181,14 +181,24 @@ Preferences preferences;
 #endif
 
 // RF stack
+
 #ifdef WITH_WIFI
   // minimal spiffs partition size is required for that
-  #include "FTPService.h"
+  #include "ESP32FtpServer.h"
+  #include <WiFi.h>
+  #include <HTTPClient.h>
+  #include <WiFiClientSecure.h>
+
+  char WiFi_SSID[32];
+  char WiFi_PASS[32];
+
+  HTTPClient http;
+
 #endif
 
 #define LIB_NATIVE_BLE    0 // native BLE Library from ESP32 SDK (buggy, some methods are unexposed)
 #define LIB_CUSTOM_BLE    1 // custom BLE Library modified from native (works better with psram)
-#define LIB_CUSTOM_NIMBLE 2 // NimBLE Library from https://github.com/h2zero/NimBLE-Arduino
+#define LIB_CUSTOM_NIMBLE 2 // NimBLE Library from https://github.com/h2zero/NimBLE-Arduino (huge improvements)
 #define BLE_LIB LIB_CUSTOM_NIMBLE
 
 #if BLE_LIB==LIB_CUSTOM_BLE
@@ -207,12 +217,10 @@ Preferences preferences;
   #include "NimBLEEddystoneTLM.h"
   #include "NimBLEBeacon.h"
   #include "NimBLE2902.h"
-
 #endif
+
 // SQLite stack
 #include <sqlite3.h> // https://github.com/siara-cc/esp32_arduino_sqlite3_lib
-
-//#include "ncurses/curses.h"
 
 // used to disable brownout detector
 #include "soc/soc.h"
@@ -242,7 +250,7 @@ static byte prune_trigger   = 0; // incremented on every insertion, reset on pru
 
 
 
-// load stack
+// load application stack
 #include "BLECache.h" // data struct
 #include "ScrollPanel.h" // scrolly methods
 #include "TimeUtils.h"

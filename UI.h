@@ -629,18 +629,16 @@ class UIUtils {
     // spawn subtasks and leave
     static void taskHeapGraph( void * pvParameters ) { // always running
       mux = xSemaphoreCreateMutex();
-      //xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 1816, NULL, 4, NULL, 0); /* last = Task Core */
       takeMuxSemaphore();
       for( uint16_t i = 0; i < hallOfMacSize; i++ ) {
         uint16_t x = hallOfMacPosX + (i%hallofMacCols) * hallOfMacItemWidth;
         uint16_t y = hallOfMacPosY + ((i/hallofMacCols)%hallofMacRows) * hallOfMacItemHeight;
         animClear( x, y, hallOfMacItemWidth, hallOfMacItemHeight, FOOTER_BGCOLOR, BLE_WHITE );
       }
-      giveMuxSemaphore();
-
       heapGraphSprite.setPsram( false );
       heapGraphSprite.setColorDepth( 16 );
       heapGraphSprite.createSprite( graphLineWidth, graphLineHeight );
+      giveMuxSemaphore();
 
       xTaskCreatePinnedToCore(clockSync, "clockSync", 2048, NULL, 2, NULL, 1); // RTC wants to run on core 1 or it fails
       xTaskCreatePinnedToCore(drawableItems, "drawableItems", 6144, NULL, 2, NULL, 1);
@@ -850,11 +848,6 @@ class UIUtils {
         return;
       }
       devCountWasUpdated = false;
-/*
-      heapmap[heapindex++] = freeheap;
-      heapindex = heapindex % heapMapBuffLen;
-      lastfreeheap = freeheap;
-*/
 
       // render heatmap
       uint16_t GRAPH_COLOR = BLE_WHITE;
@@ -894,13 +887,6 @@ class UIUtils {
       takeMuxSemaphore();
 
       heapGraphSprite.fillSprite( BLE_BLACK );
-      /*
-      heapGraphSprite.setPsram( false );
-      if( ! heapGraphSprite.createSprite( graphLineWidth, graphLineHeight ) ) {
-        log_e("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-      }
-      */
-
 
       for (uint8_t i = 0; i < graphLineWidth; i++) {
         int thisindex = int(currentheapindex - graphLineWidth + i + heapMapBuffLen) % heapMapBuffLen;
@@ -983,7 +969,6 @@ class UIUtils {
         heapGraphSprite.drawLine( dcpmLastX, dcpmLastY, graphLineWidth, dcpmFirstY, BLE_DARKBLUE );
       }
       heapGraphSprite.pushSprite( graphX, graphY );
-      //heapGraphSprite.deleteSprite();
       giveMuxSemaphore();
     }
 

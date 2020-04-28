@@ -172,21 +172,24 @@ struct OUIPsramCacheStruct {
 #define OUIDBSize 25523 // how many entries in the OUI lookup DB
 OUIPsramCacheStruct** OuiPsramCache = NULL;
 
+
 #define BLE_COLLECTOR_DB_FILE    "blemacs.db" // default filename for storing collected data
 #define MAC_OUI_NAMES_DB_FILE    "mac-oui-light.db" // oui list of known mac addresses
 #define BLE_VENDOR_NAMES_DB_FILE "ble-oui.db" // ble device/service names by mac address
 #define BLE_DB_FILES_URL_PREFIX  "https://github.com/tobozo/ESP32-BLECollector/releases/download/1.0.0/"
+#define MAC_OUI_NAMES_DB_FS_SIZE         933888 // change this according to the file size
+#define BLE_VENDOR_NAMES_DB_FS_SIZE      73728 // change this according to the file size
 
+#define MAC_OUI_NAMES_DB_URL             BLE_DB_FILES_URL_PREFIX MAC_OUI_NAMES_DB_FILE
+#define BLE_VENDOR_NAMES_DB_URL          BLE_DB_FILES_URL_PREFIX BLE_VENDOR_NAMES_DB_FILE
 #define BLE_COLLECTOR_DB_SQLITE_PATH     "/" BLE_FS_TYPE "/" BLE_COLLECTOR_DB_FILE
 #define MAC_OUI_NAMES_DB_SQLITE_PATH     "/" BLE_FS_TYPE "/" MAC_OUI_NAMES_DB_FILE
 #define BLE_VENDOR_NAMES_DB_SQLITE_PATH  "/" BLE_FS_TYPE "/" BLE_VENDOR_NAMES_DB_FILE
 #define BLE_COLLECTOR_DB_FS_PATH         "/" BLE_COLLECTOR_DB_FILE
 #define MAC_OUI_NAMES_DB_FS_PATH         "/" MAC_OUI_NAMES_DB_FILE
 #define BLE_VENDOR_NAMES_DB_FS_PATH      "/" BLE_VENDOR_NAMES_DB_FILE
-#define MAC_OUI_NAMES_DB_URL             BLE_DB_FILES_URL_PREFIX MAC_OUI_NAMES_DB_FILE
-#define BLE_VENDOR_NAMES_DB_URL          BLE_DB_FILES_URL_PREFIX BLE_VENDOR_NAMES_DB_FILE
-#define MAC_OUI_NAMES_DB_FS_SIZE         933888 // change this according to the file size
-#define BLE_VENDOR_NAMES_DB_FS_SIZE      73728 // change this according to the file size
+
+
 
 
 class DBUtils {

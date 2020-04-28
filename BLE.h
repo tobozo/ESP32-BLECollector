@@ -243,7 +243,6 @@ struct ToggleTpl {
 ToggleTpl* TogglableProps;
 uint16_t Tsize = 0;
 
-//extern void OTA_over_BLE_Client(void);
 
 class BLEScanUtils {
 
@@ -258,17 +257,31 @@ class BLEScanUtils {
       if ( ! DB.init() ) { // mount DB
         log_e("Error with .db files (not found or corrupted), starting BLE File Sharing");
         startSerialTask();
-        //UI.begin();
         takeMuxSemaphore();
         Out.scrollNextPage();
         Out.println();
         Out.scrollNextPage();
         UI.PrintFatalError( "[ERROR]: .db files not found" );
-        //Out.println( "[ERROR]: .db files not found" );
         giveMuxSemaphore();
         UI.begin();
+        startFileSharingServer();
+
+        #ifdef WITH_WIFI
+          startAlternateSourceTask( NULL );
+        #endif
+
+      } else {
+        WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
+        startSerialTask();
+        startScanCB();
+        UI.begin();
+      }
+    }
+
+    #ifdef WITH_WIFI
+
+      static void setAlternateSource( void * param = NULL ) {
         unsigned long beggingStart = millis();
-        setFileSharingServerOn( NULL );
         while(! isFileSharingClientConnected ) {
           if( beggingStart + 60000 < millis() ) {
             // waited 1mn for db file via ble, nothing came out, try WiFi
@@ -277,30 +290,210 @@ class BLEScanUtils {
           }
           vTaskDelay(100);
         }
-        //startFileSharingServer();
-        return;
+        vTaskDelete( NULL );
       }
-      WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
-      startSerialTask();
-      startScanCB();
-      UI.begin();
-    }
 
-    #ifdef WITH_WIFI
-    static void setWiFiSSID( void * param = NULL ) {
-      if( param == NULL ) return;
-      sprintf( WiFi_SSID, "%s", (const char*)param);
-    }
+      static void startAlternateSourceTask( void * param = NULL ) {
+        xTaskCreatePinnedToCore( setAlternateSource, "setAlternateSource", 16000, NULL, 2, NULL, 1);
+      }
 
-    static void setWiFiPASS( void * param = NULL ) {
-      if( param == NULL ) return;
-      sprintf( WiFi_PASS, "%s", (const char*)param);
-    }
+      static void setWiFiSSID( void * param = NULL ) {
+        if( param == NULL ) return;
+        sprintf( WiFi_SSID, "%s", (const char*)param);
+      }
 
-    static void stopBLECB( void * param = NULL ) {
-      stopScanCB();
-      xTaskCreatePinnedToCore( stopBLE, "stopBLE", 8192, NULL, 5, NULL, 1 ); /* last = Task Core */
-    }
+      static void setWiFiPASS( void * param = NULL ) {
+        if( param == NULL ) return;
+        sprintf( WiFi_PASS, "%s", (const char*)param);
+      }
+
+      static void stopBLECB( void * param = NULL ) {
+        stopScanCB();
+        xTaskCreatePinnedToCore( stopBLE, "stopBLE", 8192, NULL, 5, NULL, 1 ); /* last = Task Core */
+      }
+
+      static void stopBLE( void * param = NULL ) {
+        log_w("[Free Heap: %d] Deleting BLE Tasks", freeheap);
+
+        stopBLETasks();
+
+        log_w("[Free Heap: %d] Shutting Down BlueTooth LE", freeheap);
+
+        log_w("[Free Heap: %d] esp_bt_controller_disable()", freeheap);
+        esp_bt_controller_disable();
+
+        log_w("[Free Heap: %d] esp_bt_controller_deinit()", freeheap);
+        esp_bt_controller_deinit() ;
+
+        log_w("[Free Heap: %d] esp_bt_mem_release(ESP_BT_MODE_BTDM)", freeheap);
+        esp_bt_mem_release(ESP_BT_MODE_BTDM);
+
+        log_w("[Free Heap: %d] BT Shutdown finished", freeheap);
+
+        xTaskCreatePinnedToCore( startWifi, "startWifi", 16384, NULL, 16, NULL, 1 ); /* last = Task Core */
+        vTaskDelete( NULL );
+      }
+
+      static void startWifi( void * param = NULL ) {
+        WiFi.mode(WIFI_STA);
+        Serial.println(WiFi.macAddress());
+        if( String( WiFi_SSID ) !="" && String( WiFi_PASS ) !="" ) {
+          WiFi.begin( WiFi_SSID, WiFi_PASS );
+        } else {
+          WiFi.begin();
+        }
+        while(WiFi.status() != WL_CONNECTED) {
+          log_e("Not connected");
+          delay(1000);
+        }
+        log_w("Connected!");
+        Serial.print("Connected to ");
+        Serial.println(WiFi_SSID);
+        Serial.print("IP address: ");
+        Serial.println(WiFi.localIP());
+        Serial.println("");
+
+        if( DB.initDone ) {
+          xTaskCreatePinnedToCore( startFtpServer, "startFtpServer", 16384, NULL, 16, NULL, 1 ); /* last = Task Core */
+        } else {
+          log_w("HOBO mode: some db files are missing, will download...");
+          xTaskCreatePinnedToCore( runWifiDownloader, "runWifiDownloader", 16384, NULL, 16, NULL, 1 ); /* last = Task Core */
+        }
+        vTaskDelete( NULL );
+      }
+
+      static void startFtpServer( void * param ) {
+        /*
+          $ lftp ftp://esp32@esp32-blecollector
+          Password: esp32
+          lftp:~> set ftp:passive-mode on
+          lftp:~> set ftp:use-feat false
+          lftp:~> set ftp:ssl-allow false
+          lftp:~> mirror /db
+        */
+        FtpServer ftpSrv( BLE_FS );
+        ftpSrv.onDisconnect = ESP_Restart;
+        ftpSrv.begin("esp32","esp32"); // username, password for ftp.  set ports in ESP32FtpServer.h  (default 21, 50009 for PASV)
+        while (1) {
+          ftpSrv.handleFTP();
+          vTaskDelay(1);
+        }
+      }
+
+      static void runWifiDownloader( void * param ) {
+
+        vTaskDelay(100);
+        BLE_FS.begin();
+
+        if( !DB.checkOUIFile() ) {
+          if( ! wget( MAC_OUI_NAMES_DB_URL, BLE_FS, MAC_OUI_NAMES_DB_FS_PATH ) ) {
+            log_e("Failed to download %s from url %s", MAC_OUI_NAMES_DB_FS_PATH, MAC_OUI_NAMES_DB_URL );
+          } else {
+            log_w("Successfully downloaded %s from url %s", MAC_OUI_NAMES_DB_FS_PATH, MAC_OUI_NAMES_DB_URL );
+          }
+        } else {
+          log_w("Skipping download for %s file ", MAC_OUI_NAMES_DB_FS_PATH );
+        }
+
+        if( !DB.checkVendorFile() ) {
+          if( ! wget( BLE_VENDOR_NAMES_DB_URL, BLE_FS, BLE_VENDOR_NAMES_DB_FS_PATH ) ) {
+            log_e("Failed to download %s from url %s", BLE_VENDOR_NAMES_DB_FS_PATH, BLE_VENDOR_NAMES_DB_URL );
+          } else {
+            log_w("Successfully downloaded %s from url %s", BLE_VENDOR_NAMES_DB_FS_PATH, BLE_VENDOR_NAMES_DB_URL );
+          }
+        } else {
+          log_w("Skipping download for %s file ", MAC_OUI_NAMES_DB_FS_PATH );
+        }
+
+        ESP_Restart();
+        vTaskDelete( NULL );
+
+      }
+
+      static bool /*yolo*/wget( const char* url, fs::FS &fs, const char* path ) {
+
+        WiFiClientSecure *client = new WiFiClientSecure;
+        client->setCACert( NULL ); // yolo security
+
+        const char* UserAgent = "ESP32HTTPClient";
+
+        http.setUserAgent( UserAgent );
+        http.setConnectTimeout( 10000 ); // 10s timeout = 10000
+
+        if( ! http.begin(*client, url ) ) {
+          log_e("Can't open url %s", url );
+          return false;
+        }
+
+        const char * headerKeys[] = {"location", "redirect"};
+        const size_t numberOfHeaders = 2;
+        http.collectHeaders(headerKeys, numberOfHeaders);
+
+        log_w("URL = %s", url);
+
+        int httpCode = http.GET();
+
+        // file found at server
+        if (httpCode == HTTP_CODE_FOUND || httpCode == HTTP_CODE_MOVED_PERMANENTLY) {
+          String newlocation = "";
+          for(int i = 0; i< http.headers(); i++) {
+            String headerContent = http.header(i);
+            if( headerContent !="" ) {
+              newlocation = headerContent;
+              Serial.printf("%s: %s\n", headerKeys[i], headerContent.c_str());
+            }
+          }
+
+          http.end();
+          if( newlocation != "" ) {
+            log_w("Found 302/301 location header: %s", newlocation.c_str() );
+            return wget( newlocation.c_str(), fs, path );
+          } else {
+            log_e("Empty redirect !!");
+            return false;
+          }
+        }
+
+        WiFiClient *stream = http.getStreamPtr();
+
+        if( stream == nullptr ) {
+          http.end();
+          log_e("Connection failed!");
+          return false;
+        }
+
+        File outFile = fs.open( path, FILE_WRITE );
+        if( ! outFile ) {
+          log_e("Can't open %s file to save url %s", path, url );
+          return false;
+        }
+
+        uint8_t buff[512] = { 0 };
+        size_t sizeOfBuff = sizeof(buff);
+        int len = http.getSize();
+        int bytesLeftToDownload = len;
+        int bytesDownloaded = 0;
+
+        while(http.connected() && (len > 0 || len == -1)) {
+          size_t size = stream->available();
+          if(size) {
+            // read up to 512 byte
+            int c = stream->readBytes(buff, ((size > sizeOfBuff) ? sizeOfBuff : size));
+            outFile.write( buff, c );
+            bytesLeftToDownload -= c;
+            bytesDownloaded += c;
+            Serial.printf("%d bytes left\n", bytesLeftToDownload );
+            float progress = (((float)bytesDownloaded / (float)len) * 100.00);
+            UI.PrintProgressBar( progress, 100.0 );
+          }
+        }
+        outFile.close();
+        return fs.exists( path );
+      }
+
+
+    #endif // ifdef WITH_WIFI
+
 
     static void stopBLETasks( void * param = NULL ) {
       if( timeServerIsRunning )            destroyTaskNow( TimeServerTaskHandle );
@@ -308,7 +501,6 @@ class BLEScanUtils {
       if( fileSharingServerTaskIsRunning ) destroyTaskNow( FileServerTaskHandle );
       if( fileSharingClientTaskIsRunning ) destroyTaskNow( FileClientTaskHandle );
     }
-
 
     static void destroyTaskNow( TaskHandle_t &task ) {
       vTaskSuspendAll();
@@ -321,145 +513,11 @@ class BLEScanUtils {
       xTaskResumeAll();
     }
 
-
-    static void stopBLE( void * param = NULL ) {
-      log_w("[Free Heap: %d] Deleting BLE Tasks", freeheap);
-
-      stopBLETasks();
-
-      log_w("[Free Heap: %d] Shutting Down BlueTooth LE", freeheap);
-
-      log_w("[Free Heap: %d] esp_bt_controller_disable()", freeheap);
-      esp_bt_controller_disable();
-
-      log_w("[Free Heap: %d] esp_bt_controller_deinit()", freeheap);
-      esp_bt_controller_deinit() ;
-
-      log_w("[Free Heap: %d] esp_bt_mem_release(ESP_BT_MODE_BTDM)", freeheap);
-      esp_bt_mem_release(ESP_BT_MODE_BTDM);
-
-      log_w("[Free Heap: %d] BT Shutdown finished", freeheap);
-
-      xTaskCreatePinnedToCore( startWifi, "startWifi", 16384, NULL, 16, NULL, 1 ); /* last = Task Core */
-      vTaskDelete( NULL );
-    }
-
-
-    static void startWifi( void * param ) {
-      WiFi.mode(WIFI_STA);
-      Serial.println(WiFi.macAddress());
-      if( String( WiFi_SSID ) !="" && String( WiFi_PASS ) !="" ) {
-        WiFi.begin( WiFi_SSID, WiFi_PASS );
-      } else {
-        WiFi.begin();
-      }
-      while(WiFi.status() != WL_CONNECTED) {
-        log_e("Not connected");
-        delay(1000);
-      }
-      log_w("Connected!");
-      Serial.print("Connected to ");
-      Serial.println(WiFi_SSID);
-      Serial.print("IP address: ");
-      Serial.println(WiFi.localIP());
-      Serial.println("");
-
-      if( DB.initDone ) {
-        xTaskCreatePinnedToCore( startFtpServer, "startFtpServer", 16384, NULL, 16, NULL, 1 ); /* last = Task Core */
-      } else {
-        log_w("HOBO mode: some db files are missing, will download...");
-        xTaskCreatePinnedToCore( runWifiDownloader, "runWifiDownloader", 16384, NULL, 16, NULL, 1 ); /* last = Task Core */
-      }
-      vTaskDelete( NULL );
-    }
-
-
-    static void startFtpServer( void * param ) {
-      /*
-        $ lftp ftp://esp32@esp32-blecollector
-        Password: esp32
-        lftp:~> set ftp:passive-mode on
-        lftp:~> set ftp:use-feat false
-        lftp:~> set ftp:ssl-allow false
-        lftp:~> mirror /db
-      */
-      FtpServer ftpSrv( BLE_FS );
-      ftpSrv.onDisconnect = ESP_Restart;
-      ftpSrv.begin("esp32","esp32"); // username, password for ftp.  set ports in ESP32FtpServer.h  (default 21, 50009 for PASV)
-      while (1) {
-        ftpSrv.handleFTP();
-        vTaskDelay(1);
-      }
-    }
-
-
-
-    static void runWifiDownloader( void * param ) {
-      /*
-      #define MAC_OUI_NAMES_DB_FILE    "mac-oui-light.db" // oui list of known mac addresses
-      #define BLE_VENDOR_NAMES_DB_FILE "ble-oui.db" // ble device/service names by mac address
-      #define BLE_DB_FILES_URL_PREFIX  "https://github.com/tobozo/ESP32-BLECollector/releases/download/1.0.0/"
-      #define MAC_OUI_NAMES_DB_FS_PATH         "/" MAC_OUI_NAMES_DB_FILE
-      #define BLE_VENDOR_NAMES_DB_FS_PATH      "/" BLE_VENDOR_NAMES_DB_FILE
-      #define MAC_OUI_NAMES_DB_FS_SIZE         933888 // change this according to the file size
-      #define BLE_VENDOR_NAMES_DB_FS_SIZE      73728 // change this according to the file size
-      #define MAC_OUI_NAMES_DB_URL             BLE_DB_FILES_URL_PREFIX MAC_OUI_NAMES_DB_FILE
-      #define BLE_VENDOR_NAMES_DB_URL          BLE_DB_FILES_URL_PREFIX BLE_VENDOR_NAMES_DB_FILE
-      */
-      vTaskDelay(100);
-      BLE_FS.begin();
-      PrintProgressBar = UI.PrintProgressBar;
-
-      if( !DB.checkOUIFile() ) {
-        if( ! wget( MAC_OUI_NAMES_DB_URL, BLE_FS, MAC_OUI_NAMES_DB_FS_PATH ) ) {
-          log_e("Failed to download %s from url %s", MAC_OUI_NAMES_DB_FS_PATH, MAC_OUI_NAMES_DB_URL );
-        } else {
-          log_w("Successfully downloaded %s from url %s", MAC_OUI_NAMES_DB_FS_PATH, MAC_OUI_NAMES_DB_URL );
-        }
-      } else {
-        log_w("Skipping download for %s file ", MAC_OUI_NAMES_DB_FS_PATH );
-      }
-
-      if( !DB.checkVendorFile() ) {
-        if( ! wget( BLE_VENDOR_NAMES_DB_URL, BLE_FS, BLE_VENDOR_NAMES_DB_FS_PATH ) ) {
-          log_e("Failed to download %s from url %s", BLE_VENDOR_NAMES_DB_FS_PATH, BLE_VENDOR_NAMES_DB_URL );
-        } else {
-          log_w("Successfully downloaded %s from url %s", BLE_VENDOR_NAMES_DB_FS_PATH, BLE_VENDOR_NAMES_DB_URL );
-        }
-      } else {
-        log_w("Skipping download for %s file ", MAC_OUI_NAMES_DB_FS_PATH );
-      }
-
-      ESP_Restart();
-      vTaskDelete( NULL );
-
-    }
-
-
-    #endif
-
     static void startScanCB( void * param = NULL ) {
 
-      while ( fileSharingServerTaskIsRunning ) {
-        log_w("Waiting for BLE File Server to stop ...");
-        vTaskDelay(1000);
-      }
-
-      while ( fileSharingClientTaskIsRunning ) {
-        log_w("Waiting for BLE File Client to stop ...");
-        vTaskDelay(1000);
-      }
-      /*
-      while ( timeServerIsRunning ) {
-        log_w("Waiting for BLE Time Server to stop ...");
-        vTaskDelay(1000);
-      }
-      */
-
-      if ( timeClientisRunning ) {
-        log_w("Waiting for BLE Time Client to stop ...");
-        vTaskDelay(1000);
-      }
+      if( timeClientisStarted )            destroyTaskNow( TimeClientTaskHandle );
+      if( fileSharingServerTaskIsRunning ) destroyTaskNow( FileServerTaskHandle );
+      if( fileSharingClientTaskIsRunning ) destroyTaskNow( FileClientTaskHandle );
 
       BLEDevice::setMTU(100);
       if ( !scanTaskRunning ) {
@@ -502,14 +560,14 @@ class BLEScanUtils {
       ESP.restart();
     }
 
-    static void setFileSharingServerOn( void * param ) {
+    static void startFileSharingServer( void * param = NULL ) {
       if ( ! fileDownloadingEnabled ) {
         fileDownloadingEnabled = true;
-        xTaskCreatePinnedToCore( startFileSharingServer, "startFileSharingServer", 2048, param, 0, NULL, 0 ); // last = Task Core
+        xTaskCreatePinnedToCore( startFileSharingServerTask, "startFileSharingServerTask", 2048, param, 0, NULL, 0 ); // last = Task Core
       }
     }
 
-    static void startFileSharingServer( void * param = NULL) {
+    static void startFileSharingServerTask( void * param = NULL) {
       bool scanWasRunning = scanTaskRunning;
       int8_t oldrole = BLERoleIcon.status;
       if ( fileSharingServerTaskIsRunning ) {
@@ -538,15 +596,18 @@ class BLEScanUtils {
       vTaskDelete( NULL );
     }
 
-    static void setFileSharingClientOn( void * param ) {
+    static void setFileSharingClientOn( void * param = NULL ) {
       fileSharingEnabled = true;
     }
 
-    static void startFileSharingClient( void * param ) {
+    static void startFileSharingClient( void * param = NULL ) {
       bool scanWasRunning = scanTaskRunning;
       int8_t oldrole = BLERoleIcon.status;
       fileSharingClientStarted = true;
       if ( scanTaskRunning ) stopScanCB();
+
+      stopBLETasks();
+
       fileSharingClientTaskIsRunning = true;
       BLERoleIcon.setStatus( ICON_STATUS_ROLE_FILE_SHARING );
       xTaskCreatePinnedToCore( FileSharingClientTask, "FileSharingClientTask", 12000, param, 5, &FileClientTaskHandle, 0 ); // last = Task Core
@@ -564,7 +625,7 @@ class BLEScanUtils {
       vTaskDelete( NULL );
     }
 
-    static void setTimeClientOn( void * param ) {
+    static void setTimeClientOn( void * param = NULL ) {
       if( !timeClientisStarted ) {
         timeClientisStarted = true;
         xTaskCreatePinnedToCore( startTimeClient, "startTimeClient", 2560, param, 0, NULL, 0 ); // last = Task Core
@@ -573,7 +634,7 @@ class BLEScanUtils {
       }
     }
 
-    static void startTimeClient( void * param ) {
+    static void startTimeClient( void * param = NULL ) {
       bool scanWasRunning = scanTaskRunning;
       int8_t oldrole = BLERoleIcon.status;
       ForceBleTime = false;
@@ -598,14 +659,14 @@ class BLEScanUtils {
       vTaskDelete( NULL );
     }
 
-    static void setTimeServerOn( void * param ) {
+    static void setTimeServerOn( void * param = NULL ) {
       if( !timeServerStarted ) {
         timeServerStarted = true;
         xTaskCreatePinnedToCore( startTimeServer, "startTimeServer", 8192, param, 0, NULL, 0 ); // last = Task Core
       }
     }
 
-    static void startTimeServer( void * param ) {
+    static void startTimeServer( void * param = NULL ) {
       bool scanWasRunning = scanTaskRunning;
       if ( scanTaskRunning ) stopScanCB();
       // timeServer runs forever
@@ -788,7 +849,7 @@ class BLEScanUtils {
           { "bleclock",      setTimeServerOn,        "Broadcast time to another BLE Device (explicit)" },
           { "bletime",       setTimeClientOn,        "Get time from another BLE Device (implicit)" },
         #endif
-        { "blereceive",    setFileSharingServerOn, "Update .db files from another BLE app"},
+        { "blereceive",    startFileSharingServer, "Update .db files from another BLE app"},
         { "blesend",       setFileSharingClientOn, "Share .db files with anothe BLE app" },
         { "screenshot",    screenShotCB,           "Make a screenshot and save it on the SD" },
         { "screenshow",    screenShowCB,           "Show screenshot" },
@@ -834,12 +895,9 @@ class BLEScanUtils {
       #if HAS_EXTERNAL_RTC
       if( TimeIsSet ) {
         // auto share time if available
-        //#if BLE_LIB==LIB_CUSTOM_BLE
         runCommand( (char*)"bleclock" );
-        //#endif
       }
       #endif
-
 
       #if HAS_GPS
         GPSInit();
