@@ -9,6 +9,8 @@
   #define tft M5.Lcd // syntax sugar
 #endif
 
+#include "HID_XPad.h" // external HID
+
 
 #if defined( ARDUINO_M5Stack_Core_ESP32 ) || defined( ARDUINO_M5STACK_FIRE ) || defined( ARDUINO_ODROID_ESP32 ) || defined ( ARDUINO_ESP32_DEV ) || defined( ARDUINO_DDUINO32_XS )
   // yay! platform is supported
@@ -29,6 +31,7 @@
 #define tft_drawBitmap tft.drawBitmap
 #define SD_begin M5StackSDBegin // BLE_FS.begin
 #define hasHID() (bool)true
+#define hasXPaxShield() (bool) false
 #define snapNeedsScrollReset() (bool)false // some TFT models need a scroll reset before screen capture
 #define BLE_FS_TYPE "sd" // sd = fs::SD, sdcard = fs::SD_MMC
 #define SKIP_INTRO // don't play intro (tft spi access messes up SD/DB init)
@@ -53,6 +56,7 @@ static const int AMIGABALL_YPOS = 50;
   // custom M5Stack/Odroid-Go go TFT/SD/RTC/GPS settings here (see ARDUINO_ESP32_DEV profile for available settings)
 
 #elif defined( ARDUINO_DDUINO32_XS )
+
   #undef hasHID
   #undef SD_begin
   #undef scrollpanel_height
@@ -79,6 +83,7 @@ static const int AMIGABALL_YPOS = 50;
   #undef HAS_EXTERNAL_RTC
   #undef HAS_GPS
   #undef hasHID
+  #undef hasXPaxShield
   #undef snapNeedsScrollReset
   #undef SD_begin
   #undef scrollpanel_height
@@ -95,6 +100,7 @@ static const int AMIGABALL_YPOS = 50;
   #define HAS_EXTERNAL_RTC true // will use RTC_SDA and RTC_SCL from settings.h
   #define HAS_GPS true // will use GPS_RX and GPS_TX from settings.h
   #define hasHID() (bool)false // disable buttons
+  #define hasXPaxShield() (bool) true
   #define snapNeedsScrollReset() (bool)true
   #define SD_begin /*(bool)true*/BLE_FS.begin // SD_MMC is auto started
   #define tft_initOrientation() tft.setRotation(0) // default orientation for hardware scroll
@@ -146,6 +152,14 @@ void tft_begin() {
     if( hasHID() ) {
       // build has buttons => enable SD Updater at boot
       if(digitalRead(BUTTON_A_PIN) == 0) {
+        Serial.println("Will Load menu binary");
+        updateFromFS();
+        ESP.restart();
+      }
+    } else if( hasXPaxShield() ) {
+      XPadShield.init();
+      XPadShield.read();
+      if( XPadShield.wasPressed() && XPadShield._state == 0x01/* down */) {
         Serial.println("Will Load menu binary");
         updateFromFS();
         ESP.restart();

@@ -182,7 +182,9 @@ class UIUtils {
     void init() {
       Serial.begin(115200);
       Serial.println(welcomeMessage);
-      Serial.printf("HAS PSRAM: %s\nRTC_PROFILE: %s\nHAS_EXTERNAL_RTC: %s\nHAS_GPS: %s\nTIME_UPDATE_SOURCE: %d\n",
+      Serial.printf("HAS BUTTONS: %s,\nHAS_XPAD: %s\nHAS PSRAM: %s\nRTC_PROFILE: %s\nHAS_EXTERNAL_RTC: %s\nHAS_GPS: %s\nTIME_UPDATE_SOURCE: %d\n",
+        hasHID() ? "true" : "false",
+        hasXPaxShield() ? "true" : "false",
         psramInit() ? "true" : "false",
         RTC_PROFILE,
         HAS_EXTERNAL_RTC ? "true" : "false",
@@ -884,7 +886,6 @@ class UIUtils {
         toleranceline = map(toleranceheap, graphMin, graphMax, 0, graphLineHeight);
       }
       // draw graph
-      takeMuxSemaphore();
 
       heapGraphSprite.fillSprite( BLE_BLACK );
 
@@ -968,6 +969,7 @@ class UIUtils {
         // join last/first
         heapGraphSprite.drawLine( dcpmLastX, dcpmLastY, graphLineWidth, dcpmFirstY, BLE_DARKBLUE );
       }
+      takeMuxSemaphore();
       heapGraphSprite.pushSprite( graphX, graphY );
       giveMuxSemaphore();
     }

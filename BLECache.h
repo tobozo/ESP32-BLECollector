@@ -301,7 +301,7 @@ class BlueToothDeviceHelper {
         set(CacheItem, "manufid", vint);
       }
       if( advertisedDevice.haveServiceData() ) {
-        //Serial.printf("[%s] GATT ServiceDataUUID: '%s'\n", CacheItem->address, advertisedDevice.getServiceDataUUID().toString().c_str());
+        Serial.printf("[%s] GATT ServiceDataUUID: '%s'\n", CacheItem->address, advertisedDevice.getServiceDataUUID().toString().c_str());
       }
       if ( advertisedDevice.haveServiceUUID() ) {
         set(CacheItem, "uuid", advertisedDevice.getServiceUUID().toString().c_str());
