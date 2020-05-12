@@ -158,8 +158,8 @@ void tft_begin() {
       }
     } else if( hasXPaxShield() ) {
       XPadShield.init();
-      XPadShield.read();
-      if( XPadShield.wasPressed() && XPadShield._state == 0x01/* down */) {
+      XPadShield.update();
+      if( XPadShield.BtnA->wasPressed() ) {
         Serial.println("Will Load menu binary");
         updateFromFS();
         ESP.restart();

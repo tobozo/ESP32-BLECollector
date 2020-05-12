@@ -65,8 +65,8 @@ BLE2902* BLESharing2902Descriptor;
 std::string timeServerBLEAddress;
 std::string fileServerBLEAddress;
 
-esp_ble_addr_type_t timeServerClientType;
-esp_ble_addr_type_t fileServerClientType;
+uint8_t timeServerClientType;
+uint8_t fileServerClientType;
 
 typedef struct {
   uint16_t year;
@@ -257,11 +257,7 @@ static void TimeClientTask( void * param ) {
 
 
 class TimeServerCallbacks : public BLEServerCallbacks {
-  #if BLE_LIB==LIB_CUSTOM_NIMBLE
    void onConnect(BLEServer *pServer, ble_gap_conn_desc *param)
-  #else
-    void onConnect(BLEServer *pServer, esp_ble_gatts_cb_param_t *param)
-  #endif
     {
       TimeServerSignalSent = false;
       BLEDevice::getAdvertising()->stop();
@@ -277,22 +273,8 @@ TimeServerCallbacks *TimeServerCallback;
 
 static void stopTimeServer() {
   TimeSharingAdvertising->stop();
-  #if BLE_LIB==LIB_CUSTOM_BLE
-  TimeSharingService->stop();
-  log_w("TimeSharingServer->removeService( TimeSharingService )");
-  TimeSharingServer->removeService( TimeSharingService );
-  log_w("delete BLESharing2902Descriptor");
-  delete BLESharing2902Descriptor; BLESharing2902Descriptor = NULL;
-  log_w("delete TimeServerCallback");
-  delete TimeServerCallback; TimeServerCallback = NULL;
-  log_w("delete TimeServerChar");
-  delete TimeServerChar; TimeServerChar = NULL;
-  log_w("delete TimeSharingServer");
-  delete TimeSharingServer; TimeSharingServer = NULL;
-  log_w("delete TimeSharingService");
-  delete TimeSharingService; TimeSharingService = NULL;
-  #endif
   timeServerIsRunning = false;
+  timeServerStarted   = false;
   log_w("Stopped time server");
 }
 
@@ -329,12 +311,14 @@ uint8_t* getBLETime() {
 static void TimeServerTaskNotify( void * param ) {
   TickType_t lastWaketime;
   lastWaketime = xTaskGetTickCount();
+  timeServerStarted = true;
   while ( !TimeServerSignalSent ) {
     TimeServerChar->setValue( getBLETime(), sizeof(bt_time_t));
     TimeServerChar->notify();
     // send notification with date/time exactly every TICKS_TO_DELAY ms
     vTaskDelayUntil(&lastWaketime, TICKS_TO_DELAY / portTICK_PERIOD_MS);
   }
+  timeServerStarted = false;
   vTaskDelete(NULL);
 }
 
@@ -345,12 +329,7 @@ static void TimeServerTask( void * param ) {
 
   BLEDevice::setMTU(50);
 
-  #if BLE_LIB==LIB_CUSTOM_BLE
-  BLESharing2902Descriptor = new BLE2902();
-  BLESharing2902Descriptor->setNotifications( true );
-  #else
   log_w("MTU set");
-  #endif
 
   TimeServerCallback = new TimeServerCallbacks();
 
@@ -365,22 +344,13 @@ static void TimeServerTask( void * param ) {
 
   TimeServerChar = TimeSharingService->createCharacteristic(
     timeCharacteristicUUID,
-    #if BLE_LIB==LIB_CUSTOM_BLE
-      BLECharacteristic::PROPERTY_NOTIFY   |
-      BLECharacteristic::PROPERTY_READ
-    #else
-      NIMBLE_PROPERTY::READ  |
-      NIMBLE_PROPERTY::NOTIFY
-    #endif
+    NIMBLE_PROPERTY::READ  |
+    NIMBLE_PROPERTY::NOTIFY
   );
 
-  #if BLE_LIB==LIB_CUSTOM_BLE
-    TimeServerChar->addDescriptor( BLESharing2902Descriptor );
-  #else
-    log_w("Will create descriptor");
-    TimeServerChar->createDescriptor("2902" /** , NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE **/);
-    log_w("Descriptor created");
-  #endif
+  log_w("Will create descriptor");
+  TimeServerChar->createDescriptor("2902" /** , NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE **/);
+  log_w("Descriptor created");
 
   TimeSharingService->start();
 
@@ -566,11 +536,7 @@ class FileSharingRouteCallbacks : public BLECharacteristicCallbacks {
 
 
 class FileSharingCallbacks : public BLEServerCallbacks {
-  #if BLE_LIB==LIB_CUSTOM_NIMBLE
     void onConnect(BLEServer *SharingServer, ble_gap_conn_desc *param)
-  #else
-    void onConnect(BLEServer *SharingServer, esp_ble_gatts_cb_param_t *param)
-  #endif
     {
       log_w("A client is connected, stopping advertising");
       isFileSharingClientConnected = true;
@@ -580,12 +546,9 @@ class FileSharingCallbacks : public BLEServerCallbacks {
       Out.println();
       giveMuxSemaphore();
       BLEDevice::getAdvertising()->stop();
-      #if BLE_LIB==LIB_CUSTOM_BLE
-        // do some voodo on remote MTU for transfert perfs (thanks @chegewara)
-        esp_ble_gap_set_prefer_conn_params(param->connect.remote_bda, 6, 6, 0, 500);
-      #else
-        SharingServer->updatePeerMTU( SharingServer->getConnId(), 500 );
-      #endif
+      // do some voodo on remote MTU for transfert perfs (thanks @chegewara)
+      //esp_ble_gap_set_prefer_conn_params(param->connect.remote_bda, 6, 6, 0, 500);
+      SharingServer->updatePeerMTU( SharingServer->getConnId(), 500 );
     }
     void onDisconnect(BLEServer* SharingServer) {
       log_w("A client disconnected, restarting advertising");
@@ -607,15 +570,6 @@ FileSharingWriteCallbacks *FileSharingWriteCallback;
 
 void stopFileSharingServer() {
   FileSharingAdvertising->stop();
-  #if BLE_LIB==LIB_CUSTOM_BLE
-  FileSharingService->stop();
-  FileSharingServer->removeService( FileSharingService );
-  #endif
-  /*
-  if ( BLESharing2902Descriptor != NULL ) {
-    delete( BLESharing2902Descriptor);
-    BLESharing2902Descriptor = NULL;
-  }*/
   fileSharingServerTaskIsRunning = false;
   fileSharingServerTaskShouldStop = false;
   fileDownloadingEnabled = false;
@@ -638,11 +592,6 @@ static void FileSharingServerTask(void* p) {
   if ( FileSharingWriteCallback == NULL ) {
     FileSharingWriteCallback = new FileSharingWriteCallbacks();
   }
-  if ( BLESharing2902Descriptor == NULL ) {
-    #if BLE_LIB==LIB_CUSTOM_BLE
-    BLESharing2902Descriptor = new BLE2902();
-    #endif
-  }
   if ( FileSharingServer == NULL ) {
     FileSharingServer = BLEDevice::createServer();
   }
@@ -651,34 +600,19 @@ static void FileSharingServerTask(void* p) {
 
   FileSharingWriteChar = FileSharingService->createCharacteristic(
     FileSharingWriteUUID,
-    #if BLE_LIB==LIB_CUSTOM_BLE
-    BLECharacteristic::PROPERTY_WRITE_NR
-    #else
     NIMBLE_PROPERTY::WRITE_NR
-    #endif
   );
   FileSharingRouteChar = FileSharingService->createCharacteristic(
     FileSharingRouteUUID,
-    #if BLE_LIB==LIB_CUSTOM_BLE
-    BLECharacteristic::PROPERTY_NOTIFY |
-    BLECharacteristic::PROPERTY_READ   |
-    BLECharacteristic::PROPERTY_WRITE
-    #else
     NIMBLE_PROPERTY::NOTIFY |
     NIMBLE_PROPERTY::READ |
     NIMBLE_PROPERTY::WRITE
-    #endif
   );
 
   FileSharingRouteChar->setCallbacks( FileSharingRouteCallback );
   FileSharingWriteChar->setCallbacks( FileSharingWriteCallback );
 
-  #if BLE_LIB==LIB_CUSTOM_BLE
-  BLESharing2902Descriptor->setNotifications(true);
-  FileSharingRouteChar->addDescriptor( BLESharing2902Descriptor );
-  #else
   FileSharingRouteChar->createDescriptor("2902", NIMBLE_PROPERTY::NOTIFY/** | NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE **/);
-  #endif
 
   FileSharingService->start();
 

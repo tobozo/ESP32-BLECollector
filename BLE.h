@@ -127,32 +127,19 @@ static bool deviceHasPayload( BLEAdvertisedDevice advertisedDevice ) {
 
 
 class FoundDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
-    #if BLE_LIB==LIB_CUSTOM_BLE
-    void onResult( BLEAdvertisedDevice advertisedDevice )
-    #else
     void onResult( BLEAdvertisedDevice *advertisedDevice )
-    #endif
     {
-
       devicesStatCount++; // raw stats for heapgraph
 
-      #if BLE_LIB==LIB_CUSTOM_BLE
-      bool scanShouldStop =  deviceHasPayload( advertisedDevice );
-      #else
       bool scanShouldStop =  deviceHasPayload( *advertisedDevice );
-      #endif
 
       if ( onScanDone  ) return;
 
       if ( scan_cursor < MAX_DEVICES_PER_SCAN ) {
         log_i("will store advertisedDevice in cache #%d", scan_cursor);
-        #if BLE_LIB==LIB_CUSTOM_BLE
         BLEDevHelper.store( BLEDevScanCache[scan_cursor], advertisedDevice );
-        #else
-        BLEDevHelper.store( BLEDevScanCache[scan_cursor], *advertisedDevice );
-        #endif
         //bool is_random = strcmp( BLEDevScanCache[scan_cursor]->ouiname, "[random]" ) == 0;
-        bool is_random = (BLEDevScanCache[scan_cursor]->addr_type == BLE_ADDR_TYPE_RANDOM || BLEDevScanCache[scan_cursor]->addr_type == BLE_ADDR_TYPE_RPA_RANDOM );
+        bool is_random = (BLEDevScanCache[scan_cursor]->addr_type == BLE_ADDR_RANDOM );
         //bool is_blacklisted = isBlackListed( BLEDevScanCache[scan_cursor]->address );
         if ( UI.filterVendors && is_random ) {
           //TODO: scan_cursor++
@@ -166,17 +153,9 @@ class FoundDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
               DB.getVendor( BLEDevScanCache[scan_cursor]->manufid, BLEDevScanCache[scan_cursor]->manufname );
             }
             BLEDevScanCache[scan_cursor]->is_anonymous = BLEDevHelper.isAnonymous( BLEDevScanCache[scan_cursor] );
-            #if BLE_LIB==LIB_CUSTOM_BLE
-            log_i(  "  stored and populated #%02d : %s", scan_cursor, advertisedDevice.getName().c_str());
-            #else
             log_i(  "  stored and populated #%02d : %s", scan_cursor, advertisedDevice->getName().c_str());
-            #endif
           } else {
-            #if BLE_LIB==LIB_CUSTOM_BLE
-            log_i(  "  stored #%02d : %s", scan_cursor, advertisedDevice.getName().c_str());
-            #else
             log_i(  "  stored #%02d : %s", scan_cursor, advertisedDevice->getName().c_str());
-            #endif
           }
           scan_cursor++;
           processedDevicesCount++;
@@ -188,11 +167,7 @@ class FoundDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
         onScanDone = true;
       }
       if ( onScanDone ) {
-        #if BLE_LIB==LIB_CUSTOM_BLE
-        advertisedDevice.getScan()->stop();
-        #else
         advertisedDevice->getScan()->stop();
-        #endif
         scan_cursor = 0;
         if ( SCAN_DURATION - 1 >= MIN_SCAN_DURATION ) {
           SCAN_DURATION--;
@@ -207,11 +182,7 @@ class FoundDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
         BLEActivityIcon.setStatus( ICON_STATUS_ADV_SCAN );
       }
       if( scanShouldStop ) {
-        #if BLE_LIB==LIB_CUSTOM_BLE
-        advertisedDevice.getScan()->stop();
-        #else
         advertisedDevice->getScan()->stop();
-        #endif
       }
     }
 };
@@ -671,11 +642,16 @@ class BLEScanUtils {
       if ( scanTaskRunning ) stopScanCB();
       // timeServer runs forever
       timeServerIsRunning = true;
+      timeServerStarted   = false; // will be updated from task
       BLERoleIcon.setStatus(ICON_STATUS_ROLE_CLOCK_SHARING );
+      UI.headerStats( "Starting Time Server" );
+      vTaskDelay(1);
       xTaskCreatePinnedToCore( TimeServerTask, "TimeServerTask", 4096, NULL, 1, &TimeServerTaskHandle, 1 ); // TimeServerTask prefers core 1
       log_w("TimeServerTask started");
       if ( scanWasRunning ) {
-        vTaskDelay(1000);
+        while( ! timeServerStarted ) {
+          vTaskDelay( 100 );
+        }
         startScanCB();
       }
       vTaskDelete( NULL );
@@ -768,11 +744,18 @@ class BLEScanUtils {
 
     static void screenShotTask( void * param = NULL ) {
       if( !UI.ScreenShotLoaded ) {
+        log_w("Cold ScreenShot");
         M5.ScreenShot.init( &tft, BLE_FS );
-        M5.ScreenShot.begin();
-        UI.ScreenShotLoaded = true;
+        if( M5.ScreenShot.begin() ) {
+          UI.ScreenShotLoaded = true;
+          UI.screenShot();
+        } else {
+          log_e("Sorry, ScreenShot is not available");
+        }
+      } else {
+        log_w("Hot ScreenShot");
+        UI.screenShot();
       }
-      UI.screenShot();
       vTaskDelete(NULL);
     }
 
@@ -948,11 +931,15 @@ class BLEScanUtils {
         } else if( hasXPaxShield() ) {
 
           takeMuxSemaphore();
-          XPadShield.read();
+          XPadShield.update();
           giveMuxSemaphore();
 
           if( XPadShield.wasPressed() ) { // on release
-            switch( XPadShield._state ) {
+
+            // XPadShield.BtnA.wasPressed(); would work but xpad support simultaneous buttons push
+            // so a stricter approach is chosen
+
+            switch( XPadShield.state ) {
               case 0x01: // down
                 log_w("XPadShield->down");
                 UI.brightness -= UI.brightnessIncrement;
@@ -993,7 +980,7 @@ class BLEScanUtils {
                 // ignore
               break;
               default: // simultaneous buttons push
-                log_w("XPadShield->Combined: 0x%02x", XPadShield._state);
+                log_w("XPadShield->Combined: 0x%02x", XPadShield.state);
               break;
             }
           }

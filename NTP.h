@@ -4,47 +4,29 @@
 
 // returns true if time has been updated
 static bool checkForTimeUpdate( DateTime &internalDateTime ) {
-  bool checkNTP = false;
-  #if HAS_EXTERNAL_RTC
-    DateTime externalDateTime = RTC.now();
-  #else // only have internal RTC
-    DateTime externalDateTime = internalDateTime;
-  #endif
-  int64_t seconds_since_last_ntp_update = abs( externalDateTime.unixtime() - lastSyncDateTime.unixtime() );
-  if ( seconds_since_last_ntp_update > 86400 ) {
-    log_e("seconds_since_last_ntp_update = now(%d) - last(%d) = %d seconds", externalDateTime.unixtime(), lastSyncDateTime.unixtime(), seconds_since_last_ntp_update);
-    checkNTP = true;
-  } else {
-    checkNTP = false;
-  }
-  if( checkNTP ) {
+  //DateTime externalDateTime = internalDateTime;
+  int64_t seconds_since_last_ntp_update = abs( internalDateTime.unixtime() - lastSyncDateTime.unixtime() );
+  if ( seconds_since_last_ntp_update >= 3600 ) { // GPS sync every hour
+    log_e("seconds_since_last_ntp_update = now(%d) - last(%d) = %d seconds", internalDateTime.unixtime(), lastSyncDateTime.unixtime(), seconds_since_last_ntp_update);
     #if TIME_UPDATE_SOURCE==TIME_UPDATE_BLE // will trigger bletime if any BLETimeServer is found
       ForceBleTime = true;
       HasBTTime = false;
       return false;
     #elif HAS_GPS==true && TIME_UPDATE_SOURCE==TIME_UPDATE_GPS
-      setGPSTime( NULL );
-      return true;
+      return setGPSTime();
     #else
-      return false;
+      #if HAS_EXTERNAL_RTC // adjust internal RTC accordingly, needed for filesystem operations
+        DateTime externalDateTime = RTC.now(); // this may return some shit when I2C fails
+        setTime( externalDateTime.unixtime() );
+        return true;
+      #else
+        // no reliable time source to update from
+        return false;
+      #endif
     #endif
-  } else { // just calculate the drift
-    int64_t drift = abs( externalDateTime.unixtime() - internalDateTime.unixtime() );
-    if(drift>0) {
-      Serial.printf("[Clocks drift] : %lld seconds\n", drift);
-    }
-    // - adjust internal RTC
-    #if HAS_EXTERNAL_RTC // have external RTC, adjust internal RTC accordingly
-      setTime( externalDateTime.unixtime() );
-      if(drift > 5) {
-        log_e("[***** WTF Clocks don't agree after adjustment] %d - %d = %d", internalDateTime.unixtime(), externalDateTime.unixtime(), drift);
-      } else {
-        log_i("[***** OK Clocks agree-ish] %d - %d = %d", internalDateTime.unixtime(), externalDateTime.unixtime(), drift);
-      }
-      return true;
-    #else
-      return false;
-    #endif
+  } else {
+    // no need to update time
+    return false;
   }
 }
 
@@ -80,8 +62,13 @@ void TimeInit() {
     const timeval *tv = &epoch;
     settimeofday(tv, NULL);
     struct tm now;
-    getLocalTime(&now,0);
-    dumpTime("RTC DateTime:", nowDateTime);
+    if( getLocalTime(&now,0) ) {
+      dumpTime("RTC DateTime:", nowDateTime);
+    } else {
+      log_d("Failed to get system time after setting RTC");
+    }
+
+
     TimeIsSet = true;
   #endif
 }

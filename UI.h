@@ -202,7 +202,7 @@ class UIUtils {
       tft_initOrientation(); // messing with this may break the scroll
       tft_setBrightness( brightness );
 
-      // make sure non-printable chars aren't printed
+      // make sure non-printable chars aren't printed (also disables utf8)
       tft.setAttribute( lgfx::cp437_switch, true );
 
       Out.init();
@@ -375,6 +375,13 @@ class UIUtils {
 
       takeMuxSemaphore();
       isQuerying = true;
+
+      /*
+      if( !ScreenShotLoaded ) {
+        M5.ScreenShot.init( &tft, BLE_FS );
+        M5.ScreenShot.begin();
+        ScreenShotLoaded = true;
+      }*/
 
       int16_t yRef = Out.yRef - Out.scrollTopFixedArea;
       // match pixel copy area with scroll area
@@ -1101,13 +1108,17 @@ class UIUtils {
       }
 
       if( !isEmpty( BleCard->uuid ) ) {
-        BLEUUID tmpID;
-        tmpID.fromString(BleCard->uuid);
-        const char* serviceStr = BLEDevHelper.gattServiceToString( tmpID );
-        if( strcmp( serviceStr, "Unknown" ) != 0 ) {
+
+        //BLEUUID tmpID;
+        //tmpID.fromString(BleCard->uuid);
+        BLEGATTService srv = BLEDevHelper.gattServiceDescription( BleCard->uuid );
+        //const char* serviceStr = BLEDevHelper.gattServiceDescription( tmpID );
+
+        // TODO: icon render
+        if( strcmp( srv.name, "Unknown" ) != 0 ) {
           blockHeight += Out.println( SPACE );
           *ouiStr = {'\0'};
-          sprintf( ouiStr, ouiTpl, serviceStr );
+          sprintf( ouiStr, ouiTpl, srv.name );
           hop = Out.println( ouiStr );
           blockHeight += hop;
         }

@@ -46,53 +46,58 @@ static void GPSRead() {
 }
 
 
-static void setGPSTime( void * param ) {
+
+static bool setGPSTime() {
   if( !GPSHasDateTime ) {
     Serial.println("GPS has no valid DateTime, cowardly aborting");
-    return;
+    return false;
   }
 
   if(gps.date.isValid() && gps.time.isValid() && gps.date.year() > 2000) {
-    DateTime UTCTime = DateTime(gps.date.year(), gps.date.month(), gps.date.day(), gps.time.hour(), gps.time.minute(), gps.time.second());
-    DateTime LocalTime = UTCTime.unixtime() + timeZone*3600;
+    // fetch GPS Time
+    DateTime GPS_UTC_Time = DateTime(gps.date.year(), gps.date.month(), gps.date.day(), gps.time.hour(), gps.time.minute(), gps.time.second());
+    // apply timeZone
+    DateTime GPS_Local_Time = GPS_UTC_Time.unixtime() + timeZone*3600;
     #if HAS_EXTERNAL_RTC
-      RTC.adjust( LocalTime );
-      Serial.printf("External clock adjusted to GPS Time (GMT%s%d): %04d-%02d-%02d %02d:%02d:%02d\n",
+      RTC.adjust( GPS_Local_Time );
+      // TODO: check if RTC.adjust worked
+      Serial.printf("External RTC adjusted from GPS Time (GMT%s%d): %04d-%02d-%02d %02d:%02d:%02d\n",
         timeZone>0 ? "+" : "",
         timeZone,
-        LocalTime.year(),
-        LocalTime.month(),
-        LocalTime.day(),
-        LocalTime.hour(),
-        LocalTime.minute(),
-        LocalTime.second()
+        GPS_Local_Time.year(),
+        GPS_Local_Time.month(),
+        GPS_Local_Time.day(),
+        GPS_Local_Time.hour(),
+        GPS_Local_Time.minute(),
+        GPS_Local_Time.second()
       );
     #endif
-    setTime( LocalTime.unixtime() );
-    timeval epoch = {(time_t)LocalTime.unixtime(), 0};
+    setTime( GPS_Local_Time.unixtime() );
+    timeval epoch = {(time_t)GPS_Local_Time.unixtime(), 0};
     const timeval *tv = &epoch;
     settimeofday(tv, NULL);
 
     struct tm now;
-    getLocalTime(&now,0);
+    if( !getLocalTime(&now,0) ) {
+      log_e("Failed to getLocalTime() after setTime() && settimeofday()");
+      return false;
+    } else {
+      dumpTime( "Internal RTC adjusted from GPS Time", &now );
+      logTimeActivity(SOURCE_GPS, GPS_Local_Time.unixtime());
+      lastSyncDateTime = GPS_Local_Time;
+      return true;
+    }
 
-    Serial.printf("Internal clock adjusted to GPS Time (GMT%s%d): %04d-%02d-%02d %02d:%02d:%02d\n",
-      timeZone>0 ? "+" : "",
-      timeZone,
-      LocalTime.year(),
-      LocalTime.month(),
-      LocalTime.day(),
-      LocalTime.hour(),
-      LocalTime.minute(),
-      LocalTime.second()
-    );
-    logTimeActivity(SOURCE_GPS, LocalTime.unixtime());
-    lastSyncDateTime = LocalTime;
   } else {
-    Serial.printf("Can't set GPS Time (no signal since %ld seconds)\n", NoGPSSignalSince/1000);
+    Serial.printf("Can't set GPS Time yet (no signal since %ld seconds)\n", NoGPSSignalSince/1000);
+    return false;
   }
 }
 
+// task wrapper
+static void setGPSTime( void * param ) {
+  setGPSTime();
+}
 
 
 /*

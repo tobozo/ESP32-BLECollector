@@ -172,7 +172,6 @@ struct OUIPsramCacheStruct {
 #define OUIDBSize 25523 // how many entries in the OUI lookup DB
 OUIPsramCacheStruct** OuiPsramCache = NULL;
 
-
 #define BLE_COLLECTOR_DB_FILE    "blemacs.db" // default filename for storing collected data
 #define MAC_OUI_NAMES_DB_FILE    "mac-oui-light.db" // oui list of known mac addresses
 #define BLE_VENDOR_NAMES_DB_FILE "ble-oui.db" // ble device/service names by mac address
@@ -486,14 +485,13 @@ class DBUtils {
         }
       }
       if( HourChangeTrigger ) {
-        // try to adjust time if available
         #if HAS_GPS
-          setGPSTime( NULL );
+          // setGPSTime( NULL );
         #else
+          // try to adjust time if available
           ForceBleTime = true;
         #endif
         log_w("Hour changed, will trigger replication");
-
 
         DBneedsReplication = true;
         HourChangeTrigger = false;
@@ -730,11 +728,22 @@ class DBUtils {
       }
       open(BLE_COLLECTOR_DB, false);
 
+      String tmpName      = String( CacheItem->name );
+      String tmpOuiname   = String ( CacheItem->ouiname );
+      String tmpManufname = String( CacheItem->manufname );
+      String tmpUuid      = String( CacheItem->uuid );
+
+      // TODO: use prepared statements https://github.com/siara-cc/esp32_arduino_sqlite3_lib/blob/master/examples/sqlite3_insert_long_blob/sqlite3_insert_long_blob.ino
+      tmpName.replace("'", "''");
+      tmpOuiname.replace("'", "''");
+      tmpManufname.replace("'", "''");
+      tmpUuid.replace("'", "''");
+/*
       clean( CacheItem->name );
       clean( CacheItem->ouiname );
       clean( CacheItem->manufname );
       clean( CacheItem->uuid );
-
+*/
       sprintf(YYYYMMDD_HHMMSS_Str, YYYYMMDD_HHMMSS_Tpl,
         CacheItem->created_at.year(),
         CacheItem->created_at.month(),
@@ -746,13 +755,13 @@ class DBUtils {
 
       sprintf(insertQuery, insertQueryTemplate,
         CacheItem->appearance,
-        CacheItem->name, // SQL Injection or crash ? :-)
+        tmpName.c_str(), // CacheItem->name, // SQL Injection or crash ? :-)
         CacheItem->address,
-        CacheItem->ouiname,
+        tmpOuiname.c_str(), // CacheItem->ouiname,
         CacheItem->rssi,
         CacheItem->manufid,
-        CacheItem->manufname,
-        CacheItem->uuid,
+        tmpManufname.c_str(), // CacheItem->manufname,
+        tmpUuid.c_str(), // CacheItem->uuid,
         YYYYMMDD_HHMMSS_Str,
         YYYYMMDD_HHMMSS_Str,
         CacheItem->hits
