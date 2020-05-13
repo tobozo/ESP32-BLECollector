@@ -38,7 +38,7 @@ Software requirements (updated)
 ---------------------
   - [mandatory] Arduino IDE
   - [⚠ NEW][mandatory] [NimBLE Library](https://github.com/h2zero/NimBLE-Arduino/archive/master.zip) supersedes the BLE (legacy or custom) library versions, install it manually in the Arduino/Libraries folder.
-  - [⚠ NEW][mandatory] [ESP32-Chimera-Core "LGFX Edition"](https://github.com/tobozo/ESP32-Chimera-Core/archive/lgfx_test.zip) (M5Stack core substitute with display driver on steroids, still in beta-testing).
+  - [⚠ NEW][mandatory] [ESP32-Chimera-Core "LGFX Edition"](https://github.com/tobozo/ESP32-Chimera-Core/archive/1.0.0-alpha.zip) (M5Stack core substitute with display driver on steroids, still in beta-testing).
   - [mandatory] https://github.com/tobozo/M5Stack-SD-Updater
   - [mandatory] https://github.com/PaulStoffregen/Time
   - [mandatory] https://github.com/siara-cc/esp32_arduino_sqlite3_lib
