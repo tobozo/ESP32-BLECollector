@@ -6,7 +6,7 @@
 static bool checkForTimeUpdate( DateTime &internalDateTime ) {
   //DateTime externalDateTime = internalDateTime;
   int64_t seconds_since_last_ntp_update = abs( internalDateTime.unixtime() - lastSyncDateTime.unixtime() );
-  if ( seconds_since_last_ntp_update >= 3600 ) { // GPS sync every hour
+  if ( seconds_since_last_ntp_update >= 3500 ) { // GPS sync every hour +/- 3% precision
     log_e("seconds_since_last_ntp_update = now(%d) - last(%d) = %d seconds", internalDateTime.unixtime(), lastSyncDateTime.unixtime(), seconds_since_last_ntp_update);
     #if TIME_UPDATE_SOURCE==TIME_UPDATE_BLE // will trigger bletime if any BLETimeServer is found
       ForceBleTime = true;
