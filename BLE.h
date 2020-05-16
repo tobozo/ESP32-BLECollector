@@ -234,7 +234,7 @@ class BLEScanUtils {
         Out.scrollNextPage();
         UI.PrintFatalError( "[ERROR]: .db files not found" );
         giveMuxSemaphore();
-        UI.begin();
+        //UI.begin();
         startFileSharingServer();
 
         #ifdef WITH_WIFI
@@ -245,7 +245,7 @@ class BLEScanUtils {
         WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
         startSerialTask();
         startScanCB();
-        UI.begin();
+        //UI.begin();
       }
     }
 

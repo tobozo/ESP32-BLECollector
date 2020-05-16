@@ -446,10 +446,10 @@ static const uint16_t BLE_TRANSPARENT = TFT_TRANSPARENT;
 static const uint16_t HEADER_BGCOLOR      = tft_color565(0x22, 0x22, 0x22);
 static const uint16_t FOOTER_BGCOLOR      = tft_color565(0x22, 0x22, 0x22);
 // BLECard info styling
-static const uint16_t IN_CACHE_COLOR      = tft_color565(0x37, 0x6b, 0x37);
-static const uint16_t NOT_IN_CACHE_COLOR  = tft_color565(0xa4, 0xa0, 0x5f);
-static const uint16_t ANONYMOUS_COLOR     = tft_color565(0x88, 0xaa, 0xaa);
-static const uint16_t NOT_ANONYMOUS_COLOR = tft_color565(0xee, 0xee, 0xee);
+static const uint16_t IN_CACHE_COLOR      = tft_color565(0x87, 0xff, 0x87);
+static const uint16_t NOT_IN_CACHE_COLOR  = tft_color565(0xff, 0xa0, 0x5f);
+static const uint16_t ANONYMOUS_COLOR     = tft_color565(0xaa, 0xcc, 0xcc);
+static const uint16_t NOT_ANONYMOUS_COLOR = tft_color565(0xee, 0xff, 0xee);
 // one carefully chosen blue
 static const uint16_t BLUETOOTH_COLOR     = tft_color565(0x14, 0x54, 0xf0);
 static const uint16_t BLE_DARKORANGE      = tft_color565(0x80, 0x40, 0x00);

@@ -202,6 +202,8 @@ class UIUtils {
       tft_initOrientation(); // messing with this may break the scroll
       tft_setBrightness( brightness );
 
+      begin(); // start graph
+
       // make sure non-printable chars aren't printed (also disables utf8)
       tft.setAttribute( lgfx::cp437_switch, true );
 
@@ -1249,7 +1251,7 @@ class UIUtils {
       uint16_t boxHeight = MacScrollView[card_index].blockHeight-2;
       uint16_t boxWidth  = Out.width - 2;
       uint16_t boxPosY   = newYPos + 1;
-      for( int16_t color=255; color>64; color-- ) {
+      for( int16_t color=255; color>64; color-=4 ) {
         Out.drawScrollableRoundRect( 1, boxPosY, boxWidth, boxHeight, 4, tft_color565(color, color, color) );
         delay(8); // TODO: use a timer
       }
