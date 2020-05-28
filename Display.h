@@ -508,6 +508,7 @@ static bool foundFileServer = false;
 static bool RTCisRunning = false;
 static bool ForceBleTime = false;
 static bool HasBTTime = false;
+static bool RamCacheReady = false;
 
 static unsigned long blinknow = millis(); // task blinker start time
 static unsigned long scanTime = SCAN_DURATION * 1000; // task blinker duration

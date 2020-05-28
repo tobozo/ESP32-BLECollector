@@ -31,7 +31,8 @@
 
 
 
-char *macAddressToColorStr = (char*)calloc(MAC_LEN+1, sizeof(char*));
+char *macAddressToColorStr = new char[MAC_LEN+1];
+static int AvatarizedMACWidth = -1, AvatarizedMACHeight = -1;
 
 // github avatar style mac address visual code generation \o/
 // builds a 8x8 vertically symetrical matrix based on the
@@ -70,10 +71,14 @@ struct MacAddressColors {
     color = (msb*256) + lsb;
   }
   void spriteDraw( TFT_eSprite *sprite, uint16_t x, uint16_t y ) {
-    sprite->setPsram( false );
-    sprite->setColorDepth( 16 );
-    sprite->createSprite( scaleX*8, scaleY*8 );
-    sprite->setWindow( 0, 0, scaleX * 8, scaleY*8 );
+    if( AvatarizedMACWidth==-1 && AvatarizedMACHeight==-1 ) {
+      AvatarizedMACWidth  = scaleX*8;
+      AvatarizedMACHeight = scaleY*8;
+      sprite->setPsram( false );
+      sprite->setColorDepth( 16 );
+      sprite->createSprite( AvatarizedMACWidth, AvatarizedMACHeight );
+    } // no need to clear sprite, all pixels will be overwritten
+    sprite->setWindow( 0, 0, AvatarizedMACWidth, AvatarizedMACHeight );
     for( uint8_t i = 0; i < 8; i++ ) {
       for( uint8_t sy = 0; sy < scaleY; sy++ ) {
         for( uint8_t j = 0; j < 8; j++ ) {
@@ -86,11 +91,11 @@ struct MacAddressColors {
       }
     }
     sprite->pushSprite( x, y );
-    sprite->deleteSprite();
   }
+  // vertical blitter for upscaled rendering
   void chopDraw( int32_t posx, int32_t posy, uint16_t height ) {
-    if( height%scaleY != 0 || height > scaleY * 8 ) { // not a multiple !!
-      log_e("Bad height request, height %d must be a multiple of scaleY %d and inferior to sizeY %d", height, scaleY, scaleY*8 );
+    if( height%scaleY != 0 || height > AvatarizedMACHeight ) { // not a multiple !!
+      log_e("Bad height request, height %d must be a multiple of scaleY %d and inferior to sizeY %d", height, scaleY, AvatarizedMACHeight );
       return;
     }
     uint8_t amount = height / scaleY;
@@ -99,7 +104,7 @@ struct MacAddressColors {
       return;
     }
     tft.startWrite();
-    tft.setAddrWindow( posx, posy, scaleX * 8, height );
+    tft.setAddrWindow( posx, posy, AvatarizedMACWidth, height );
     for( uint8_t i = choplevel; i < choplevel + amount; i++ ) {
       for( uint8_t sy = 0; sy < scaleY; sy++ ) {
         for( uint8_t j = 0; j < 8; j++ ) {
@@ -202,20 +207,18 @@ class UIUtils {
       tft_initOrientation(); // messing with this may break the scroll
       tft_setBrightness( brightness );
 
-      begin(); // start graph
+      // start heap graph
+      xTaskCreatePinnedToCore(taskHeapGraph, "taskHeapGraph", 1024, NULL, 0, NULL, 1);
 
       // make sure non-printable chars aren't printed (also disables utf8)
       tft.setAttribute( lgfx::cp437_switch, true );
 
       Out.init();
       setUISizePos(); // set position/dimensions for widgets and other UI items
+
       setIconBar(); // setup icon bar
-
-      RGBColor colorstart = { 0x44, 0x44, 0x88 };
-      RGBColor colorend   = { 0x22, 0x22, 0x44 };
-
-
 /*
+      // test icons from the icon bar
       struct DrawSet {
         void drawJpg( const char* name, const unsigned char *jpeg, int32_t len, uint16_t x, uint16_t y, uint16_t w, uint16_t h ) {
           Serial.printf("Rendering %s [%d*%d] at [%d, %d]\n", name, w, h, x, y);
@@ -262,6 +265,9 @@ class UIUtils {
         ;
       }
       */
+
+      RGBColor colorstart = { 0x44, 0x44, 0x88 };
+      RGBColor colorend   = { 0x22, 0x22, 0x44 };
 
       if (clearScreen) {
         tft.fillScreen(BLE_BLACK);
@@ -317,11 +323,6 @@ class UIUtils {
       } else {
         Out.scrollNextPage();
       }
-    }
-
-    void begin() {
-      // alloc some ram for the heap graph
-      xTaskCreatePinnedToCore(taskHeapGraph, "taskHeapGraph", 1024, NULL, 0, NULL, 1);
     }
 
 
@@ -673,6 +674,10 @@ class UIUtils {
     }
 
     static void hallOfMac( int32_t * sorted, int32_t * lastsorted ) {
+
+
+      if( !RamCacheReady ) return;
+
       // get the 8 top hits in the cache
       size_t macFound = 0;
       int16_t index = BLEDEVCACHE_SIZE-1;
@@ -820,8 +825,8 @@ class UIUtils {
       lastWaketime = xTaskGetTickCount();
       devGraphFirstStatTime = millis();
 
-      int32_t *sorted     = (int32_t*)malloc( sizeof(int32_t) * hallOfMacSize );
-      int32_t *lastsorted = (int32_t*)malloc( sizeof(int32_t) * hallOfMacSize );
+      int32_t *sorted     = new int32_t[hallOfMacSize+1];
+      int32_t *lastsorted = new int32_t[hallOfMacSize+1];
 
       for( uint16_t i = 0; i< hallOfMacSize; i++ ) {
         sorted[i]     = -1;

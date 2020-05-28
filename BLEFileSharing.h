@@ -31,6 +31,10 @@
 
 #define TICKS_TO_DELAY 1000
 
+// French "StopCodid" app's Service UUID
+// TODO: add more of those
+static BLEUUID StopCovidServiceUUID("910c7798-9f3a-11ea-bb37-0242ac130002");
+
 static BLEUUID FileSharingServiceUUID( "f59f6622-1540-0001-8d71-362b9e155667" ); // generated UUID for the service
 static BLEUUID FileSharingWriteUUID(   "f59f6622-1540-0002-8d71-362b9e155667" ); // characteristic to write file_chunk locally
 static BLEUUID FileSharingRouteUUID(   "f59f6622-1540-0003-8d71-362b9e155667" ); // characteristic to manage routing

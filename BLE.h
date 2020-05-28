@@ -121,6 +121,11 @@ static bool deviceHasPayload( BLEAdvertisedDevice advertisedDevice ) {
       return true;
     }
   }
+
+  if( advertisedDevice.isAdvertisingService( StopCovidServiceUUID ) ) {
+    log_n("Found StopCovid Advertisement %s : %s", advertisedDevice.getAddress().toString().c_str(), advertisedDevice.getServiceUUID().toString().c_str() );
+  }
+
   return false;
 }
 
@@ -234,7 +239,6 @@ class BLEScanUtils {
         Out.scrollNextPage();
         UI.PrintFatalError( "[ERROR]: .db files not found" );
         giveMuxSemaphore();
-        //UI.begin();
         startFileSharingServer();
 
         #ifdef WITH_WIFI
@@ -245,7 +249,7 @@ class BLEScanUtils {
         WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
         startSerialTask();
         startScanCB();
-        //UI.begin();
+        RamCacheReady = true;
       }
     }
 
