@@ -678,11 +678,11 @@ class UIUtils {
 
       if( !RamCacheReady ) return;
 
-      // get the 8 top hits in the cache
+      // get the n top hits in the cache ( n=hallOfMacSize )
       size_t macFound = 0;
       int16_t index = BLEDEVCACHE_SIZE-1;
-      uint16_t x;
-      uint16_t y;
+
+      takeMuxSemaphore();
 
       while( index >= 0 ) {
         if( isEmpty( BLEDevRAMCache[index]->address ) || BLEDevRAMCache[index]->hits == 0 ) {
@@ -714,29 +714,30 @@ class UIUtils {
       }
       if( macFound > 0 ) {
         for( uint16_t i = 0; i < hallOfMacSize; i++ ) {
-          x = hallOfMacPosX + (i%hallofMacCols) * hallOfMacItemWidth;
-          y = hallOfMacPosY + ((i/hallofMacCols)%hallofMacRows) * hallOfMacItemHeight;
+          uint16_t x = hallOfMacPosX + (i%hallofMacCols) * hallOfMacItemWidth;
+          uint16_t y = hallOfMacPosY + ((i/hallofMacCols)%hallofMacRows) * hallOfMacItemHeight;
           if( i<macFound ) {
             if( lastsorted[i] != sorted[i] ) {
-              takeMuxSemaphore();
+              //takeMuxSemaphore();
               // cleanup current slot
               animClear( x, y, hallOfMacItemWidth, hallOfMacItemHeight, FOOTER_BGCOLOR, BLE_WHITE );
               // draw current slot
               MacAddressColors AvatarizedMAC( BLEDevRAMCache[sorted[i]]->address, 2, 1 );
               AvatarizedMAC.spriteDraw( &animSprite, hallOfMacHmargin + x, hallOfMacVmargin + y );
-              giveMuxSemaphore();
+              //giveMuxSemaphore();
             }
           } else {
             if( lastsorted[i] > 0 ) {
-              takeMuxSemaphore();
+              //takeMuxSemaphore();
               //tft.fillRect( hallOfMacHmargin + x, hallOfMacVmargin + y, hallOfMacItemWidth, hallOfMacItemHeight, FOOTER_BGCOLOR );
               animClear( x, y, hallOfMacItemWidth, hallOfMacItemHeight, FOOTER_BGCOLOR, BLE_WHITE );
-              giveMuxSemaphore();
+              //giveMuxSemaphore();
             }
           }
         }
         //Serial.println();
       }
+      giveMuxSemaphore();
     }
 
     static void textCounters() {
