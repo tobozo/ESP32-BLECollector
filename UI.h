@@ -575,12 +575,14 @@ class UIUtils {
     }
 
     static void PrintProgressBar(uint16_t width) {
+      takeMuxSemaphore();
       if( width > Out.width || width == 0 ) { // clear
         tft.fillRect(0,     progressBarY, Out.width, 2, BLE_DARKGREY);
       } else {
         tft.fillRect(0,     progressBarY, width,           2, BLUETOOTH_COLOR);
         tft.fillRect(width, progressBarY, Out.width-width, 2, BLE_DARKGREY);
       }
+      giveMuxSemaphore();
     }
 
     static void SetTimeStateIcon() {
@@ -605,9 +607,7 @@ class UIUtils {
       if (!blinkit || blinknow >= blinkthen) {
         blinkit = false;
         if( BLEActivityIcon.status != ICON_STATUS_IDLE ) {
-          takeMuxSemaphore();
           PrintProgressBar( 0 );
-          giveMuxSemaphore();
           BLEActivityIcon.setStatus( ICON_STATUS_IDLE );
         }
         return;
@@ -631,9 +631,7 @@ class UIUtils {
       if (lastprogress + 1000 < blinknow) {
         unsigned long remaining = blinkthen - blinknow;
         int percent = 100 - ( ( remaining * 100 ) / scanTime );
-        takeMuxSemaphore();
         PrintProgressBar( (Out.width * percent) / 100 );
-        giveMuxSemaphore();
         lastprogress = blinknow;
       }
     }

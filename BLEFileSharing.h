@@ -638,9 +638,7 @@ static void FileSharingServerTask(void* p) {
 
   while (1) {
     if ( FileReceiverProgress != progress ) {
-      takeMuxSemaphore();
       UI.PrintProgressBar( (Out.width * FileReceiverProgress) / 100 );
-      giveMuxSemaphore();
       progress = FileReceiverProgress;
       //vTaskDelay(10);
     }
@@ -709,9 +707,7 @@ void FileSharingSendFile( BLERemoteCharacteristic* RemoteChar, const char* filen
   uint32_t len = fileToTransfer.read( buff, BLE_FILECOPY_BUFFSIZE );
   log_w("Starting transfert...");
   UI.headerStats(filename);
-  takeMuxSemaphore();
   UI.PrintProgressBar( 0 );
-  giveMuxSemaphore();
   int lastpercent = 0;
   while ( len > 0 ) {
     fileSharingClientLastActivity = millis();
@@ -726,19 +722,14 @@ void FileSharingSendFile( BLERemoteCharacteristic* RemoteChar, const char* filen
       log_v("SUCCESS sending %d bytes (%d percent done) %d / %d", len, percent, progress, totalsize);
     }
     if ( lastpercent != percent ) {
-      takeMuxSemaphore();
       UI.PrintProgressBar( (Out.width * percent) / 100 );
-      giveMuxSemaphore();
       lastpercent = percent;
       vTaskDelay(10);
     }
     len = fileToTransfer.read( buff, BLE_FILECOPY_BUFFSIZE );
     vTaskDelay(10);
   }
-  takeMuxSemaphore();
   UI.PrintProgressBar( 0 );
-  giveMuxSemaphore();
-
   UI.headerStats("[OK]");
   log_w("Transfer finished!");
   fileToTransfer.close();
