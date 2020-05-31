@@ -122,9 +122,9 @@ static const int AMIGABALL_YPOS = 50;
 #endif
 
 
-static TFT_eSprite gradientSprite( &tft );
-static TFT_eSprite heapGraphSprite( &tft );
-static TFT_eSprite animSprite( &tft );
+static TFT_eSprite gradientSprite( &tft );  // gradient background
+static TFT_eSprite heapGraphSprite( &tft ); // activity graph
+static TFT_eSprite hallOfMacSprite( &tft ); // mac address badge holder
 
 
 // TODO: make this SD-driver dependant rather than platform dependant

@@ -32,7 +32,6 @@
 
 
 char *macAddressToColorStr = new char[MAC_LEN+1];
-static int AvatarizedMACWidth = -1, AvatarizedMACHeight = -1;
 
 // github avatar style mac address visual code generation \o/
 // builds a 8x8 vertically symetrical matrix based on the
@@ -43,6 +42,7 @@ struct MacAddressColors {
   uint8_t MACBytes[8]; // 8x8
   uint16_t color;
   uint8_t scaleX, scaleY;
+  int width = -1, height = -1;
   size_t size;
   size_t choplevel = 0;
   MacAddressColors( const char* address, byte _scaleX, byte _scaleY ) {
@@ -71,14 +71,14 @@ struct MacAddressColors {
     color = (msb*256) + lsb;
   }
   void spriteDraw( TFT_eSprite *sprite, uint16_t x, uint16_t y ) {
-    if( AvatarizedMACWidth==-1 && AvatarizedMACHeight==-1 ) {
-      AvatarizedMACWidth  = scaleX*8;
-      AvatarizedMACHeight = scaleY*8;
+    if( width==-1 && height==-1 ) {
+      width  = scaleX*8;
+      height = scaleY*8;
       sprite->setPsram( false );
       sprite->setColorDepth( 16 );
-      sprite->createSprite( AvatarizedMACWidth, AvatarizedMACHeight );
+      sprite->createSprite( width, height );
     } // no need to clear sprite, all pixels will be overwritten
-    sprite->setWindow( 0, 0, AvatarizedMACWidth, AvatarizedMACHeight );
+    sprite->setWindow( 0, 0, width, height );
     for( uint8_t i = 0; i < 8; i++ ) {
       for( uint8_t sy = 0; sy < scaleY; sy++ ) {
         for( uint8_t j = 0; j < 8; j++ ) {
@@ -93,18 +93,22 @@ struct MacAddressColors {
     sprite->pushSprite( x, y );
   }
   // vertical blitter for upscaled rendering
-  void chopDraw( int32_t posx, int32_t posy, uint16_t height ) {
-    if( height%scaleY != 0 || height > AvatarizedMACHeight ) { // not a multiple !!
-      log_e("Bad height request, height %d must be a multiple of scaleY %d and inferior to sizeY %d", height, scaleY, AvatarizedMACHeight );
+  void chopDraw( int32_t posx, int32_t posy, uint16_t _height ) {
+    if( width==-1 && height==-1 ) {
+      width  = scaleX*8;
+      height = scaleY*8;
+    }
+    if( _height%scaleY != 0 || _height > height ) { // not a multiple !!
+      log_e("Bad height request, height %d must be a multiple of scaleY %d and inferior to sizeY %d", _height, scaleY, height );
       return;
     }
-    uint8_t amount = height / scaleY;
+    uint8_t amount = _height / scaleY;
     if( choplevel + amount > 8 || amount <= 0 ) { // out of range
       log_e("Bad height request ( i=%d; i<%d; i++)", choplevel, choplevel+amount );
       return;
     }
     tft.startWrite();
-    tft.setAddrWindow( posx, posy, AvatarizedMACWidth, height );
+    tft.setAddrWindow( posx, posy, width, _height );
     for( uint8_t i = choplevel; i < choplevel + amount; i++ ) {
       for( uint8_t sy = 0; sy < scaleY; sy++ ) {
         for( uint8_t j = 0; j < 8; j++ ) {
@@ -463,7 +467,7 @@ class UIUtils {
         y = hallOfMacPosY + ((counter/hallofMacCols)%hallofMacRows) * hallOfMacItemHeight;
         MacAddressColors AvatarizedMAC( randomAddressStr, 2, 1 );
         takeMuxSemaphore();
-        AvatarizedMAC.spriteDraw( &animSprite, hallOfMacHmargin + x, hallOfMacVmargin + y );
+        AvatarizedMAC.spriteDraw( &hallOfMacSprite, hallOfMacHmargin + x, hallOfMacVmargin + y );
         giveMuxSemaphore();
         counter++;
         vTaskDelay(30);
@@ -721,7 +725,7 @@ class UIUtils {
               animClear( x, y, hallOfMacItemWidth, hallOfMacItemHeight, FOOTER_BGCOLOR, BLE_WHITE );
               // draw current slot
               MacAddressColors AvatarizedMAC( BLEDevRAMCache[sorted[i]]->address, 2, 1 );
-              AvatarizedMAC.spriteDraw( &animSprite, hallOfMacHmargin + x, hallOfMacVmargin + y );
+              AvatarizedMAC.spriteDraw( &hallOfMacSprite, hallOfMacHmargin + x, hallOfMacVmargin + y );
               //giveMuxSemaphore();
             }
           } else {
