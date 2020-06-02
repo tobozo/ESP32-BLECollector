@@ -31,7 +31,7 @@
 
 
 
-char *macAddressToColorStr = (char*)calloc(MAC_LEN+1, sizeof(char*));
+char *macAddressToColorStr = new char[MAC_LEN+1];
 
 // github avatar style mac address visual code generation \o/
 // builds a 8x8 vertically symetrical matrix based on the
@@ -42,6 +42,7 @@ struct MacAddressColors {
   uint8_t MACBytes[8]; // 8x8
   uint16_t color;
   uint8_t scaleX, scaleY;
+  int width = -1, height = -1;
   size_t size;
   size_t choplevel = 0;
   MacAddressColors( const char* address, byte _scaleX, byte _scaleY ) {
@@ -70,10 +71,14 @@ struct MacAddressColors {
     color = (msb*256) + lsb;
   }
   void spriteDraw( TFT_eSprite *sprite, uint16_t x, uint16_t y ) {
-    sprite->setPsram( false );
-    sprite->setColorDepth( 16 );
-    sprite->createSprite( scaleX*8, scaleY*8 );
-    sprite->setWindow( 0, 0, scaleX * 8, scaleY*8 );
+    if( width==-1 && height==-1 ) {
+      width  = scaleX*8;
+      height = scaleY*8;
+      sprite->setPsram( false );
+      sprite->setColorDepth( 16 );
+      sprite->createSprite( width, height );
+    } // no need to clear sprite, all pixels will be overwritten
+    sprite->setWindow( 0, 0, width, height );
     for( uint8_t i = 0; i < 8; i++ ) {
       for( uint8_t sy = 0; sy < scaleY; sy++ ) {
         for( uint8_t j = 0; j < 8; j++ ) {
@@ -86,20 +91,24 @@ struct MacAddressColors {
       }
     }
     sprite->pushSprite( x, y );
-    sprite->deleteSprite();
   }
-  void chopDraw( int32_t posx, int32_t posy, uint16_t height ) {
-    if( height%scaleY != 0 || height > scaleY * 8 ) { // not a multiple !!
-      log_e("Bad height request, height %d must be a multiple of scaleY %d and inferior to sizeY %d", height, scaleY, scaleY*8 );
+  // vertical blitter for upscaled rendering
+  void chopDraw( int32_t posx, int32_t posy, uint16_t _height ) {
+    if( width==-1 && height==-1 ) {
+      width  = scaleX*8;
+      height = scaleY*8;
+    }
+    if( _height%scaleY != 0 || _height > height ) { // not a multiple !!
+      log_e("Bad height request, height %d must be a multiple of scaleY %d and inferior to sizeY %d", _height, scaleY, height );
       return;
     }
-    uint8_t amount = height / scaleY;
+    uint8_t amount = _height / scaleY;
     if( choplevel + amount > 8 || amount <= 0 ) { // out of range
       log_e("Bad height request ( i=%d; i<%d; i++)", choplevel, choplevel+amount );
       return;
     }
     tft.startWrite();
-    tft.setAddrWindow( posx, posy, scaleX * 8, height );
+    tft.setAddrWindow( posx, posy, width, _height );
     for( uint8_t i = choplevel; i < choplevel + amount; i++ ) {
       for( uint8_t sy = 0; sy < scaleY; sy++ ) {
         for( uint8_t j = 0; j < 8; j++ ) {
@@ -182,7 +191,10 @@ class UIUtils {
     void init() {
       Serial.begin(115200);
       Serial.println(welcomeMessage);
-      Serial.printf("RTC_PROFILE: %s\nHAS_EXTERNAL_RTC: %s\nHAS_GPS: %s\nTIME_UPDATE_SOURCE: %d\n",
+      Serial.printf("HAS BUTTONS: %s,\nHAS_XPAD: %s\nHAS PSRAM: %s\nRTC_PROFILE: %s\nHAS_EXTERNAL_RTC: %s\nHAS_GPS: %s\nTIME_UPDATE_SOURCE: %d\n",
+        hasHID() ? "true" : "false",
+        hasXPaxShield() ? "true" : "false",
+        psramInit() ? "true" : "false",
         RTC_PROFILE,
         HAS_EXTERNAL_RTC ? "true" : "false",
         HAS_GPS ? "true" : "false",
@@ -198,8 +210,65 @@ class UIUtils {
       tft_begin();
       tft_initOrientation(); // messing with this may break the scroll
       tft_setBrightness( brightness );
+
+      // start heap graph
+      xTaskCreatePinnedToCore(taskHeapGraph, "taskHeapGraph", 1024, NULL, 0, NULL, 1);
+
+      // make sure non-printable chars aren't printed (also disables utf8)
+      tft.setAttribute( lgfx::cp437_switch, true );
+
+      Out.init();
       setUISizePos(); // set position/dimensions for widgets and other UI items
+
       setIconBar(); // setup icon bar
+/*
+      // test icons from the icon bar
+      struct DrawSet {
+        void drawJpg( const char* name, const unsigned char *jpeg, int32_t len, uint16_t x, uint16_t y, uint16_t w, uint16_t h ) {
+          Serial.printf("Rendering %s [%d*%d] at [%d, %d]\n", name, w, h, x, y);
+          delay(100);
+          tft.drawJpg( (const uint8_t *)jpeg, len, x, y, w, h );
+        }
+      } drawSet;
+
+      // 8x8 icons
+      drawSet.drawJpg(  "01", filter_jpeg,            filter_jpeg_len,            10, 10, 10, 8 );
+      drawSet.drawJpg(  "02", filter_unset_jpeg,      filter_unset_jpeg_len,      10, 10, 10, 8 );
+      drawSet.drawJpg(  "03", disk_jpeg,              disk_jpeg_len,              10, 10, 8,  8 );
+      drawSet.drawJpg(  "04", ghost_jpeg,             ghost_jpeg_len,             10, 10, 8,  8 );
+      drawSet.drawJpg(  "05", earth_jpeg,             earth_jpeg_len,             10, 10, 8,  8 );
+      drawSet.drawJpg(  "06", insert_jpeg,            insert_jpeg_len,            10, 10, 8,  8 );
+      drawSet.drawJpg(  "07", moai_jpeg,              moai_jpeg_len,              10, 10, 8,  8 );
+      drawSet.drawJpg(  "08", ram_jpeg,               ram_jpeg_len,               10, 10, 8,  8 );
+      drawSet.drawJpg(  "09", clock_jpeg,             clock_jpeg_len,             10, 10, 8,  8 );
+      drawSet.drawJpg(  "10", clock3_jpeg,            clock3_jpeg_len,            10, 10, 8,  8 );
+      drawSet.drawJpg(  "11", clock2_jpeg,            clock2_jpeg_len,            10, 10, 8,  8 );
+      drawSet.drawJpg(  "12", zzz_jpeg,               zzz_jpeg_len,               10, 10, 8,  8 );
+      drawSet.drawJpg(  "13", update_jpeg,            update_jpeg_len,            10, 10, 8,  8 );
+      drawSet.drawJpg(  "14", service_jpeg,           service_jpeg_len,           10, 10, 8,  8 );
+      drawSet.drawJpg(  "15", espressif_jpeg,         espressif_jpeg_len,         10, 10, 8,  8 );
+      drawSet.drawJpg(  "16", apple16_jpeg,           apple16_jpeg_len,           10, 10, 8,  8 );
+      drawSet.drawJpg(  "17", crosoft_jpeg,           crosoft_jpeg_len,           10, 10, 8,  8 );
+      drawSet.drawJpg(  "18", generic_jpeg,           generic_jpeg_len,           10, 10, 8,  8 );
+      // ?x8 icons
+      drawSet.drawJpg(  "19", nic16_jpeg,             nic16_jpeg_len,             10, 10, 13, 8 );
+      drawSet.drawJpg(  "20", ibm8_jpg,               ibm8_jpg_len,               10, 10, 20, 8 );
+      drawSet.drawJpg(  "21", speaker_icon_jpg,       speaker_icon_jpg_len,       10, 10, 6,  8 );
+      drawSet.drawJpg(  "22", name_jpeg,              name_jpeg_len,              10, 10, 7,  8 );
+      drawSet.drawJpg(  "23", BLECollector_Title_jpg, BLECollector_Title_jpg_len, 10, 10, 82, 8 );
+      // ?x? icons
+      drawSet.drawJpg(  "24", ble_jpeg,               ble_jpeg_len,               10, 10, 7,  11 );
+      drawSet.drawJpg(  "25", db_jpeg,                db_jpeg_len,                10, 10, 12, 11 );
+      drawSet.drawJpg(  "26", tbz_28x28_jpg,          tbz_28x28_jpg_len,          10, 10, 28, 28 );
+      drawSet.drawJpg(  "27", disk00_jpg,             disk00_jpg_len,             10, 10, 30, 30 );
+      drawSet.drawJpg(  "28", disk01_jpg,             disk01_jpg_len,             10, 10, 30, 30 );
+      drawSet.drawJpg(  "29", gps_jpg,                gps_jpg_len,                10, 10, 10, 10 );
+      drawSet.drawJpg(  "30", nogps_jpg,              nogps_jpg_len,              10, 10, 10, 10 );
+
+      while(1) {
+        ;
+      }
+      */
 
       RGBColor colorstart = { 0x44, 0x44, 0x88 };
       RGBColor colorend   = { 0x22, 0x22, 0x44 };
@@ -244,6 +313,7 @@ class UIUtils {
       } else {
         headerStats("Init SD");
       }
+
       Out.setupScrollArea( headerHeight, footerHeight, colorstart, colorend );
 
       SDSetup();
@@ -257,11 +327,6 @@ class UIUtils {
       } else {
         Out.scrollNextPage();
       }
-    }
-
-    void begin() {
-      // alloc some ram for the heap graph
-      xTaskCreatePinnedToCore(taskHeapGraph, "taskHeapGraph", 1024, NULL, 0, NULL, 1);
     }
 
 
@@ -314,107 +379,67 @@ class UIUtils {
 
 
     static void screenShot() {
-/*
+
       takeMuxSemaphore();
       isQuerying = true;
-      if( snapNeedsScrollReset() ) {
-        // reset scroll before snapping to avoid messing up the chunks order
-        tft_setupScrollArea(0, tft.height(), 0);
-        tft_scrollTo(0);
-      }
-      M5.ScreenShot.snap("BLECollector", true);
-      if( snapNeedsScrollReset() ) {
-        // restore initial scroll setup
-        tft_setupScrollArea(headerHeight, tft.height()-(headerHeight+footerHeight), footerHeight);
-      }
+
+      /*
+      if( !ScreenShotLoaded ) {
+        M5.ScreenShot.init( &tft, BLE_FS );
+        M5.ScreenShot.begin();
+        ScreenShotLoaded = true;
+      }*/
+
+      int16_t yRef = Out.yRef - Out.scrollTopFixedArea;
+      // match pixel copy area with scroll area
+      tft.setScrollRect(0, Out.scrollTopFixedArea, Out.width, Out.yArea);
+      tft_hScrollTo( Out.scrollTopFixedArea ); // reset hardware scroll position before capturing
+      tft_scrollTo( -yRef ); // reverse software-scroll to compensate hardware scroll offset
+
+      //M5.ScreenShot.snapBMP("BLECollector", false);
+      //M5.ScreenShot.snapJPG("BLECollector", false);
+      M5.ScreenShot.snap("BLECollector", false); // filename prefix, show image after capture
+
+      // restore scroll states
+      tft_scrollTo( yRef ); // restore software scroll
+      tft_hScrollTo( Out.yRef ); // restore hardware scroll
+
       isQuerying = false;
       giveMuxSemaphore();
-*/
-/*
-      if( psramInit() ) {
-        char screenshotFilenameStr[42] = {'\0'};
-        const char* screenshotFilenameTpl = "/screenshot-%04d-%02d-%02d_%02dh%02dm%02ds.jpg";
-        sprintf(screenshotFilenameStr, screenshotFilenameTpl, year(), month(), day(), hour(), minute(), second());
-
-        takeMuxSemaphore();
-        uint8_t *imgBuffer = (uint8_t*)calloc( (Out.width*3)+1, sizeof( uint8_t ) );
-
-        for(uint16_t y=0; y<headerHeight; y++) { // header portion
-          tft.readRectRGB(0, y, Out.width, 1, imgBuffer);
-          for( int j=0; j<Out.width*3; j++ ) {
-            uint32_t rgb888Index = ( y* Out.width ) + j;
-            M5.ScreenShot.rgb888Buffer[rgb888Index]   = imgBuffer[j];
-          }
-        }
-        for(uint16_t y=Out.yStart; y<Out.height-footerHeight; y++) { // lower scroll portion
-          tft.readRectRGB(0, y, Out.width, 1, imgBuffer);
-          for( int j=0; j<Out.width*3; j++ ) {
-            uint32_t rgb888Index = ( y* Out.width ) + j;
-            M5.ScreenShot.rgb888Buffer[rgb888Index]   = imgBuffer[j];
-          }
-        }
-        for(uint16_t y=headerHeight; y<Out.yStart; y++) { // upper scroll portion
-          tft.readRectRGB(0, y, Out.width, 1, imgBuffer);
-          for( int j=0; j<Out.width*3; j++ ) {
-            uint32_t rgb888Index = ( y* Out.width ) + j;
-            M5.ScreenShot.rgb888Buffer[rgb888Index]   = imgBuffer[j];
-          }
-        }
-        for(uint16_t y=Out.height-footerHeight; y<Out.height; y++) { // footer portion
-          tft.readRectRGB(0, y, Out.width, 1, imgBuffer);
-          for( int j=0; j<Out.width*3; j++ ) {
-            uint32_t rgb888Index = ( y* Out.width ) + j;
-            M5.ScreenShot.rgb888Buffer[rgb888Index]   = imgBuffer[j];
-          }
-        }
-
-        if ( !M5.ScreenShot.JPEGEncoder.encodeToFile( screenshotFilenameStr, Out.width, Out.height, 3, M5.ScreenShot.rgb888Buffer ) ) {
-          log_e( "[ERROR] Could not write JPG file to: %s", screenshotFilenameStr );
-        } else {
-          Serial.printf( "Screenshot saved as %s\n", screenshotFilenameStr );
-        }
-        //free( rgb888Buffer );
-        free( imgBuffer );
-
-        giveMuxSemaphore();
-      }
-*/
 
     }
 
     static void screenShow( void * fileName = NULL ) {
+
       if( fileName == NULL ) return;
       isQuerying = true;
+
+      // reset hardware scroll position before printing
+      tft_hScrollTo( Out.scrollTopFixedArea );
 
       if( String( (const char*)fileName ).endsWith(".jpg" ) ) {
         if( !BLE_FS.exists( (const char*)fileName ) ) {
           log_e("File %s does not exist\n", (const char*)fileName );
-          isQuerying = false;
-          return;
+        } else {
+          takeMuxSemaphore();
+          Out.scrollNextPage(); // reset scroll position to zero otherwise image will have offset
+          tft.drawJpgFile( BLE_FS, (const char*)fileName, 0, 0, Out.width, Out.height, 0, 0, JPEG_DIV_NONE );
+          giveMuxSemaphore();
+          vTaskDelay( 5000 );
         }
-        takeMuxSemaphore();
-        Out.scrollNextPage(); // reset scroll position to zero otherwise image will have offset
-        tft.drawJpgFile( BLE_FS, (const char*)fileName, 0, 0, Out.width, Out.height, 0, 0, JPEG_DIV_NONE );
-        giveMuxSemaphore();
-        vTaskDelay( 5000 );
-        return;
       }
-      if( String( (const char*)fileName ).endsWith(".565" ) ) {
-        File screenshotFile = BLE_FS.open( (const char*)fileName );
-        if(!screenshotFile) {
-          Serial.printf("Failed to open file %s\n", (const char*)fileName );
-          screenshotFile.close();
-          return;
+      if( String( (const char*)fileName ).endsWith(".bmp" ) ) {
+        if( !BLE_FS.exists( (const char*)fileName ) ) {
+          log_e("File %s does not exist\n", (const char*)fileName );
+        } else {
+          takeMuxSemaphore();
+          Out.scrollNextPage(); // reset scroll position to zero otherwise image will have offset
+          tft.drawBmpFile( BLE_FS, (const char*)fileName, 0, 0 );
+          giveMuxSemaphore();
+          vTaskDelay( 5000 );
         }
-        takeMuxSemaphore();
-        Out.scrollNextPage(); // reset scroll position to zero otherwise image will have offset
-        uint16_t imgBuffer[320]; // one scan line used for screen capture
-        for(uint16_t y=0; y<Out.height; y++) {
-          screenshotFile.read( (uint8_t*)imgBuffer, sizeof(uint16_t)*Out.width );
-          tft_drawBitmap(0, y, Out.width, 1, imgBuffer);
-        }
-        giveMuxSemaphore();
       }
+
       isQuerying = false;
     }
 
@@ -437,12 +462,12 @@ class UIUtils {
                 randomAddress[4],
                 randomAddress[5]
         );
-        log_w("Generated fake mac: %s", randomAddressStr);
+        log_d("Generated fake mac: %s", randomAddressStr);
         x = hallOfMacPosX + (counter%hallofMacCols) * hallOfMacItemWidth;
         y = hallOfMacPosY + ((counter/hallofMacCols)%hallofMacRows) * hallOfMacItemHeight;
         MacAddressColors AvatarizedMAC( randomAddressStr, 2, 1 );
         takeMuxSemaphore();
-        AvatarizedMAC.spriteDraw( &animSprite, hallOfMacHmargin + x, hallOfMacVmargin + y );
+        AvatarizedMAC.spriteDraw( &hallOfMacSprite, hallOfMacHmargin + x, hallOfMacVmargin + y );
         giveMuxSemaphore();
         counter++;
         vTaskDelay(30);
@@ -549,14 +574,19 @@ class UIUtils {
     static void PrintFatalError( const char* message, uint16_t yPos = AMIGABALL_YPOS ) {
       alignTextAt( message, 0, yPos, BLE_YELLOW, BLECARD_BGCOLOR, ALIGN_CENTER );
     }
+    static void PrintProgressBar(float progress, float magnitude) {
+      PrintProgressBar( (Out.width * progress) / magnitude );
+    }
 
     static void PrintProgressBar(uint16_t width) {
+      takeMuxSemaphore();
       if( width > Out.width || width == 0 ) { // clear
-        tft.fillRect(0, progressBarY, Out.width, 2, BLE_DARKGREY);
+        tft.fillRect(0,     progressBarY, Out.width, 2, BLE_DARKGREY);
       } else {
         tft.fillRect(0,     progressBarY, width,           2, BLUETOOTH_COLOR);
         tft.fillRect(width, progressBarY, Out.width-width, 2, BLE_DARKGREY);
       }
+      giveMuxSemaphore();
     }
 
     static void SetTimeStateIcon() {
@@ -581,9 +611,7 @@ class UIUtils {
       if (!blinkit || blinknow >= blinkthen) {
         blinkit = false;
         if( BLEActivityIcon.status != ICON_STATUS_IDLE ) {
-          takeMuxSemaphore();
           PrintProgressBar( 0 );
-          giveMuxSemaphore();
           BLEActivityIcon.setStatus( ICON_STATUS_IDLE );
         }
         return;
@@ -607,9 +635,7 @@ class UIUtils {
       if (lastprogress + 1000 < blinknow) {
         unsigned long remaining = blinkthen - blinknow;
         int percent = 100 - ( ( remaining * 100 ) / scanTime );
-        takeMuxSemaphore();
         PrintProgressBar( (Out.width * percent) / 100 );
-        giveMuxSemaphore();
         lastprogress = blinknow;
       }
     }
@@ -617,22 +643,32 @@ class UIUtils {
     // spawn subtasks and leave
     static void taskHeapGraph( void * pvParameters ) { // always running
       mux = xSemaphoreCreateMutex();
-      //xTaskCreatePinnedToCore(heapGraph, "HeapGraph", 1816, NULL, 4, NULL, 0); /* last = Task Core */
       takeMuxSemaphore();
       for( uint16_t i = 0; i < hallOfMacSize; i++ ) {
         uint16_t x = hallOfMacPosX + (i%hallofMacCols) * hallOfMacItemWidth;
         uint16_t y = hallOfMacPosY + ((i/hallofMacCols)%hallofMacRows) * hallOfMacItemHeight;
         animClear( x, y, hallOfMacItemWidth, hallOfMacItemHeight, FOOTER_BGCOLOR, BLE_WHITE );
       }
+      heapGraphSprite.setPsram( false );
+      heapGraphSprite.setColorDepth( 16 );
+      heapGraphSprite.createSprite( graphLineWidth, graphLineHeight );
       giveMuxSemaphore();
+
       xTaskCreatePinnedToCore(clockSync, "clockSync", 2048, NULL, 2, NULL, 1); // RTC wants to run on core 1 or it fails
-      xTaskCreatePinnedToCore(drawableItems, "drawableItems", 1816, NULL, 2, NULL, 1); // RTC wants to run on core 1 or it fails
+      xTaskCreatePinnedToCore(drawableItems, "drawableItems", 6144, NULL, 2, NULL, 1);
       vTaskDelete(NULL);
     }
 
 
     static void drawableItems( void * param ) {
       while(1) {
+        if( freeheap != lastfreeheap ) {
+          takeMuxSemaphore();
+          heapmap[heapindex++] = freeheap;
+          heapindex = heapindex % heapMapBuffLen;
+          lastfreeheap = freeheap;
+          giveMuxSemaphore();
+        }
         PrintBlinkableWidgets();
         BLECollectorIconBar.draw( BLECollectorIconBarX, BLECollectorIconBarY );
         vTaskDelay( 100 );
@@ -640,11 +676,15 @@ class UIUtils {
     }
 
     static void hallOfMac( int32_t * sorted, int32_t * lastsorted ) {
-      // get the 8 top hits in the cache
+
+
+      if( !RamCacheReady ) return;
+
+      // get the n top hits in the cache ( n=hallOfMacSize )
       size_t macFound = 0;
       int16_t index = BLEDEVCACHE_SIZE-1;
-      uint16_t x;
-      uint16_t y;
+
+      takeMuxSemaphore();
 
       while( index >= 0 ) {
         if( isEmpty( BLEDevRAMCache[index]->address ) || BLEDevRAMCache[index]->hits == 0 ) {
@@ -676,29 +716,30 @@ class UIUtils {
       }
       if( macFound > 0 ) {
         for( uint16_t i = 0; i < hallOfMacSize; i++ ) {
-          x = hallOfMacPosX + (i%hallofMacCols) * hallOfMacItemWidth;
-          y = hallOfMacPosY + ((i/hallofMacCols)%hallofMacRows) * hallOfMacItemHeight;
+          uint16_t x = hallOfMacPosX + (i%hallofMacCols) * hallOfMacItemWidth;
+          uint16_t y = hallOfMacPosY + ((i/hallofMacCols)%hallofMacRows) * hallOfMacItemHeight;
           if( i<macFound ) {
             if( lastsorted[i] != sorted[i] ) {
-              takeMuxSemaphore();
+              //takeMuxSemaphore();
               // cleanup current slot
               animClear( x, y, hallOfMacItemWidth, hallOfMacItemHeight, FOOTER_BGCOLOR, BLE_WHITE );
               // draw current slot
               MacAddressColors AvatarizedMAC( BLEDevRAMCache[sorted[i]]->address, 2, 1 );
-              AvatarizedMAC.spriteDraw( &animSprite, hallOfMacHmargin + x, hallOfMacVmargin + y );
-              giveMuxSemaphore();
+              AvatarizedMAC.spriteDraw( &hallOfMacSprite, hallOfMacHmargin + x, hallOfMacVmargin + y );
+              //giveMuxSemaphore();
             }
           } else {
             if( lastsorted[i] > 0 ) {
-              takeMuxSemaphore();
+              //takeMuxSemaphore();
               //tft.fillRect( hallOfMacHmargin + x, hallOfMacVmargin + y, hallOfMacItemWidth, hallOfMacItemHeight, FOOTER_BGCOLOR );
               animClear( x, y, hallOfMacItemWidth, hallOfMacItemHeight, FOOTER_BGCOLOR, BLE_WHITE );
-              giveMuxSemaphore();
+              //giveMuxSemaphore();
             }
           }
         }
         //Serial.println();
       }
+      giveMuxSemaphore();
     }
 
     static void textCounters() {
@@ -775,7 +816,7 @@ class UIUtils {
               mincdpmpp = devCountPerMinutePerPeriod[i];
             }
           }
-          log_i( "%d devices per minute per %d seconds  (%.2f), min(%d), max(%d)", totalCount, (devGraphPeriodLong/1000), (float)totalCount/60, mincdpmpp, maxcdpmpp );
+          log_v( "%d devices per minute per %d seconds  (%.2f), min(%d), max(%d)", totalCount, (devGraphPeriodLong/1000), (float)totalCount/60, mincdpmpp, maxcdpmpp );
         }
         devCountWasUpdated = true;
     }
@@ -787,10 +828,8 @@ class UIUtils {
       lastWaketime = xTaskGetTickCount();
       devGraphFirstStatTime = millis();
 
-      heapGraphSprite.setPsram( false );
-
-      int32_t *sorted     = (int32_t*)malloc( sizeof(int32_t) * hallOfMacSize );
-      int32_t *lastsorted = (int32_t*)malloc( sizeof(int32_t) * hallOfMacSize );
+      int32_t *sorted     = new int32_t[hallOfMacSize+1];
+      int32_t *lastsorted = new int32_t[hallOfMacSize+1];
 
       for( uint16_t i = 0; i< hallOfMacSize; i++ ) {
         sorted[i]     = -1;
@@ -828,9 +867,6 @@ class UIUtils {
         return;
       }
       devCountWasUpdated = false;
-      heapmap[heapindex++] = freeheap;
-      heapindex = heapindex % heapMapBuffLen;
-      lastfreeheap = freeheap;
 
       // render heatmap
       uint16_t GRAPH_COLOR = BLE_WHITE;
@@ -839,9 +875,10 @@ class UIUtils {
       uint32_t toleranceline = graphLineHeight;
       uint32_t minline = 0;
       uint16_t GRAPH_BG_COLOR = BLE_BLACK;
+      uint16_t currentheapindex = heapindex;
       // dynamic scaling
       for (uint8_t i = 0; i < graphLineWidth; i++) {
-        int thisindex = int(heapindex - graphLineWidth + i + heapMapBuffLen) % heapMapBuffLen;
+        int thisindex = int(currentheapindex - graphLineWidth + i + heapMapBuffLen) % heapMapBuffLen;
         uint32_t heapval = heapmap[thisindex];
         if (heapval != 0 && heapval < graphMin) {
           graphMin =  heapval;
@@ -866,13 +903,11 @@ class UIUtils {
         toleranceline = map(toleranceheap, graphMin, graphMax, 0, graphLineHeight);
       }
       // draw graph
-      takeMuxSemaphore();
 
-      heapGraphSprite.setColorDepth( 8 );
-      heapGraphSprite.createSprite( graphLineWidth, graphLineHeight );
+      heapGraphSprite.fillSprite( BLE_BLACK );
 
       for (uint8_t i = 0; i < graphLineWidth; i++) {
-        int thisindex = int(heapindex - graphLineWidth + i + heapMapBuffLen) % heapMapBuffLen;
+        int thisindex = int(currentheapindex - graphLineWidth + i + heapMapBuffLen) % heapMapBuffLen;
         uint32_t heapval = heapmap[thisindex];
         if ( heapval > toleranceheap ) {
           // nominal, all green
@@ -951,8 +986,8 @@ class UIUtils {
         // join last/first
         heapGraphSprite.drawLine( dcpmLastX, dcpmLastY, graphLineWidth, dcpmFirstY, BLE_DARKBLUE );
       }
+      takeMuxSemaphore();
       heapGraphSprite.pushSprite( graphX, graphY );
-      heapGraphSprite.deleteSprite();
       giveMuxSemaphore();
     }
 
@@ -1083,13 +1118,17 @@ class UIUtils {
       }
 
       if( !isEmpty( BleCard->uuid ) ) {
-        BLEUUID tmpID;
-        tmpID.fromString(BleCard->uuid);
-        const char* serviceStr = BLEDevHelper.gattServiceToString( tmpID );
-        if( strcmp( serviceStr, "Unknown" ) != 0 ) {
+
+        //BLEUUID tmpID;
+        //tmpID.fromString(BleCard->uuid);
+        BLEGATTService srv = BLEDevHelper.gattServiceDescription( BleCard->uuid );
+        //const char* serviceStr = BLEDevHelper.gattServiceDescription( tmpID );
+
+        // TODO: icon render
+        if( strcmp( srv.name, "Unknown" ) != 0 ) {
           blockHeight += Out.println( SPACE );
           *ouiStr = {'\0'};
-          sprintf( ouiStr, ouiTpl, serviceStr );
+          sprintf( ouiStr, ouiTpl, srv.name );
           hop = Out.println( ouiStr );
           blockHeight += hop;
         }
@@ -1220,7 +1259,7 @@ class UIUtils {
       uint16_t boxHeight = MacScrollView[card_index].blockHeight-2;
       uint16_t boxWidth  = Out.width - 2;
       uint16_t boxPosY   = newYPos + 1;
-      for( int16_t color=255; color>64; color-- ) {
+      for( int16_t color=255; color>64; color-=4 ) {
         Out.drawScrollableRoundRect( 1, boxPosY, boxWidth, boxHeight, 4, tft_color565(color, color, color) );
         delay(8); // TODO: use a timer
       }
@@ -1319,7 +1358,7 @@ class UIUtils {
         break;
         default:
         case 0:
-          barColors[0] = RED; // want: RAINBOW
+          barColors[0] = BLE_RED; // want: RAINBOW
         break;
       }
       tft.fillRect(x,          y + 4*size, 2*size, 4*size, barColors[0]);
@@ -1382,7 +1421,7 @@ class UIUtils {
     }
 
 
-    static void alignTextAt(const char* text, uint16_t x, uint16_t y, int16_t color = BLE_YELLOW, int16_t bgcolor = BLE_TRANSPARENT, uint8_t textAlign = ALIGN_FREE) {
+    static void alignTextAt(const char* text, uint16_t x, uint16_t y, uint16_t color = BLE_YELLOW, uint16_t bgcolor = BLE_TRANSPARENT, uint8_t textAlign = ALIGN_FREE) {
       if( isEmpty( text ) ) return;
       if( bgcolor != BLE_TRANSPARENT ) {
         tft.setTextColor( color, bgcolor );
@@ -1652,10 +1691,21 @@ class UIUtils {
       dcpmFirstY = baseCoordY;
       dcpmppFirstY = baseCoordY;
 
-      log_w("Will allocate heapgraph buffer to %d", heapMapBuffLen );
+      log_w("Allocating heapgraph buffers (%d and %d bytes)", heapMapBuffLen*sizeof( uint16_t ),  heapMapBuffLen*sizeof( uint32_t ));
+
       devCountPerMinutePerPeriod = (uint16_t*)calloc( heapMapBuffLen, sizeof( uint16_t ) );
+      if( devCountPerMinutePerPeriod != NULL ) {
+        log_d("'devCountPerMinutePerPeriod' allocation successful");
+      } else {
+        log_e("'devCountPerMinutePerPeriod' allocation of %d bytes failed!", heapMapBuffLen*sizeof( uint32_t ) );
+      }
+
       heapmap = (uint32_t*)calloc( heapMapBuffLen, sizeof( uint32_t ) );
-      log_w("Allocation successful");
+      if( heapmap != NULL ) {
+        log_d("'heapmap' allocation successful");
+      } else {
+        log_e("'heapmap' allocation of %d bytes failed!", heapMapBuffLen*sizeof( uint32_t ) );
+      }
 
     }
 

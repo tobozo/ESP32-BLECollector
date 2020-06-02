@@ -81,7 +81,7 @@ static char colValue[32] = {'\0'}; // search result
   strftime('%s', updated_at) as updated_at, \
   hits \
 "
-#define insertQueryTemplate "INSERT INTO blemacs(" BLEMAC_INSERT_FIELDNAMES ") VALUES(%d,\"%s\",\"%s\",\"%s\",%d,%d,\"%s\",\"%s\",'%s.000000','%s.000000', '%d')"
+#define insertQueryTemplate "INSERT INTO blemacs(" BLEMAC_INSERT_FIELDNAMES ") VALUES(%d,'%s','%s','%s',%d,%d,'%s','%s','%s.000000','%s.000000', '%d')"
 
 // all DB queries
 #define nameQuery    "SELECT DISTINCT SUBSTR(name,0,32) FROM blemacs where TRIM(name)!=''"
@@ -175,15 +175,20 @@ OUIPsramCacheStruct** OuiPsramCache = NULL;
 #define BLE_COLLECTOR_DB_FILE    "blemacs.db" // default filename for storing collected data
 #define MAC_OUI_NAMES_DB_FILE    "mac-oui-light.db" // oui list of known mac addresses
 #define BLE_VENDOR_NAMES_DB_FILE "ble-oui.db" // ble device/service names by mac address
+#define BLE_DB_FILES_URL_PREFIX  "https://github.com/tobozo/ESP32-BLECollector/releases/download/1.0.0/"
+#define MAC_OUI_NAMES_DB_FS_SIZE         933888 // change this according to the file size
+#define BLE_VENDOR_NAMES_DB_FS_SIZE      73728 // change this according to the file size
 
+#define MAC_OUI_NAMES_DB_URL             BLE_DB_FILES_URL_PREFIX MAC_OUI_NAMES_DB_FILE
+#define BLE_VENDOR_NAMES_DB_URL          BLE_DB_FILES_URL_PREFIX BLE_VENDOR_NAMES_DB_FILE
 #define BLE_COLLECTOR_DB_SQLITE_PATH     "/" BLE_FS_TYPE "/" BLE_COLLECTOR_DB_FILE
 #define MAC_OUI_NAMES_DB_SQLITE_PATH     "/" BLE_FS_TYPE "/" MAC_OUI_NAMES_DB_FILE
 #define BLE_VENDOR_NAMES_DB_SQLITE_PATH  "/" BLE_FS_TYPE "/" BLE_VENDOR_NAMES_DB_FILE
 #define BLE_COLLECTOR_DB_FS_PATH         "/" BLE_COLLECTOR_DB_FILE
 #define MAC_OUI_NAMES_DB_FS_PATH         "/" MAC_OUI_NAMES_DB_FILE
 #define BLE_VENDOR_NAMES_DB_FS_PATH      "/" BLE_VENDOR_NAMES_DB_FILE
-#define MAC_OUI_NAMES_DB_FS_SIZE         933888 // change this according to the file size
-#define BLE_VENDOR_NAMES_DB_FS_SIZE      73728 // change this according to the file size
+
+
 
 
 class DBUtils {
@@ -443,7 +448,8 @@ class DBUtils {
       BLEDevDBCache = (BlueToothDevice*)calloc(1, sizeof( BlueToothDevice ) );
       BLEDevHelper.init( BLEDevTmp, false ); // false = make sure the copy placeholder isn't using SPI ram
       BLEDevHelper.init( BLEDevDBCache, false ); // false = make sure the copy placeholder isn't using SPI ram
-      return true;
+      initDone = true;
+      return initDone;
     }
 
 
@@ -479,14 +485,13 @@ class DBUtils {
         }
       }
       if( HourChangeTrigger ) {
-        // try to adjust time if available
         #if HAS_GPS
-          setGPSTime( NULL );
+          // setGPSTime( NULL );
         #else
+          // try to adjust time if available
           ForceBleTime = true;
         #endif
         log_w("Hour changed, will trigger replication");
-
 
         DBneedsReplication = true;
         HourChangeTrigger = false;
@@ -494,9 +499,9 @@ class DBUtils {
 
       }
       if( DBneedsReplication ) {
-        log_w("Replicating DB");
         DBneedsReplication = false;
-        //updateDBFromCache( BLEDevRAMCache, false, false );
+        log_w("Replicating DB");
+        updateDBFromCache( BLEDevRAMCache, false, false );
       }
       if( needsRestart ) {
         ESP.restart();
@@ -607,6 +612,7 @@ class DBUtils {
       open(BLE_COLLECTOR_DB);
       log_v("will run on template %s", searchDeviceTemplate );
       sprintf(searchDeviceQuery, searchDeviceTemplate, "%s", "%s", address);
+      log_d( "[SEARCH QUERY] : %s", searchDeviceQuery );
       int rc = sqlite3_exec(BLECollectorDB, searchDeviceQuery, BLEDevDBCacheCallback, (void*)dataBLE, &zErrMsg);
       if (rc != SQLITE_OK) {
         error(zErrMsg);
@@ -625,7 +631,7 @@ class DBUtils {
       open(BLE_VENDOR_NAMES_DB);
       //Out.println("Cloning Vendors DB to PSRam...");
       UI.headerStats("PSRam Cloning...");
-      int rc = sqlite3_exec(BLEVendorsDB, "SELECT id, SUBSTR(vendor, 0, 32) as vendor FROM 'ble-oui' where vendor!=''", VendorDBCallback, (void*)dataVendor, &zErrMsg);
+      int rc = sqlite3_exec(BLEVendorsDB, "SELECT id, SUBSTR(vendor, 0, 32) AS vendor FROM 'ble-oui' WHERE vendor!=''", VendorDBCallback, (void*)dataVendor, &zErrMsg);
       UI.PrintProgressBar( Out.width );
       if (rc != SQLITE_OK) {
         error(zErrMsg);
@@ -646,7 +652,7 @@ class DBUtils {
       open(MAC_OUI_NAMES_DB);
       //Out.println("Cloning Manufacturers DB to PSRam...");
       UI.headerStats("PSRam Cloning...");
-      int rc = sqlite3_exec(OUIVendorsDB, "SELECT LOWER(assignment) as mac, SUBSTR(`Organization Name`, 0, 32) as ouiname FROM 'oui-light'", OUIDBCallback, (void*)dataOUI, &zErrMsg);
+      int rc = sqlite3_exec(OUIVendorsDB, "SELECT LOWER(assignment) AS mac, SUBSTR(`Organization Name`, 0, 32) AS ouiname FROM 'oui-light' WHERE assignment!=''", OUIDBCallback, (void*)dataOUI, &zErrMsg);
       UI.PrintProgressBar( Out.width );
       if (rc != SQLITE_OK) {
         error(zErrMsg);
@@ -722,11 +728,22 @@ class DBUtils {
       }
       open(BLE_COLLECTOR_DB, false);
 
+      String tmpName      = String( CacheItem->name );
+      String tmpOuiname   = String ( CacheItem->ouiname );
+      String tmpManufname = String( CacheItem->manufname );
+      String tmpUuid      = String( CacheItem->uuid );
+
+      // TODO: use prepared statements https://github.com/siara-cc/esp32_arduino_sqlite3_lib/blob/master/examples/sqlite3_insert_long_blob/sqlite3_insert_long_blob.ino
+      tmpName.replace("'", "''");
+      tmpOuiname.replace("'", "''");
+      tmpManufname.replace("'", "''");
+      tmpUuid.replace("'", "''");
+/*
       clean( CacheItem->name );
       clean( CacheItem->ouiname );
       clean( CacheItem->manufname );
       clean( CacheItem->uuid );
-
+*/
       sprintf(YYYYMMDD_HHMMSS_Str, YYYYMMDD_HHMMSS_Tpl,
         CacheItem->created_at.year(),
         CacheItem->created_at.month(),
@@ -738,20 +755,24 @@ class DBUtils {
 
       sprintf(insertQuery, insertQueryTemplate,
         CacheItem->appearance,
-        CacheItem->name, // SQL Injection or crash ? :-)
+        tmpName.c_str(), // CacheItem->name, // SQL Injection or crash ? :-)
         CacheItem->address,
-        CacheItem->ouiname,
+        tmpOuiname.c_str(), // CacheItem->ouiname,
         CacheItem->rssi,
         CacheItem->manufid,
-        CacheItem->manufname,
-        CacheItem->uuid,
+        tmpManufname.c_str(), // CacheItem->manufname,
+        tmpUuid.c_str(), // CacheItem->uuid,
         YYYYMMDD_HHMMSS_Str,
         YYYYMMDD_HHMMSS_Str,
         CacheItem->hits
       );
+      log_d( "[INSERT QUERY] : %s", insertQuery );
       int rc = DBExec( BLECollectorDB, insertQuery );
       if (rc != SQLITE_OK) {
         log_e("SQlite Error occured when heap level was at %d : %s", freeheap, insertQuery);
+        log_e("\nHeap size: %d\n", ESP.getHeapSize());
+        log_e("Free Heap: %d\n", esp_get_free_heap_size());
+        log_e("Min Free Heap: %d\n", esp_get_minimum_free_heap_size());
         close(BLE_COLLECTOR_DB);
         CacheItem->in_db = false;
         return INSERTION_FAILED;
@@ -972,7 +993,9 @@ class DBUtils {
           colValue[colValueLen] = '\0';
           colValueLen++;
         }
-        VendorHeapCacheSet(vendorcacheindex, devid, colValue);
+        String vName = String(colValue);
+        vName.replace("'", ""); // escape quotes
+        VendorHeapCacheSet( vendorcacheindex, devid, vName.c_str() );
       } else {
         VendorHeapCacheSet(vendorcacheindex, devid, "[unknown]");
       }
@@ -1067,7 +1090,9 @@ class DBUtils {
           colValue[colValueLen] = '\0';
           colValueLen++;
         }
-        OUIHeapCacheSet( assignmentcacheindex, shortmac, colValue );
+        String oName = String(colValue);
+        oName.replace("'", ""); // escape quotes
+        OUIHeapCacheSet( assignmentcacheindex, shortmac, oName.c_str() );
       } else {
         OUIHeapCacheSet( assignmentcacheindex, shortmac, "[private]" );
       }

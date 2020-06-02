@@ -70,11 +70,11 @@ struct TimeActivity {
  *
  * External RTC needs update:
  *  - when time is not set
- *  - every 24h
+ *  - every hour
  *
  * Internal RTC needs update:
  *  - when time is not set
- *  - every hour if external RTC, otherwise every 24h
+ *  - every hour
  *
  *
  *                 External RTC | No External RTC
@@ -161,7 +161,7 @@ static void timeHousekeeping() {
 
   nowDateTime = internalDateTime;
   uptimeSet();
-  log_d("Time: %s, Uptime: %s", hhmmString, UpTimeString );
+  log_v("Time: %s, Uptime: %s", hhmmString, UpTimeString );
 }
 
 

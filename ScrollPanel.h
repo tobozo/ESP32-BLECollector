@@ -36,13 +36,19 @@ static bool isInScroll() {
 }
 
 class ScrollableOutput {
+
+  enum ScrollType {
+    SCROLL_HARDWARE,
+    SCROLL_SOFTWARE
+  };
+
   public:
-    uint16_t height = scrollpanel_height();
-    uint16_t width  = scrollpanel_width();
+    uint16_t height;// = scrollpanel_height();
+    uint16_t width;//  = scrollpanel_width();
     // scroll control variables
     uint16_t scrollTopFixedArea = 0;
     uint16_t scrollBottomFixedArea = 0;
-    uint16_t yStart = scrollTopFixedArea;
+    uint16_t yRef = scrollTopFixedArea;
     uint16_t yArea = height - scrollTopFixedArea - scrollBottomFixedArea;
     int16_t  x1_tmp, y1_tmp;
     uint16_t w_tmp, h_tmp;
@@ -52,6 +58,12 @@ class ScrollableOutput {
     //uint16_t BgColor;
     RGBColor BGColorStart;
     RGBColor BGColorEnd;
+    ScrollType scrollType = SCROLL_HARDWARE;
+
+    void init() {
+      height = scrollpanel_height();
+      width  = scrollpanel_width();
+    }
 
     int println() {
       return println(" ");
@@ -73,13 +85,21 @@ class ScrollableOutput {
       BGColorStart = colorstart;
       BGColorEnd = colorend;
       tft.setCursor(0, TFA);
-      uint16_t VSA = scrollpanel_width()-TFA-BFA;
-      tft_setupScrollArea(TFA, VSA, BFA);
-      scrollPosY = TFA;
-      scrollTopFixedArea = TFA;
+      uint16_t VSA = height-TFA-BFA;
+
+      scrollTopFixedArea    = TFA;
       scrollBottomFixedArea = BFA;
-      yStart = scrollTopFixedArea;
+
+      yRef       = scrollTopFixedArea;
+      scrollPosY = scrollTopFixedArea;
       yArea = height - scrollTopFixedArea - scrollBottomFixedArea;
+
+      tft_setupHScrollArea(TFA, VSA, BFA);
+      s_x_tmp = 0;
+      s_y_tmp = scrollTopFixedArea;
+      s_w_tmp = width;
+      s_h_tmp = yArea;
+
       log_w("*** NEW Scroll Setup: Top=%d Bottom=%d YArea=%d", TFA, BFA, yArea);
       if (clear) {
         tft_fillGradientHRect( 0, TFA, width/2, yArea, BGColorStart, BGColorEnd );
@@ -104,7 +124,7 @@ class ScrollableOutput {
       int yStart = translate(y, 0); // get the scrollview-translated y position
       if ( yStart >= scrollTopFixedArea && (yStart+_height)<(height-scrollBottomFixedArea) ) {
         // no scroll loop point overlap, just render the translated box using the native method
-        log_d("Rendering native x:%d, y:%d, width:%d, height:%d, radius:%d", x, y, _width, _height, radius);
+        log_v("Rendering native x:%d, y:%d, width:%d, height:%d, radius:%d", x, y, _width, _height, radius);
         if( fill ) {
           tft.fillRoundRect(x, yStart, _width, _height, radius, bordercolor);
         } else {
@@ -120,7 +140,7 @@ class ScrollableOutput {
         int leftHLinePosX    = leftVlinePosX + radius;
         int rightHlinePosX   = rightVlinePosX - radius;
         int hLineWidth       = _width - 2 * radius;
-        log_d("Rendering split x:%d, y:%d, width:%d, height:%d, radius:%d", x, y, _width, _height, radius);
+        log_v("Rendering split x:%d, y:%d, width:%d, height:%d, radius:%d", x, y, _width, _height, radius);
         log_v("                yStart:%d, yEnd:%d, upperBlockHeight:%d, lowerBlockHeight:%d", yStart, yEnd, upperBlockHeight, lowerBlockHeight);
 
         tft.drawFastHLine(leftHLinePosX, yStart, hLineWidth, bordercolor); // upper hline
@@ -153,15 +173,24 @@ class ScrollableOutput {
         scrollPosY = tft.getCursorY();
       }
       scrollPosX = tft.getCursorX();
-      if (scrollPosY >= (height - scrollBottomFixedArea)) {
-        scrollPosY = (scrollPosY % (height - scrollBottomFixedArea)) + scrollTopFixedArea;
+      switch( scrollType ) {
+        case SCROLL_HARDWARE:
+          if (scrollPosY >= (height - scrollBottomFixedArea)) {
+            scrollPosY = (scrollPosY % (height - scrollBottomFixedArea)) + scrollTopFixedArea;
+          }
+          tft_getTextBounds(str, scrollPosX, scrollPosY, &x1_tmp, &y1_tmp, &w_tmp, &h_tmp);
+        break;
+        case SCROLL_SOFTWARE:
+          tft_getTextBounds(str, scrollPosX, scrollPosY, &x1_tmp, &y1_tmp, &w_tmp, &h_tmp);
+          scrollPosY = (scrollTopFixedArea + yArea) - h_tmp;
+        break;
       }
-      tft_getTextBounds(str, scrollPosX, scrollPosY, &x1_tmp, &y1_tmp, &w_tmp, &h_tmp);
+
 
       tft_fillGradientHRect( 0, scrollPosY, width/2, h_tmp, BGColorStart, BGColorEnd );
       tft_fillGradientHRect( width/2, scrollPosY, width/2, h_tmp, BGColorEnd, BGColorStart );
       tft.setCursor(scrollPosX, scrollPosY);
-      scroll_slow(h_tmp, 3); // Scroll lines, 5ms per line
+      scroll_slow(h_tmp, 3); // Scroll lines, 3ms per line
       //tft.print(str);
       if( strcmp(str, " \n")!=0 ) {
         tft.drawString( str, tft.getCursorX(), tft.getCursorY());
@@ -174,15 +203,30 @@ class ScrollableOutput {
     }
     // change this function if your TFT does not handle hardware scrolling
     int scroll_slow(int lines, int wait) {
-      int yTemp = yStart;
-      scrollPosY = -1;
-      for (int i = 0; i < lines; i++) {
-        yStart++;
-        if (yStart == height - scrollBottomFixedArea) yStart = scrollTopFixedArea;
-        tft_scrollTo(yStart);
-        delay(wait);
+      int yTemp = yRef;
+      //scrollPosY = -1;
+
+      switch( scrollType ) {
+        case SCROLL_HARDWARE:
+          for (int i = 0; i < lines; i++) {
+            yRef++;
+            if (yRef == height - scrollBottomFixedArea) yRef = scrollTopFixedArea;
+            tft_hScrollTo( yRef );
+            delay(wait);
+          }
+        break;
+        case SCROLL_SOFTWARE:
+          tft_scrollTo(-lines);
+          /*
+          for (int i = 0; i < lines; i++) {
+            if (yRef <= scrollTopFixedArea ) yRef = height - scrollBottomFixedArea;
+            yRef--;
+          }
+          */
+          yTemp = abs(lines);
+        break;
       }
-      return  yTemp;
+      return yTemp;
     }
 
 };

@@ -2,8 +2,14 @@
 #include <M5StackUpdater.h> // https://github.com/tobozo/M5Stack-SD-Updater
 
 #ifndef _CHIMERA_CORE_
-  #error "This app needs ESP32 Chimera Core but M5Stack Core was selected, check your library path !!"
+  #warning "This app needs ESP32 Chimera Core but M5Stack Core was selected, check your library path !!"
+  #include <SD.h>
+  #define M5STACK_SD SD
+#else
+  #define tft M5.Lcd // syntax sugar
 #endif
+
+#include "HID_XPad.h" // external HID
 
 
 #if defined( ARDUINO_M5Stack_Core_ESP32 ) || defined( ARDUINO_M5STACK_FIRE ) || defined( ARDUINO_ODROID_ESP32 ) || defined ( ARDUINO_ESP32_DEV ) || defined( ARDUINO_DDUINO32_XS )
@@ -15,16 +21,17 @@
 #endif
 
 #define BLE_FS M5STACK_SD // inherited from ESP32-Chimera-Core
-#define tft M5.Lcd // syntax sugar
+
 #define tft_drawJpg tft.drawJpg
 #define tft_color565 tft.color565
 #define tft_readPixels tft.readRect
-#define scrollpanel_height() tft.width()
-#define scrollpanel_width() tft.height()
+#define scrollpanel_height() tft.height()
+#define scrollpanel_width() tft.width()
 #define tft_initOrientation() tft.setRotation(1)
 #define tft_drawBitmap tft.drawBitmap
-#define SD_begin BLE_FS.begin
+#define SD_begin M5StackSDBegin // BLE_FS.begin
 #define hasHID() (bool)true
+#define hasXPaxShield() (bool) false
 #define snapNeedsScrollReset() (bool)false // some TFT models need a scroll reset before screen capture
 #define BLE_FS_TYPE "sd" // sd = fs::SD, sdcard = fs::SD_MMC
 #define SKIP_INTRO // don't play intro (tft spi access messes up SD/DB init)
@@ -49,6 +56,7 @@ static const int AMIGABALL_YPOS = 50;
   // custom M5Stack/Odroid-Go go TFT/SD/RTC/GPS settings here (see ARDUINO_ESP32_DEV profile for available settings)
 
 #elif defined( ARDUINO_DDUINO32_XS )
+
   #undef hasHID
   #undef SD_begin
   #undef scrollpanel_height
@@ -75,6 +83,7 @@ static const int AMIGABALL_YPOS = 50;
   #undef HAS_EXTERNAL_RTC
   #undef HAS_GPS
   #undef hasHID
+  #undef hasXPaxShield
   #undef snapNeedsScrollReset
   #undef SD_begin
   #undef scrollpanel_height
@@ -91,6 +100,7 @@ static const int AMIGABALL_YPOS = 50;
   #define HAS_EXTERNAL_RTC true // will use RTC_SDA and RTC_SCL from settings.h
   #define HAS_GPS true // will use GPS_RX and GPS_TX from settings.h
   #define hasHID() (bool)false // disable buttons
+  #define hasXPaxShield() (bool) true
   #define snapNeedsScrollReset() (bool)true
   #define SD_begin /*(bool)true*/BLE_FS.begin // SD_MMC is auto started
   #define tft_initOrientation() tft.setRotation(0) // default orientation for hardware scroll
@@ -111,6 +121,12 @@ static const int AMIGABALL_YPOS = 50;
 
 #endif
 
+
+static TFT_eSprite gradientSprite( &tft );  // gradient background
+static TFT_eSprite heapGraphSprite( &tft ); // activity graph
+static TFT_eSprite hallOfMacSprite( &tft ); // mac address badge holder
+
+
 // TODO: make this SD-driver dependant rather than platform dependant
 static bool isInQuery() {
   return isQuerying; // M5Stack uses SPI SD, isolate SD accesses from TFT rendering
@@ -119,19 +135,37 @@ static bool isInQuery() {
 
 void tft_begin() {
   M5.begin( true, true, false, false, false ); // don't start Serial
+  //tft.init();
+  //M5.ScreenShot.init( &tft, BLE_FS );
+  //M5.ScreenShot.begin();
+
   #if HAS_EXTERNAL_RTC
-    Wire.begin(RTC_SDA, RTC_SCL);
-    M5.I2C.scan();
+    //Wire.begin(RTC_SDA, RTC_SCL);
+    //M5.I2C.scan();
   #endif
   delay( 100 );
-  if( hasHID() ) {
-    // build has buttons => enable SD Updater at boot
-    if(digitalRead(BUTTON_A_PIN) == 0) {
-      Serial.println("Will Load menu binary");
-      updateFromFS();
-      ESP.restart();
+
+  //tft.init();
+  //tft.setRotation(1);
+
+  #ifdef __M5STACKUPDATER_H
+    if( hasHID() ) {
+      // build has buttons => enable SD Updater at boot
+      if(digitalRead(BUTTON_A_PIN) == 0) {
+        Serial.println("Will Load menu binary");
+        updateFromFS();
+        ESP.restart();
+      }
+    } else if( hasXPaxShield() ) {
+      XPadShield.init();
+      XPadShield.update();
+      if( XPadShield.BtnA->wasPressed() ) {
+        Serial.println("Will Load menu binary");
+        updateFromFS();
+        ESP.restart();
+      }
     }
-  }
+  #endif
 }
 
 
@@ -142,15 +176,16 @@ void tft_setBrightness( uint8_t brightness ) {
 // emulating Adafruit's tft.getTextBounds()
 void tft_getTextBounds(const char *string, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h) {
   *w = tft.textWidth( string );
-  *h = tft.fontHeight( tft.textfont );
+  *h = tft.fontHeight();
 }
+/*
 void tft_getTextBounds(const __FlashStringHelper *s, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h) {
   *w = tft.textWidth( s );
-  *h = tft.fontHeight( tft.textfont );
-}
+  *h = tft.fontHeight();
+}*/
 void tft_getTextBounds(const String &str, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h) {
-  *w = tft.textWidth( str );
-  *h = tft.fontHeight( tft.textfont );
+  *w = tft.textWidth( str.c_str() );
+  *h = tft.fontHeight();
 }
 
 void tft_fillCircle( uint16_t x, uint16_t y, uint16_t r, uint16_t color) {
@@ -167,50 +202,109 @@ void tft_fillTriangle( uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint1
 }
 
 
+// software scroll
+/*
 void tft_setupScrollArea(uint16_t tfa, uint16_t vsa, uint16_t bfa) {
+  log_w("Init Software Scroll area with tft.setScrollRect( 0, %d, %d, %d )", tfa, tft.width(), vsa);
+  tft.setScrollRect( 0, tfa, tft.width(), vsa );
+  //tft.getScrollRect( &s_x_tmp, &s_y_tmp, &s_w_tmp, &s_h_tmp );
+}
+*/
+
+// software scroll
+static int32_t s_x_tmp, s_y_tmp, s_w_tmp, s_h_tmp;
+static uint16_t circularScrollBufferHSize = 240;
+static uint16_t circularScrollBufferVSize = 16;
+static uint16_t circularScrollBufferSize = circularScrollBufferHSize*circularScrollBufferVSize;
+void tft_scrollTo(int32_t vsp) {
+  if( vsp == 0 ) return;
+  //tft.getScrollRect( &s_x_tmp, &s_y_tmp, &s_w_tmp, &s_h_tmp );
+  int32_t direction   = vsp>0 ? 1 : -1;
+  int32_t blockHeight = abs(vsp);
+  int32_t blockSize   = s_w_tmp*blockHeight;
+  int32_t bottomY     = (s_y_tmp+s_h_tmp)-blockHeight;
+
+  if( blockSize <= circularScrollBufferSize ) {
+    // scroll area fits into buffer
+    RGBColor * scrollArea = new RGBColor[s_w_tmp*blockHeight];
+    int32_t ySrc        = 0;
+    int32_t yDest       = 0;
+    if( vsp < 0 ) {
+      ySrc  = s_y_tmp;
+      yDest = bottomY;
+    } else {
+      ySrc  = bottomY;
+      yDest = s_y_tmp;
+    }
+    tft.readRectRGB( s_x_tmp, ySrc,  s_w_tmp, blockHeight, scrollArea );
+    tft.scroll(0, vsp);
+    tft.pushImage(   s_x_tmp, yDest, s_w_tmp, blockHeight, scrollArea );
+    log_v("[block] tft.scroll(0, %d); scrollRect( %d, %d, %d, %d ) ", vsp, s_x_tmp, s_y_tmp, s_w_tmp, s_h_tmp );
+    free( scrollArea );
+  } else {
+    // scroll area doesn't fit into buffer, need to split
+    log_v("[split] tft.scroll(0, %d); scrollRect( %d, %d, %d, %d ) ", vsp, s_x_tmp, s_y_tmp, s_w_tmp, s_h_tmp );
+    // how many scan lines can the buffer fit ?
+    int scanLines = floor( circularScrollBufferSize / s_w_tmp );
+    // how many iterations these scanLines will be required to cover the current scroll zone
+    int iterations = floor( blockHeight / scanLines );
+    // are there any leftover lines
+    int leftover = blockHeight%scanLines;
+    // go recursive
+    while( iterations-- > 0 ) {
+      tft_scrollTo( scanLines * direction );
+    }
+    // do leftover lines if any
+    tft_scrollTo( leftover * direction );
+  }
+}
+
+// hardware scroll
+void tft_setupHScrollArea(uint16_t tfa, uint16_t vsa, uint16_t bfa) {
   bfa += SCROLL_OFFSET; // compensate for stubborn firmware
-  tft.writecommand(ILI9341_VSCRDEF); // Vertical scroll definition
+  tft.writecommand(0x33/*ILI9341_VSCRDEF*/); // Vertical scroll definition
   tft.writedata(tfa >> 8);           // Top Fixed Area line count
   tft.writedata(tfa);
   tft.writedata(vsa >> 8);  // Vertical Scrolling Area line count
   tft.writedata(vsa);
   tft.writedata(bfa >> 8);           // Bottom Fixed Area line count
   tft.writedata(bfa);
-  log_w("Init Scroll area with tfa/bfa %d/%d on w/h %d/%d", tfa, bfa, scrollpanel_width(), scrollpanel_height());
+  log_w("Init Hardware Scroll area with tfa/vsa/bfa %d/%d/%d on w/h %d/%d", tfa, vsa, bfa, scrollpanel_width(), scrollpanel_height());
 }
-
-
-void tft_scrollTo(uint16_t vsp) {
-  tft.writecommand(ILI9341_VSCRSADD); // Vertical scrolling pointer
+// hardware scroll
+void tft_hScrollTo(uint16_t vsp) {
+  tft.writecommand(0x37/*ILI9341_VSCRSADD*/); // Vertical scrolling pointer
   tft.writedata(vsp>>8);
   tft.writedata(vsp);
 }
 
-TFT_eSprite gradientSprite = TFT_eSprite( &tft );
-TFT_eSprite heapGraphSprite = TFT_eSprite( &tft );
-TFT_eSprite animSprite = TFT_eSprite( &tft );
 
 void tft_fillGradientHRect( uint16_t x, uint16_t y, uint16_t width, uint16_t height, RGBColor colorstart, RGBColor colorend ) {
+  log_v("tft_fillGradientHRect( %d, %d, %d, %d )\n", x, y, width, height );
   gradientSprite.setPsram( false ); // don't bother using psram for that
-  gradientSprite.setSwapBytes( false );
-  gradientSprite.createSprite( width, 1);
+  //gradientSprite.setSwapBytes( false );
   gradientSprite.setColorDepth( 16 );
+  gradientSprite.createSprite( width, 1);
+  tft.startWrite();
   gradientSprite.drawGradientHLine( 0, 0, width, colorstart, colorend );
   for( uint16_t h = 0; h < height; h++ ) {
     gradientSprite.pushSprite( x, y+h );
   }
+  tft.endWrite();
   gradientSprite.deleteSprite();
 }
 
 void tft_fillGradientVRect( uint16_t x, uint16_t y, uint16_t width, uint16_t height, RGBColor colorstart, RGBColor colorend ) {
   gradientSprite.setPsram( false ); // don't bother using psram for that
-  gradientSprite.setSwapBytes( false );
-  gradientSprite.createSprite( 1, height);
+  //gradientSprite.setSwapBytes( false );
   gradientSprite.setColorDepth( 16 );
+  gradientSprite.createSprite( 1, height);
+  tft.startWrite();
   gradientSprite.drawGradientVLine( 0, 0, height, colorstart, colorend );
   for( uint16_t w = 0; w < width; w++ ) {
     gradientSprite.pushSprite( x+w, y );
   }
+  tft.endWrite();
   gradientSprite.deleteSprite();
 }
 
@@ -352,10 +446,10 @@ static const uint16_t BLE_TRANSPARENT = TFT_TRANSPARENT;
 static const uint16_t HEADER_BGCOLOR      = tft_color565(0x22, 0x22, 0x22);
 static const uint16_t FOOTER_BGCOLOR      = tft_color565(0x22, 0x22, 0x22);
 // BLECard info styling
-static const uint16_t IN_CACHE_COLOR      = tft_color565(0x37, 0x6b, 0x37);
-static const uint16_t NOT_IN_CACHE_COLOR  = tft_color565(0xa4, 0xa0, 0x5f);
-static const uint16_t ANONYMOUS_COLOR     = tft_color565(0x88, 0xaa, 0xaa);
-static const uint16_t NOT_ANONYMOUS_COLOR = tft_color565(0xee, 0xee, 0xee);
+static const uint16_t IN_CACHE_COLOR      = tft_color565(0x87, 0xff, 0x87);
+static const uint16_t NOT_IN_CACHE_COLOR  = tft_color565(0xff, 0xa0, 0x5f);
+static const uint16_t ANONYMOUS_COLOR     = tft_color565(0xaa, 0xcc, 0xcc);
+static const uint16_t NOT_ANONYMOUS_COLOR = tft_color565(0xee, 0xff, 0xee);
 // one carefully chosen blue
 static const uint16_t BLUETOOTH_COLOR     = tft_color565(0x14, 0x54, 0xf0);
 static const uint16_t BLE_DARKORANGE      = tft_color565(0x80, 0x40, 0x00);
@@ -414,6 +508,7 @@ static bool foundFileServer = false;
 static bool RTCisRunning = false;
 static bool ForceBleTime = false;
 static bool HasBTTime = false;
+static bool RamCacheReady = false;
 
 static unsigned long blinknow = millis(); // task blinker start time
 static unsigned long scanTime = SCAN_DURATION * 1000; // task blinker duration

@@ -47,8 +47,9 @@
 // edit these values to fit your mode (can be #undef from Display.ESP32Chimeracore.h)
 #define HAS_EXTERNAL_RTC   false // uses I2C, search this file for RTC_SDA or RTC_SCL to change pins
 #define HAS_GPS            false // uses hardware serial, search this file for GPS_RX and GPS_TX to change pins
-#define TIME_UPDATE_SOURCE TIME_UPDATE_NONE // TIME_UPDATE_GPS // soon deprecated, will be implicit
-int8_t timeZone = 1; // 1 = GMT+1, 2 = GMT+2, etc
+#define TIME_UPDATE_SOURCE TIME_UPDATE_GPS // TIME_UPDATE_GPS // soon deprecated, will be implicit
+int8_t timeZone = 2; // 1 = GMT+1, 2 = GMT+2, etc
+//#define WITH_WIFI          1 // enable this on first run to download oui databases, or for sharing other .db files
 const char* NTP_SERVER = "europe.pool.ntp.org";
 
 byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
@@ -105,7 +106,7 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN 4
 #define MAX_BLECARDS_WITHOUT_TIMESTAMPS_ON_SCREEN 5
 #define BLEDEVCACHE_PSRAM_SIZE 1024 // use PSram to cache BLECards
-#define BLEDEVCACHE_HEAP_SIZE 12 // use some heap to cache BLECards. min = 5, max = 64, higher value = less SD/SD_MMC sollicitation
+#define BLEDEVCACHE_HEAP_SIZE 32 // use some heap to cache BLECards. min = 5, max = 64, higher value = less SD/SD_MMC sollicitation
 #define MAX_DEVICES_PER_SCAN MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN // also max displayed devices on the screen, affects initial scan duration
 
 #define MENU_FILENAME "/" BUILD_TYPE ".bin"
@@ -180,19 +181,26 @@ Preferences preferences;
 #endif
 
 // RF stack
+
 #ifdef WITH_WIFI
+  // minimal spiffs partition size is required for that
+  #include "ESP32FtpServer.h"
   #include <WiFi.h>
+  #include <HTTPClient.h>
+  #include <WiFiClientSecure.h>
+
   char WiFi_SSID[32];
   char WiFi_PASS[32];
+
+  HTTPClient http;
+
 #endif
 
-// BLE stack
-#include <BLEDevice.h>
-#include <BLEUtils.h>
-#include <BLEScan.h>
-#include <BLEAdvertisedDevice.h>
-#include <BLEClient.h>
-#include <BLE2902.h>
+
+// NimBLE Stack from https://github.com/h2zero/NimBLE-Arduino
+#include <NimBLEDevice.h>
+#include "NimBLE2902.h"
+
 
 // SQLite stack
 #include <sqlite3.h> // https://github.com/siara-cc/esp32_arduino_sqlite3_lib
@@ -225,7 +233,7 @@ static byte prune_trigger   = 0; // incremented on every insertion, reset on pru
 
 
 
-// load stack
+// load application stack
 #include "BLECache.h" // data struct
 #include "ScrollPanel.h" // scrolly methods
 #include "TimeUtils.h"

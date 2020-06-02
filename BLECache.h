@@ -35,6 +35,8 @@ struct BLEGATTService {
   uint32_t    assignedNumber;
 };
 
+static const BLEGATTService BLE_unknownService = {"Unknown", "", 0 };
+
 static const BLEGATTService BLE_gattServices[] = {
   {"Alert Notification Service",    "org.bluetooth.service.alert_notification",             0x1811},
   {"Automation IO",                 "org.bluetooth.service.automation_io",                  0x1815},
@@ -71,7 +73,7 @@ static const BLEGATTService BLE_gattServices[] = {
   {"Tx Power",                      "org.bluetooth.service.tx_power",                       0x1804},
   {"User Data",                     "org.bluetooth.service.user_data",                      0x181C},
   {"Weight Scale",                  "org.bluetooth.service.weight_scale",                   0x181D},
-  {"", "", 0 } // terminator
+  BLE_unknownService // terminator
 };
 
 static bool isEmpty(const char* str ) {
@@ -127,7 +129,7 @@ struct BlueToothDevice {
   uint16_t appearance = 0; // BLE Icon
   int rssi            = 0; // RSSI
   int manufid         = -1;// manufacturer data (or ID)
-  esp_ble_addr_type_t addr_type;
+  uint8_t addr_type;
   char* name      = NULL;// device name
   char* address   = NULL;// device mac address
   char* ouiname   = NULL;// oui vendor name (from mac address, see oui.h)
@@ -215,10 +217,10 @@ class BlueToothDeviceHelper {
       else if(strcmp(prop, "in_db")==0) { CacheItem->in_db = val;}
       else if(strcmp(prop, "is_anonymous")==0) { CacheItem->is_anonymous = val;}
     }
-    static void set( BlueToothDevice *CacheItem, const char* prop, esp_ble_addr_type_t val ) {
+    static void set( BlueToothDevice *CacheItem, const char* prop, uint8_t val ) {
       //log_d( "setting address type for %s", BLEAddrTypeToString( val ) ); // https://github.com/nkolban/ESP32_BLE_Arduino/blob/934702b6169b92c71cbc850876fd17fb9ee3236d/src/BLEAdvertisedDevice.h#L44
       if(!prop) return;
-      else if(strcmp(prop, "addr_type")==0)   { CacheItem->addr_type = (esp_ble_addr_type_t)(val); }
+      else if(strcmp(prop, "addr_type")==0)   { CacheItem->addr_type = (uint8_t)(val); }
     }
     static void set( BlueToothDevice *CacheItem, const char* prop, DateTime val ) {
        if(!prop) return;
@@ -273,43 +275,60 @@ class BlueToothDeviceHelper {
     }
 
     // stores in cache a given advertised device
-    static void store( BlueToothDevice *CacheItem, BLEAdvertisedDevice advertisedDevice ) {
+    static void store( BlueToothDevice *CacheItem, BLEAdvertisedDevice *advertisedDevice ) {
       reset(CacheItem);// avoid mixing new and old data
-      set(CacheItem, "address", advertisedDevice.getAddress().toString().c_str());
-      set(CacheItem, "rssi", advertisedDevice.getRSSI());
-      set(CacheItem, "addr_type", advertisedDevice.getAddressType());
-      if(  advertisedDevice.getAddressType() == BLE_ADDR_TYPE_RANDOM
-        || advertisedDevice.getAddressType() == BLE_ADDR_TYPE_RPA_RANDOM ) {
+      set(CacheItem, "address", advertisedDevice->getAddress().toString().c_str());
+      set(CacheItem, "rssi", advertisedDevice->getRSSI());
+      set(CacheItem, "addr_type", advertisedDevice->getAddressType());
+      if(  advertisedDevice->getAddressType() == BLE_ADDR_RANDOM ) {
         set(CacheItem, "ouiname", "[random]");
       } else {
         set(CacheItem, "ouiname", "[unpopulated]");
       }
-      if ( advertisedDevice.haveName() ) {
-        set(CacheItem, "name", advertisedDevice.getName().c_str());
+      if ( advertisedDevice->haveName() ) {
+        set(CacheItem, "name", advertisedDevice->getName().c_str());
       }
-      if ( advertisedDevice.haveAppearance() ) {
-        set(CacheItem, "appearance", advertisedDevice.getAppearance());
+      if ( advertisedDevice->haveAppearance() ) {
+        set(CacheItem, "appearance", advertisedDevice->getAppearance());
       }
-      if ( advertisedDevice.haveManufacturerData() ) {
-        uint8_t* mdp = (uint8_t*)advertisedDevice.getManufacturerData().data();
-        //std::string md = advertisedDevice.getManufacturerData();
-        //char *pHex = BLEUtils::buildHexData(nullptr, mdp, md.length());
+      if ( advertisedDevice->haveManufacturerData() ) {
+        uint8_t* mdp = (uint8_t*)advertisedDevice->getManufacturerData().data();
         uint8_t vlsb = mdp[0];
         uint8_t vmsb = mdp[1];
         uint16_t vint = vmsb * 256 + vlsb;
         set(CacheItem, "manufname", "[unpopulated]");
         set(CacheItem, "manufid", vint);
       }
-      if( advertisedDevice.haveServiceData() ) {
-        //Serial.printf("[%s] GATT ServiceDataUUID: '%s'\n", CacheItem->address, advertisedDevice.getServiceDataUUID().toString().c_str());
+      if( advertisedDevice->haveServiceData() ) {
+        //log_d("[%d][%s] Has Service Data[%d]", freeheap, CacheItem->address, strlen( advertisedDevice->getServiceData().c_str() ) );
+        //log_d("[%s] GATT ServiceDataUUID: '%s'", CacheItem->address, advertisedDevice->getServiceDataUUID().toString().c_str());
+        /*
+        const char* serviceData = advertisedDevice->getServiceData().c_str();
+        int datalen = strlen( advertisedDevice->getServiceData().c_str() );
+        if( datalen > 0  ) {
+          Serial.printf("[%s] Service Data[%d]: [", CacheItem->address, datalen );
+          Serial.print( advertisedDevice->getServiceData().c_str() );
+          Serial.print("] ");
+          for( int i=0; i<datalen; i++ ) {
+            Serial.printf("%02x",  serviceData[i] );
+          }
+          Serial.println();
+        }*/
       }
-      if ( advertisedDevice.haveServiceUUID() ) {
-        set(CacheItem, "uuid", advertisedDevice.getServiceUUID().toString().c_str());
-        //const char* serviceStr = gattServiceToString( advertisedDevice.getServiceUUID() );
-        //log_w("Gatt Service UUID to string %s = %s", advertisedDevice.getServiceUUID().toString().c_str(), gattServiceToString( advertisedDevice.getServiceUUID() ) );
-        //uint16_t sUUID = (uint16_t)advertisedDevice.getServiceUUID().getNative();
-        //Serial.printf("[%s] GATT ServiceUUID:     '%s'\n", CacheItem->address, advertisedDevice.getServiceUUID().toString().c_str() );
+      if ( advertisedDevice->haveServiceUUID() ) {
+        set(CacheItem, "uuid", advertisedDevice->getServiceUUID().toString().c_str());
+        BLEGATTService srv = gattServiceDescription( CacheItem->uuid );
+
+        //const char* serviceStr = gattServiceDescription( advertisedDevice->getServiceUUID() );
+        if( strcmp( srv.name, "Unknown" ) != 0 ) {
+          log_w("Gatt Service UUID to string %s = %s", advertisedDevice->getServiceUUID().toString().c_str(), srv.name );
+        }
+
+        //log_w("Gatt Service UUID to string %s = %s", advertisedDevice->getServiceUUID().toString().c_str(), gattServiceDescription( advertisedDevice->getServiceUUID() ) );
+        //uint16_t sUUID = (uint16_t)advertisedDevice->getServiceUUID().getNative();
+        //Serial.printf("[%s] GATT ServiceUUID:     '%s'\n", CacheItem->address, advertisedDevice->getServiceUUID().toString().c_str() );
       }
+
       if( TimeIsSet ) {
         CacheItem->created_at = nowDateTime;
         //log_v("Stored created_at DateTime %d", (unsigned long)nowDateTime.unixtime());
@@ -329,30 +348,52 @@ class BlueToothDeviceHelper {
       return true;
     }
 
-    static const char *BLEAddrTypeToString( esp_ble_addr_type_t type ) {
+    static const char *BLEAddrTypeToString( uint8_t type ) {
       // implented here because the BLELibrary hides this value under debug symbols
       switch (type) {
-        case BLE_ADDR_TYPE_PUBLIC:
+        case BLE_ADDR_PUBLIC:
           return "BLE_ADDR_TYPE_PUBLIC";
-        case BLE_ADDR_TYPE_RANDOM:
+        case BLE_ADDR_RANDOM:
           return "BLE_ADDR_TYPE_RANDOM";
-        case BLE_ADDR_TYPE_RPA_PUBLIC:
+        /*case BLE_ADDR_RPA_PUBLIC:
           return "BLE_ADDR_TYPE_RPA_PUBLIC";
-        case BLE_ADDR_TYPE_RPA_RANDOM:
-          return "BLE_ADDR_TYPE_RPA_RANDOM";
+        case BLE_ADDR_RPA_RANDOM:
+          return "BLE_ADDR_TYPE_RPA_RANDOM";*/
         default:
-          return "Unknown addr_t";
+          log_e("Unknown addrtype : %d", type );
+          return "Unknown uint8_t";
       }
     }
 
-
-    static const char *gattServiceToString( BLEUUID serviceUUID ) {
+    static const BLEGATTService gattServiceDescription( const char* serviceUUIDStr ) {
+      //const char* serviceUUIDStr = serviceUUID.toString().c_str();
+      if( serviceUUIDStr == NULL ) return BLE_unknownService;
+      if( strcmp(serviceUUIDStr, "<NULL>") == 0 ) return BLE_unknownService; // wtf ??
       size_t heapbefore = freeheap;
-      char* gattUUIDblock = substr( serviceUUID.toString().c_str(), 0, 8 );
-      char* gattUUIDchar = substr( gattUUIDblock, 4, 4 );
-      uint32_t serviceId = (int)strtol(gattUUIDchar, NULL, 16);
-      free(gattUUIDblock);
-      free(gattUUIDchar);
+
+      uint32_t serviceId = 0;
+
+      char* prefix = substr( serviceUUIDStr, 0, 2 );
+
+      if( strcmp( prefix, "0x" ) == 0 ) {
+        // e.g. serviceUUID = "0xfe9f"
+        int uuidWidth = strlen( serviceUUIDStr ) - 2;
+        char* gattUUIDchar = substr( serviceUUIDStr, 2, uuidWidth );
+        serviceId = (int)strtol(gattUUIDchar, NULL, 16);
+        log_d("[gattServiceDescription(%s)] UUIDchar = '%s', serviceId = '%d'", serviceUUIDStr, gattUUIDchar, serviceId );
+        free(gattUUIDchar);
+      } else {
+        // e.g. serviceUUID = "cbbfe0e1-f7f3-4206-84e0-84cbb3d09dfc"
+        char* gattUUIDblock = substr( serviceUUIDStr, 0, 8 );
+        char* gattUUIDchar = substr( gattUUIDblock, 4, 4 );
+        serviceId = (int)strtol(gattUUIDchar, NULL, 16);
+        log_d("[gattServiceDescription(%s)] UUIDblock = '%s', UUIDchar = '%s', serviceId = '%d'", serviceUUIDStr, gattUUIDblock, gattUUIDchar, serviceId );
+        free(gattUUIDblock);
+        free(gattUUIDchar);
+      }
+
+      free( prefix );
+
       size_t heapafter = freeheap;
       int heapdiff = heapbefore - heapafter;
       byte i = 0;
@@ -361,13 +402,13 @@ class BlueToothDeviceHelper {
           break;
         }
         if (BLE_gattServices[i].assignedNumber == serviceId) {
-          log_w("[%d (%d)] Gatt Service UUID to string %04x => %s", freeheap, heapdiff, serviceId, BLE_gattServices[i].name );
-          return BLE_gattServices[i].name;
+          log_d("[%d (%d)] Gatt Service UUID to string %04x => %s", freeheap, heapdiff, serviceId, BLE_gattServices[i].name );
+          return BLE_gattServices[i]/*.name*/;
         }
         i++;
       }
-      return "Unknown";
-    } // gattServiceToString
+      return BLE_unknownService;
+    } // gattServiceDescription
 
     static uint16_t getNextCacheIndex( BlueToothDevice **CacheItem, uint16_t CacheItemIndex ) {
       uint16_t minCacheValue = 65535;

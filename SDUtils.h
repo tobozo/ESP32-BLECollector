@@ -4,6 +4,17 @@
 
 static bool sd_mounted = false;
 
+
+
+bool M5StackSDBegin() {
+  #ifdef _SD_H_
+    return SD.begin(4, SPI, 20000000);
+  #endif
+  return false;
+}
+
+
+
 bool SDSetup() {
   if(sd_mounted) return true;
   unsigned long max_wait = 500;

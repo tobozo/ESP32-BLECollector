@@ -152,6 +152,19 @@ void dumpTime(const char* message, tmElements_t tm) {
     tm.Second
   );
 }
+void dumpTime(const char* message, struct tm *info) {
+  Serial.printf("%s (GMT%s%d): %04d-%02d-%02d %02d:%02d:%02d\n",
+    message,
+    timeZone>0 ? "+" : "",
+    timeZone,
+    info->tm_year + 1900,
+    info->tm_mon+1,
+    info->tm_mday,
+    info->tm_hour,
+    info->tm_min,
+    info->tm_sec
+  );
+}
 
 void dumpTime(const char* message, time_t epoch) {
   tmElements_t nowUnixDateTime;
