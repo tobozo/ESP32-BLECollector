@@ -1,5 +1,7 @@
 # ESP32-BLECollector
 
+[![Join the chat at https://gitter.im/ESP32-BLECollector/ESP32-BLECollector](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/ESP32-BLECollector/ESP32-BLECollector)
+
 A BLE Scanner with persistence.
 
   ![ESP32 BLECollector running on Wrover-Kit](https://user-images.githubusercontent.com/1893754/81865372-1b965680-956e-11ea-9f2d-448c2330f3d3.png) ![ESP32 BLECollector running on M5Stack](https://raw.githubusercontent.com/tobozo/ESP32-BLECollector/unstable/screenshots/BLECollector-M5Stack.jpeg)
