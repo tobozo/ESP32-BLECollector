@@ -162,14 +162,22 @@ Preferences preferences;
 #include "DateTime.h"
 
 #if HAS_EXTERNAL_RTC
+
   #include <Wire.h>
   // RTC Module: On Wrover Kit you can use the following pins (from the camera connector)
   // SCL = GPIO27 (SIO_C / SCCB Clock 4)
   // SDA = GPIO26 (SIO_D / SCCB Data)
   #include "RTC.h"
-  static BLE_RTC_DS1307 RTC;
-  #define RTC_SDA 26 // pin number
-  #define RTC_SCL 27 // pin number
+  static BLE_RTC RTC;
+
+  #if defined( ARDUINO_M5STACK_Core2 ) // M5Core2
+    #define RTC_SDA 21 // pin number
+    #define RTC_SCL 22 // pin number
+  #else
+    #define RTC_SDA 26 // pin number
+    #define RTC_SCL 27 // pin number
+  #endif
+
 #endif
 
 #if HAS_GPS
@@ -199,7 +207,11 @@ Preferences preferences;
 
 // NimBLE Stack from https://github.com/h2zero/NimBLE-Arduino
 #include <NimBLEDevice.h>
-#include "NimBLE2902.h"
+#include "NimBLEEddystoneURL.h"
+#include "NimBLEEddystoneTLM.h"
+#include "NimBLEBeacon.h"
+//#include "NimBLE2902.h"
+
 
 
 // SQLite stack

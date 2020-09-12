@@ -33,7 +33,16 @@
 
 // French "StopCodid" app's Service UUID
 // TODO: add more of those
-static BLEUUID StopCovidServiceUUID("910c7798-9f3a-11ea-bb37-0242ac130002");
+//static BLEUUID StopCovidServiceUUID("910c7798-9f3a-11ea-bb37-0242ac130002"); // test UUID
+
+static BLEUUID Covid19RadarTestesUUID("7822fa0f-ce38-48ea-a7e8-e72af4e42c1c"); // https://github.com/Covid-19Radar/Covid19Radar/blob/master/doc/Tester/Tester-Instructions.md
+static BLEUUID Covid19RadarUUID("550e8400-e29b-41d4-a716-446655440000"); // International Covid19 Radar contact tracing app
+
+static BLEUUID StopCovidServiceUUID("0000fd64-0000-1000-8000-00805f9b34fb"); // French stop covid app
+static BLEUUID StopCovidCharUUID("a8f12d00-ee67-478b-b95f-65d599407756");
+
+
+
 
 static BLEUUID FileSharingServiceUUID( "f59f6622-1540-0001-8d71-362b9e155667" ); // generated UUID for the service
 static BLEUUID FileSharingWriteUUID(   "f59f6622-1540-0002-8d71-362b9e155667" ); // characteristic to write file_chunk locally
@@ -64,7 +73,7 @@ BLERemoteCharacteristic* FileSharingReadRemoteChar;
 BLERemoteCharacteristic* FileSharingRouterRemoteChar;
 BLERemoteCharacteristic* TimeRemoteChar;
 
-BLE2902* BLESharing2902Descriptor;
+//BLE2902* BLESharing2902Descriptor;
 
 std::string timeServerBLEAddress;
 std::string fileServerBLEAddress;
@@ -116,6 +125,7 @@ static int checkMacResponse = 0;
 
 const char* sizeMarker             = "size:";
 const char* dateTimeMarker         = "dateTime:";
+const char* dateTimeMarkerTpl      = "dateTime:%04d-%02d-%02d %02d:%03d:%03d %d %d %d %d";
 const char* closeMessage           = "close";
 const char* restartMessage         = "restart";
 const char* lsMessage              = "ls";
@@ -353,7 +363,7 @@ static void TimeServerTask( void * param ) {
   );
 
   log_w("Will create descriptor");
-  TimeServerChar->createDescriptor("2902" /** , NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE **/);
+  //TimeServerChar->createDescriptor("2902" /** , NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE **/);
   log_w("Descriptor created");
 
   TimeSharingService->start();
@@ -395,6 +405,7 @@ byte receivedFiles = 0;
 void FileSharingReceiveFile( const char* filename ) {
   FileReceiverReceivedSize = 0;
   FileReceiverProgress = 0;
+  log_w("Will create %s", filename);
   FileReceiver = BLE_FS.open( filename, FILE_WRITE );
   // receivedFiles
   if( FileReceiverExpectedSize == FileReceiver.size() ) {
@@ -403,7 +414,7 @@ void FileSharingReceiveFile( const char* filename ) {
   if ( !FileReceiver ) {
     log_e("Failed to create %s", filename);
   }
-  log_v("Successfully opened %s for writing", filename);
+  log_d("Successfully opened %s for writing", filename);
 }
 
 
@@ -413,11 +424,17 @@ void FileSharingCloseFile() {
     return;
   }
   takeMuxSemaphore();
+  const char* filename = FileReceiver.name(); // store filename for reopening
   FileReceiver.close();
+  FileReceiver = BLE_FS.open( filename ); // r/w mode gives bogus size, reopen r/o
+
   if ( FileReceiverReceivedSize != FileReceiverExpectedSize ) {
     log_e("Total size != expected size ( %d != %d )", FileReceiver.size(), FileReceiverExpectedSize);
     Out.println( "Copy Failed, please try again." );
+    FileReceiver.close();
+    BLE_FS.remove( filename );
   } else {
+    FileReceiver.close();
     Out.println( "Copy successful!" );
   }
   giveMuxSemaphore();
@@ -438,7 +455,7 @@ class FileSharingWriteCallbacks : public BLECharacteristicCallbacks {
       }
       size_t progress = (((float)FileReceiverReceivedSize / (float)FileReceiverExpectedSize) * 100.00);
       if ( FileReceiver ) {
-        FileReceiver.write( WriterAgent->getData(), len );
+        FileReceiver.write( (const uint8_t*)(WriterAgent->getValue().c_str()), len );
         log_w("Wrote %d bytes", len);
         FileReceiverReceivedSize += len;
       } else {
@@ -454,12 +471,28 @@ class FileSharingWriteCallbacks : public BLECharacteristicCallbacks {
 
 class FileSharingRouteCallbacks : public BLECharacteristicCallbacks {
     void onWrite( BLECharacteristic* RouterAgent ) {
-      char routing[RouterAgent->getDataLength()] = {0};
-      memcpy( &routing, RouterAgent->getData(), RouterAgent->getDataLength() );
-      log_w("Received copy routing query: %s", routing);
+      size_t strLenRouting = RouterAgent->getDataLength();
+
+      if( strLenRouting < 1 ) {
+        log_e("getDataLength() == 0");
+        return;
+      }
+
+      /*
+      char routing[strLenRouting+1] = {0};
+      memcpy( &routing, RouterAgent->getData(), strLenRouting+1 );
+      routing[strLenRouting]= '\0'; // null terminate
+      */
+      //std::string dscVal((char*)RouterAgent->getValue(), RouterAgent->getDataLength());
+
+      const char* routing = RouterAgent->getValue().c_str();
+
+      log_w("Received copy routing query (len=%d): %s", strLenRouting, routing);
+
       if ( strstr(routing, sizeMarker) ) { // messages starting with "size:"
-        if ( strlen( routing ) > strlen( sizeMarker ) ) {
-          char* lenStr = substr( routing, strlen(sizeMarker), strlen(routing) - strlen(sizeMarker) );
+        log_w("Received sizeMarker");
+        if ( strLenRouting > strlen( sizeMarker ) ) {
+          char* lenStr = substr( routing, strlen(sizeMarker), strLenRouting - strlen(sizeMarker) );
           FileReceiverExpectedSize = atoi( lenStr );
           log_w( "Assigned size_t %d", FileReceiverExpectedSize );
           free( lenStr );
@@ -468,20 +501,91 @@ class FileSharingRouteCallbacks : public BLECharacteristicCallbacks {
         log_w("Received dateTimeMarker");
         if ( strlen( routing ) > strlen( dateTimeMarker ) ) {
           char* lenStr = substr( routing, strlen(dateTimeMarker), strlen(routing) - strlen(dateTimeMarker) );
-          log_w("Received time");
-          memcpy( &BLERemoteTime, lenStr, strlen( lenStr ) );
+          log_w("Decoding time");
+/*
+          char _dtMarker[20];
+          int year, month, day, hour, minutes, seconds, wday, fraction, adjust, tz;
+          //const char* myMarker = dateTimeMarker "%d-%d-%d %d:%d:%d %d %d %d %d";
+          int res = sscanf( routing, dateTimeMarker,
+            &_dtMarker,
+            &year,
+            &month,
+            &day,
+            &hour,
+            &minutes,
+            &seconds,
+            &wday,
+            &fraction,
+            &adjust,
+            &tz
+          );
+*/
+
+          char* timestampChar = new char( strlen( lenStr ) +1 );
+          memcpy( &timestampChar, lenStr, strlen( lenStr ) );
+          timestampChar[strlen( lenStr )] = '\0';
+
+          Serial.printf("Copied routing: %s\n", timestampChar );
+
+          struct tm time;
+          strptime(routing, "dateTime:%Y-%m-%d %H:%M:%S %w 0 0 %z", &time);
+          time_t loctime = mktime( &time );
+          struct tm * now = localtime( & loctime );
+          BLERemoteTime.year     = now->tm_year+1900;
+          BLERemoteTime.month    = now->tm_mon+1;
+          BLERemoteTime.day      = now->tm_mday;
+          BLERemoteTime.hour     = now->tm_hour;
+          BLERemoteTime.minutes  = now->tm_min;
+          BLERemoteTime.seconds  = now->tm_sec;
+          BLERemoteTime.wday     = now->tm_wday;
+          //BLERemoteTime.fraction = 0;
+          //BLERemoteTime.adjust   = 0;
+          //BLERemoteTime.tz       = time.__tm_zone;
+
+/*
+          Serial.printf("scanf res=%d (scanned: %s)----- \n", res, routing);
+
+          Serial.printf( dateTimeMarkerTpl,
+            "sscanf result=",
+            year,
+            month,
+            day,
+            hour,
+            minutes,
+            seconds,
+            wday,
+            fraction,
+            adjust,
+            tz
+          );
+          Serial.println();
+
+          BLERemoteTime.year     = year;
+          BLERemoteTime.month    = month;
+          BLERemoteTime.day      = day;
+          BLERemoteTime.hour     = hour;
+          BLERemoteTime.minutes  = minutes;
+          BLERemoteTime.seconds  = seconds;
+          BLERemoteTime.wday     = wday;
+          BLERemoteTime.fraction = fraction;
+          BLERemoteTime.adjust   = adjust;
+          BLERemoteTime.tz       = tz;
+
+          //memcpy( &BLERemoteTime, lenStr, strlen( lenStr ) );*/
           setBLETime();
           free( lenStr );
         }
       } else if ( strcmp( routing, closeMessage ) == 0 ) { // file end
+        log_w("Closing file");
         FileSharingCloseFile();
       } else if ( strcmp( routing, restartMessage ) == 0 ) { // transfert finished
         ESP.restart();
       } else if ( strcmp( routing, checkVendorFileMessage ) == 0 ) {
         if( !DB.checkVendorFile() ) {
-          log_w("Senting notification for Vendor DB update");
+          log_w("Asking for Vendor DB update (%s)", BLE_VENDOR_NAMES_DB_FS_PATH);
           RouterAgent->setValue( (uint8_t*)(BLE_VENDOR_NAMES_DB_FS_PATH), strlen(BLE_VENDOR_NAMES_DB_FS_PATH));
           RouterAgent->notify();
+          log_w("Notification sent!");
         } else {
           const char* resp = String( String(checkVendorFileMessage) + String("0") ).c_str();
           log_w("Vendor DB file is fine, will send resp: %s", resp);
@@ -490,16 +594,17 @@ class FileSharingRouteCallbacks : public BLECharacteristicCallbacks {
         }
       } else if ( strcmp( routing, checkMacFileMessage ) == 0 ) {
         if( !DB.checkOUIFile() ) {
-          log_w("Senting notification for OUI DB update");
+          log_w("Asking for OUI DB update ( %s )", MAC_OUI_NAMES_DB_FS_PATH);
           RouterAgent->setValue( (uint8_t*)(MAC_OUI_NAMES_DB_FS_PATH), strlen(MAC_OUI_NAMES_DB_FS_PATH));
           RouterAgent->notify();
+          log_w("Notification sent!");
         } else {
           const char* resp = String( String(checkMacFileMessage) + String("0") ).c_str();
           log_w("OUI DB file is fine, will send resp: %s", resp);
           RouterAgent->setValue( (uint8_t*)resp, strlen(resp) );
           RouterAgent->notify();
         }
-      } else   if (strcmp(routing, lsMessage ) == 0) {
+      } else if (strcmp(routing, lsMessage ) == 0) {
         int filesCount = 0;
         char strOut[32+64];
         File root = BLE_FS.open("/");
@@ -524,10 +629,13 @@ class FileSharingRouteCallbacks : public BLECharacteristicCallbacks {
         RouterAgent->notify();
       } else { // filenames
         if ( strcmp( routing, BLE_VENDOR_NAMES_DB_FS_PATH ) == 0 ) {
+          log_w( "FileSharingReceiveFile( %s )", BLE_VENDOR_NAMES_DB_FS_PATH );
           FileSharingReceiveFile( BLE_VENDOR_NAMES_DB_FS_PATH );
-        }
-        if ( strcmp( routing, MAC_OUI_NAMES_DB_FS_PATH ) == 0 ) {
+        } else  if ( strcmp( routing, MAC_OUI_NAMES_DB_FS_PATH ) == 0 ) {
+          log_w( "FileSharingReceiveFile( %s )", MAC_OUI_NAMES_DB_FS_PATH );
           FileSharingReceiveFile( MAC_OUI_NAMES_DB_FS_PATH);
+        } else {
+          log_e( "No filename matching !");
         }
       }
       takeMuxSemaphore();
@@ -552,7 +660,7 @@ class FileSharingCallbacks : public BLEServerCallbacks {
       BLEDevice::getAdvertising()->stop();
       // do some voodo on remote MTU for transfert perfs (thanks @chegewara)
       //esp_ble_gap_set_prefer_conn_params(param->connect.remote_bda, 6, 6, 0, 500);
-      SharingServer->updatePeerMTU( SharingServer->getConnId(), 500 );
+      //SharingServer->updatePeerMTU( SharingServer->getConnId(), 500 );
     }
     void onDisconnect(BLEServer* SharingServer) {
       log_w("A client disconnected, restarting advertising");
@@ -584,6 +692,7 @@ void stopFileSharingServer() {
 static void FileSharingServerTask(void* p) {
 
   BLEDevice::setMTU(517);
+
   if ( FileSharingAdvertising == NULL ) {
     FileSharingAdvertising = BLEDevice::getAdvertising();
   }
@@ -616,7 +725,8 @@ static void FileSharingServerTask(void* p) {
   FileSharingRouteChar->setCallbacks( FileSharingRouteCallback );
   FileSharingWriteChar->setCallbacks( FileSharingWriteCallback );
 
-  FileSharingRouteChar->createDescriptor("2902", NIMBLE_PROPERTY::NOTIFY/** | NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE **/);
+  //BLE2902* pRoute2902 = (BLE2902*)FileSharingRouteChar->createDescriptor("2902", NIMBLE_PROPERTY::NOTIFY/** | NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE **/);
+  //pRoute2902->setCallbacks(FileSharingRouteCallback);
 
   FileSharingService->start();
 
@@ -665,7 +775,8 @@ static void FileSharingServerTask(void* p) {
 bool fileTransferInProgress = false;
 unsigned long fileSharingClientLastActivity = millis();
 unsigned long fileSharingClientTimeout = 10000;
-
+char myDateTimeMarker[50] = {0};
+//char dateTimeAsChar[sizeof(bt_time_t)+1] = {0};
 
 void FileSharingSendFile( BLERemoteCharacteristic* RemoteChar, const char* filename ) {
   while( fileTransferInProgress ) {
@@ -673,10 +784,40 @@ void FileSharingSendFile( BLERemoteCharacteristic* RemoteChar, const char* filen
     vTaskDelay( 1000 );
   }
 
-  if ( !RemoteChar->writeValue((uint8_t*)filename, strlen(filename), true) ) {
+  /*
+  // send local datetime as a binary string
+  uint8_t* dateTime = getBLETime();
+  sprintf( myDateTimeMarker, dateTimeMarkerTpl,
+    BLELocalTime.year,
+    BLELocalTime.month,
+    BLELocalTime.day,
+    BLELocalTime.hour,
+    BLELocalTime.minutes,
+    BLELocalTime.seconds,
+    BLELocalTime.wday,
+    BLELocalTime.fraction,
+    BLELocalTime.adjust,
+    BLELocalTime.tz
+  );
+  log_w("RemoteChar->writevalue(%d bytes): \"%s\"", strlen(myDateTimeMarker), myDateTimeMarker );
+  //sprintf( myDateTimeMarker, "%s%s", dateTimeMarker, (const char*)dateTime );
+  //log_w("RemoteChar->writevalue( %s, %d )", (const char*)myDateTimeMarker, strlen(myDateTimeMarker)+1 );
+  if( !RemoteChar->writeValue( (uint8_t*)myDateTimeMarker, strlen(myDateTimeMarker)+1 ) ) {
+    log_e("Failed to send datetime");
+    fileSharingSendFileError = true;
+    return;
+  }
+  log_w("Time sent !");
+  vTaskDelay( 200 );
+*/
+
+  log_w("RemoteChar->writeValue( %s,  %d)", filename, strlen(filename)+1 );
+  if ( !RemoteChar->writeValue((uint8_t*)filename, strlen(filename)+1, false) ) {
     log_e("Remote is unable to comply to %s filename query", filename);
     return;
   }
+  log_w("Filename sent !");
+  vTaskDelay( 200 );
 
   fileSharingSendFileError = false;
   fileTransferInProgress = true;
@@ -694,21 +835,31 @@ void FileSharingSendFile( BLERemoteCharacteristic* RemoteChar, const char* filen
   // send file size as string
   char myTotalSize[32];
   sprintf( myTotalSize, "%s%d", sizeMarker, totalsize );
-  RemoteChar->writeValue((uint8_t*)myTotalSize, strlen(myTotalSize), false);
+  log_w("RemoteChar->writevalue( myTotalSize: '%s' )", (const char*)myTotalSize);
+  if( !RemoteChar->writeValue((uint8_t*)myTotalSize, strlen(myTotalSize)+1, false) ) {
+    log_e("Failed to send file size");
+    fileSharingSendFileError = true;
+    fileTransferInProgress = false;
+    fileToTransfer.close();
+    return;
+  }
+  log_w("Size sent !");
 
-  // send local datetime as a binary string
-  char myDateTimeMarker[strlen(dateTimeMarker)+sizeof(bt_time_t)+1];
-  const char* dateTimeAsChar = (const char*)getBLETime();
-  sprintf( myDateTimeMarker, "%s%s", dateTimeMarker, dateTimeAsChar );
-  RemoteChar->writeValue( myDateTimeMarker, strlen(dateTimeMarker)+sizeof(bt_time_t)+1 );
+  //vTaskDelay( 1000 );
+
 
   #define BLE_FILECOPY_BUFFSIZE 512
   uint8_t buff[BLE_FILECOPY_BUFFSIZE];
-  uint32_t len = fileToTransfer.read( buff, BLE_FILECOPY_BUFFSIZE );
+  uint32_t len = fileToTransfer.read( buff, BLE_FILECOPY_BUFFSIZE ); // fill buffer
   log_w("Starting transfert...");
   UI.headerStats(filename);
   UI.PrintProgressBar( 0 );
   int lastpercent = 0;
+
+  if( !FileSharingReadRemoteChar->canWriteNoResponse() ) {
+    log_w("FileSharingReadRemoteChar can't WRITE_NORESPONSE");
+  }
+
   while ( len > 0 ) {
     fileSharingClientLastActivity = millis();
     progress -= len;
@@ -731,23 +882,39 @@ void FileSharingSendFile( BLERemoteCharacteristic* RemoteChar, const char* filen
   }
   UI.PrintProgressBar( 0 );
   UI.headerStats("[OK]");
-  log_w("Transfer finished!");
+  if( fileSharingSendFileError ) {
+    log_e("Transfer aborted!");
+  } else {
+    log_w("Transfer finished!");
+  }
   fileToTransfer.close();
 
-  RemoteChar->writeValue((uint8_t*)closeMessage, strlen(closeMessage), true);
+  if( !RemoteChar->writeValue((uint8_t*)closeMessage, strlen(closeMessage)+1, true) ) {
+    log_e("Failed to send file close message");
+  }
 
   fileTransferInProgress = false;
 }
 
 
 static void FileSharingRouterCallbacks( BLERemoteCharacteristic* RemoteChar, uint8_t* pData, size_t length, bool isNotify ) {
-  char routing[512] = {0};
-  memcpy( &routing, pData, length );
+  //char routing[512] = {0};
+  const char* pRoutingData = (const char*)pData;
+  char* blah = substr( pRoutingData, 0, length );
+  const char* routing = (const char*)blah;
+  if( length > 128 ) {
+    log_w("Notified (%d bytes)", length);
+  } else {
+    log_w("Notified (%d bytes): %s / %s", length, blah, routing);
+  }
+  //memcpy( &routing, pData, length );
   fileSharingClientLastActivity = millis();
   if (strcmp(routing, BLE_VENDOR_NAMES_DB_FS_PATH) == 0) {
+    log_w("FileSharingSendFile( %s )", BLE_VENDOR_NAMES_DB_FS_PATH);
     FileSharingSendFile( RemoteChar, BLE_VENDOR_NAMES_DB_FS_PATH );
     checkVendorResponded = true;
   } else if (strcmp(routing, MAC_OUI_NAMES_DB_FS_PATH) == 0) {
+    log_w("FileSharingSendFile( %s )", MAC_OUI_NAMES_DB_FS_PATH);
     FileSharingSendFile( RemoteChar, MAC_OUI_NAMES_DB_FS_PATH );
     checkMacResponded = true;
   } else if ( strstr(routing, fileMarker ) ) {
@@ -783,16 +950,18 @@ static void FileSharingRouterCallbacks( BLERemoteCharacteristic* RemoteChar, uin
   } else {
     log_w("Received unknown routing query: %s", routing);
   }
+  free( blah );
+  log_w("exiting notification");
 };
 
 
 class FileSharingClientCallbacks : public BLEClientCallbacks {
     void onConnect(BLEClient* pC) {
-      log_v("[Heap: %06d] Connect!!", freeheap);
+      log_d("[Heap: %06d] Connect!!", freeheap);
       fileSharingClientLastActivity = millis();
     }
     void onDisconnect(BLEClient* pC) {
-      log_v("[Heap: %06d] Disconnect!!", freeheap);
+      log_d("[Heap: %06d] Disconnect!!", freeheap);
       fileSharingClientTaskIsRunning = false;
       fileSharingClientLastActivity = millis();
     }
@@ -869,7 +1038,9 @@ static void FileSharingClientTask( void * param ) {
     vTaskDelete( NULL );
     return;
   }
-  FileSharingRouterRemoteChar->registerForNotify( FileSharingRouterCallbacks );
+
+  //FileSharingRouterRemoteChar->registerForNotify( FileSharingRouterCallbacks, true, false );
+  FileSharingRouterRemoteChar->subscribe( true, false, FileSharingRouterCallbacks );
 
   UI.headerStats("Connected :-)");
 
@@ -886,8 +1057,12 @@ static void FileSharingClientTask( void * param ) {
   checkVendorResponded = false;
   if( FileSharingRouterRemoteChar->writeValue((uint8_t*)checkMacFileMessage, strlen(checkMacFileMessage), true) ) {
     log_w("Sent checkMacFileMessage query");
-    while( !checkVendorResponded && fileSharingClientLastActivity + fileSharingClientTimeout < millis() ) {
+    while( !checkVendorResponded ) {
       vTaskDelay(100);
+      if( fileSharingClientLastActivity + fileSharingClientTimeout < millis() ) {
+        log_e("checkVendorResponded timeout !");
+        break;
+      }
     }
     //log_w("Vendor response: %d", checkVendorResponse);
     FileSharingSendFile( FileSharingRouterRemoteChar, BLE_VENDOR_NAMES_DB_FS_PATH );
@@ -899,8 +1074,12 @@ static void FileSharingClientTask( void * param ) {
   checkMacResponded = false;
   if( FileSharingRouterRemoteChar->writeValue((uint8_t*)checkVendorFileMessage, strlen(checkVendorFileMessage), true) ) {
     log_w("Sent checkVendorFileMessage query");
-    while( !checkMacResponded && fileSharingClientLastActivity + fileSharingClientTimeout < millis() ) {
+    while( !checkMacResponded ) {
       vTaskDelay(100);
+      if( fileSharingClientLastActivity + fileSharingClientTimeout < millis() ) {
+        log_e("checkMacResponded timeout !");
+        break;
+      }
     }
     //log_w("Mac response: %d", checkMacResponse);
     FileSharingSendFile( FileSharingRouterRemoteChar, MAC_OUI_NAMES_DB_FS_PATH );
@@ -909,8 +1088,10 @@ static void FileSharingClientTask( void * param ) {
   }
 
   while( fileSharingClientTaskIsRunning ) {
-    if( fileSharingClientLastActivity + fileSharingClientTimeout < millis() ) break;
-    else {
+    if( fileSharingClientLastActivity + fileSharingClientTimeout < millis() ) {
+      log_e("fileSharingClientTimeout timeout !");
+      break;
+    } else {
       log_w("fileSharingClientLastActivity: %d", fileSharingClientLastActivity);
     }
     vTaskDelay( 1000 );

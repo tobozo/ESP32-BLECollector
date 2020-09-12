@@ -166,7 +166,7 @@ static void copy(char* dest, const char* source, byte maxlen) {
   }
 }
 
-
+BLEUUID checkUrlUUID = (uint16_t)0xfeaa;
 
 
 class BlueToothDeviceHelper {
@@ -299,6 +299,8 @@ class BlueToothDeviceHelper {
         set(CacheItem, "manufname", "[unpopulated]");
         set(CacheItem, "manufid", vint);
       }
+
+
       if( advertisedDevice->haveServiceData() ) {
         //log_d("[%d][%s] Has Service Data[%d]", freeheap, CacheItem->address, strlen( advertisedDevice->getServiceData().c_str() ) );
         //log_d("[%s] GATT ServiceDataUUID: '%s'", CacheItem->address, advertisedDevice->getServiceDataUUID().toString().c_str());
@@ -315,6 +317,8 @@ class BlueToothDeviceHelper {
           Serial.println();
         }*/
       }
+
+
       if ( advertisedDevice->haveServiceUUID() ) {
         set(CacheItem, "uuid", advertisedDevice->getServiceUUID().toString().c_str());
         BLEGATTService srv = gattServiceDescription( CacheItem->uuid );
@@ -322,6 +326,55 @@ class BlueToothDeviceHelper {
         //const char* serviceStr = gattServiceDescription( advertisedDevice->getServiceUUID() );
         if( strcmp( srv.name, "Unknown" ) != 0 ) {
           log_w("Gatt Service UUID to string %s = %s", advertisedDevice->getServiceUUID().toString().c_str(), srv.name );
+        }
+
+        // beacon check
+        uint8_t *payLoad = advertisedDevice->getPayload();
+
+        if (advertisedDevice->getServiceUUID().equals(checkUrlUUID)) {
+          if (payLoad[11] == 0x10) {
+            Serial.println("Found an EddystoneURL beacon!");
+            BLEEddystoneURL foundEddyURL = BLEEddystoneURL();
+            std::string eddyContent((char *)&payLoad[11]); // incomplete EddystoneURL struct!
+
+            foundEddyURL.setData(eddyContent);
+            std::string bareURL = foundEddyURL.getURL();
+            if (bareURL[0] == 0x00) {
+              size_t payLoadLen = advertisedDevice->getPayloadLength();
+              Serial.println("DATA-->");
+              for (int idx = 0; idx < payLoadLen; idx++) {
+                Serial.printf("0x%08X ", payLoad[idx]);
+              }
+              Serial.println("\nInvalid Data");
+            } else {
+              Serial.printf("Found URL: %s\n", foundEddyURL.getURL().c_str());
+              Serial.printf("Decoded URL: %s\n", foundEddyURL.getDecodedURL().c_str());
+              Serial.printf("TX power %d\n", foundEddyURL.getPower());
+              Serial.println("\n");
+            }
+          } else if (payLoad[11] == 0x20) {
+            Serial.println("Found an EddystoneTLM beacon!");
+            BLEEddystoneTLM foundEddyURL = BLEEddystoneTLM();
+            std::string eddyContent((char *)&payLoad[11]); // incomplete EddystoneURL struct!
+
+            eddyContent = "01234567890123";
+
+            for (int idx = 0; idx < 14; idx++) {
+              eddyContent[idx] = payLoad[idx + 11];
+            }
+
+            foundEddyURL.setData(eddyContent);
+            Serial.printf("Reported battery voltage: %dmV\n", foundEddyURL.getVolt());
+            Serial.printf("Reported temperature from TLM class: %.2fC\n", (double)foundEddyURL.getTemp());
+            int temp = (int)payLoad[16] + (int)(payLoad[15] << 8);
+            float calcTemp = temp / 256.0f;
+            Serial.printf("Reported temperature from data: %.2fC\n", calcTemp);
+            Serial.printf("Reported advertise count: %d\n", foundEddyURL.getCount());
+            Serial.printf("Reported time since last reboot: %ds\n", foundEddyURL.getTime());
+            Serial.println("\n");
+            Serial.print(foundEddyURL.toString().c_str());
+            Serial.println("\n");
+          }
         }
 
         //log_w("Gatt Service UUID to string %s = %s", advertisedDevice->getServiceUUID().toString().c_str(), gattServiceDescription( advertisedDevice->getServiceUUID() ) );

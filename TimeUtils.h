@@ -168,10 +168,10 @@ static void timeHousekeeping() {
 
 bool RTCSetup() {
   #if HAS_EXTERNAL_RTC
-    RTC.begin(RTC_SDA/*26*/, RTC_SCL/*27*/);
+    RTC.begin( RTC_SDA, RTC_SCL );
     delay(100);
     if (!RTC.isrunning()) { // first run use case (or dead RTC battery)
-      log_e("[RTC] NOT running, will try to adjust from hardcoded value");
+      log_e("[RTC (SDA:%d, SCL:%d)] NOT running, will adjust from compilation DateTime", RTC_SDA, RTC_SCL);
       RTC.adjust(DateTime(__DATE__, __TIME__));
       logTimeActivity(SOURCE_COMPILER, DateTime(__DATE__, __TIME__).unixtime() );
       RTCisRunning = RTC.isrunning();

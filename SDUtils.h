@@ -60,6 +60,26 @@ static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char
   time_t lastWrite;
   struct tm * tmstruct;
 
+  // show folders first
+  while( file ) {
+    lastWrite = file.getLastWrite();
+    tmstruct = localtime(&lastWrite);
+
+    sprintf(fileDate, "%04d-%02d-%02d %02d:%02d:%02d",(tmstruct->tm_year)+1900,( tmstruct->tm_mon)+1, tmstruct->tm_mday,tmstruct->tm_hour , tmstruct->tm_min, tmstruct->tm_sec);
+    if( (tmstruct->tm_year)+1900 < 2000 ) {
+      // time is not set
+    }
+    if(file.isDirectory()) {
+      Serial.printf( "    %-32s | %20s | DIRECTORY\n", file.name(), fileDate );
+    }
+    file.close();
+    file = root.openNextFile();
+  }
+
+  root.rewindDirectory();
+  file = root.openNextFile();
+
+  // show files (TODO: sort by date)
   while( file ) {
 
     lastWrite = file.getLastWrite();
@@ -79,9 +99,9 @@ static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char
         Serial.printf( "    %-32s | %20s | %8ld Bytes\n", fileName, fileDate, fileSize );
       }
       totalSize += fileSize;
-    } else {
+    }/* else {
       Serial.printf( "    %-32s | %20s | DIRECTORY\n", file.name(), fileDate );
-    }
+    }*/
     file.close();
     file = root.openNextFile();
   }

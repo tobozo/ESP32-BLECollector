@@ -100,30 +100,37 @@ static bool AddressIsListed( const char* address ) {
 }
 */
 
-static bool deviceHasPayload( BLEAdvertisedDevice advertisedDevice ) {
-  if ( !advertisedDevice.haveServiceUUID() ) return false;
-  if( advertisedDevice.isAdvertisingService( timeServiceUUID ) ) {
-    log_i( "Found Time Server %s : %s", advertisedDevice.getAddress().toString().c_str(), advertisedDevice.getServiceUUID().toString().c_str() );
-    timeServerBLEAddress = advertisedDevice.getAddress().toString();
-    timeServerClientType = advertisedDevice.getAddressType();
+static bool deviceHasKnownPayload( BLEAdvertisedDevice *advertisedDevice ) {
+  if ( !advertisedDevice->haveServiceUUID() ) return false;
+  if( advertisedDevice->isAdvertisingService( timeServiceUUID ) ) {
+    log_i( "Found Time Server %s : %s", advertisedDevice->getAddress().toString().c_str(), advertisedDevice->getServiceUUID().toString().c_str() );
+    timeServerBLEAddress = advertisedDevice->getAddress().toString();
+    timeServerClientType = advertisedDevice->getAddressType();
     foundTimeServer = true;
     if ( foundTimeServer && (!TimeIsSet || ForceBleTime) ) {
       return true;
     }
   }
-  if( advertisedDevice.isAdvertisingService( FileSharingServiceUUID ) ) {
-    log_i( "Found File Server %s : %s", advertisedDevice.getAddress().toString().c_str(), advertisedDevice.getServiceUUID().toString().c_str() );
+  if( advertisedDevice->isAdvertisingService( FileSharingServiceUUID ) ) {
+    log_i( "Found File Server %s : %s", advertisedDevice->getAddress().toString().c_str(), advertisedDevice->getServiceUUID().toString().c_str() );
     foundFileServer = true;
-    fileServerBLEAddress = advertisedDevice.getAddress().toString();
-    fileServerClientType = advertisedDevice.getAddressType();
+    fileServerBLEAddress = advertisedDevice->getAddress().toString();
+    fileServerClientType = advertisedDevice->getAddressType();
     if ( fileSharingEnabled ) {
       log_w("Ready to connect to file server %s", fileServerBLEAddress.c_str());
       return true;
     }
   }
 
-  if( advertisedDevice.isAdvertisingService( StopCovidServiceUUID ) ) {
-    log_n("Found StopCovid Advertisement %s : %s", advertisedDevice.getAddress().toString().c_str(), advertisedDevice.getServiceUUID().toString().c_str() );
+  if( advertisedDevice->isAdvertisingService( StopCovidServiceUUID ) ) {
+    log_n("Found StopCovid Advertisement %s : %s", advertisedDevice->getAddress().toString().c_str(), advertisedDevice->getServiceUUID().toString().c_str() );
+    uint8_t *payLoad = advertisedDevice->getPayload();
+    size_t payLoadLen = advertisedDevice->getPayloadLength();
+    Serial.printf("Payload (%d bytes): ", payLoadLen);
+    for (size_t i=0; i<payLoadLen; i++ ) {
+      Serial.printf("%02x ", payLoad[i] );
+    }
+    Serial.println();
   }
 
   return false;
@@ -136,7 +143,7 @@ class FoundDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
     {
       devicesStatCount++; // raw stats for heapgraph
 
-      bool scanShouldStop =  deviceHasPayload( *advertisedDevice );
+      bool scanShouldStop =  deviceHasKnownPayload( advertisedDevice );
 
       if ( onScanDone  ) return;
 

@@ -34,7 +34,7 @@ static bool checkForTimeUpdate( DateTime &internalDateTime ) {
 void TimeInit() {
   preferences.begin("BLEClock", true);
   lastSyncDateTime = preferences.getUInt("epoch", millis());
-  byte clockUpdateSource   = preferences.getUChar("source", 0);
+  byte clockUpdateSource = preferences.getUChar("source", 0);
   preferences.end();
   sprintf(YYYYMMDD_HHMMSS_Str, YYYYMMDD_HHMMSS_Tpl,
     lastSyncDateTime.year(),
@@ -52,7 +52,7 @@ void TimeInit() {
         logTimeActivity(SOURCE_RTC, 0);
         ESP.restart();
       } else {
-        log_d("[RTC] isn't running!");
+        log_e("[RTC] isn't running!");
         return;
       }
     }
@@ -63,9 +63,10 @@ void TimeInit() {
     settimeofday(tv, NULL);
     struct tm now;
     if( getLocalTime(&now,0) ) {
-      dumpTime("RTC DateTime:", nowDateTime);
+      dumpTime("RTC setTime Success", nowDateTime);
     } else {
-      log_d("Failed to get system time after setting RTC");
+      log_e("[RTC] setTime Failed");
+      dumpTime("RTC.now() :", nowDateTime);
     }
 
 

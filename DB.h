@@ -328,7 +328,7 @@ class DBUtils {
       bool ret = true;
       isQuerying = true;
       if( ! BLE_FS.exists( fileName ) ) {
-        log_e( "Missing critical DB file %s, aborting\n", fileName );
+        log_e( "DB file not found: %s", fileName );
         ret = false;
       } else {
         File tmpFile = BLE_FS.open( fileName );
