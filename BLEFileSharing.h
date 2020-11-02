@@ -897,7 +897,7 @@ void FileSharingSendFile( BLERemoteCharacteristic* RemoteChar, const char* filen
   fileTransferInProgress = false;
 }
 
-
+__attribute__((unused))
 static void FileSharingRouterCallbacks( BLERemoteCharacteristic* RemoteChar, uint8_t* pData, size_t length, bool isNotify ) {
   //char routing[512] = {0};
   const char* pRoutingData = (const char*)pData;
@@ -1041,7 +1041,7 @@ static void FileSharingClientTask( void * param ) {
   }
 
   //FileSharingRouterRemoteChar->registerForNotify( FileSharingRouterCallbacks, true, false );
-  FileSharingRouterRemoteChar->subscribe( true, false, FileSharingRouterCallbacks );
+  //FileSharingRouterRemoteChar->subscribe( true, false, FileSharingRouterCallbacks );
 
   UI.headerStats("Connected :-)");
 

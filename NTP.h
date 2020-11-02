@@ -75,25 +75,7 @@ void TimeInit() {
 }
 
 
-time_t compileTime() {
-    const time_t FUDGE(10);     // fudge factor to allow for compile time (seconds, YMMV)
-    const char *compDate = __DATE__, *compTime = __TIME__, *months = "JanFebMarAprMayJunJulAugSepOctNovDec";
-    char chMon[3], *m;
-    tmElements_t tm;
 
-    strncpy(chMon, compDate, 3);
-    chMon[3] = '\0';
-    m = strstr(months, chMon);
-    tm.Month = ((m - months) / 3 + 1);
-
-    tm.Day = atoi(compDate + 4);
-    tm.Year = atoi(compDate + 7) - 1970;
-    tm.Hour = atoi(compTime);
-    tm.Minute = atoi(compTime + 3);
-    tm.Second = atoi(compTime + 6);
-    time_t t = makeTime(tm);
-    return t + FUDGE;           // add fudge factor to allow for compile time
-}
 
 
 #ifdef WITH_WIFI
@@ -130,6 +112,8 @@ time_t compileTime() {
       Serial.println("Failed to set system time from NTP...");
       return false;
     } else {
+      Serial.println("[[NTP] System Local time adjusted!");
+
       struct timeval tv;
       //bt_time_t _time;
       struct tm* _t;
@@ -140,11 +124,12 @@ time_t compileTime() {
 
       dumpTime("[NTP] UTC Time", NTP_UTC_Time );
       dumpTime("[NTP] Local Time", NTP_Local_Time );
-
-      RTC.adjust( NTP_Local_Time );
+      #if HAS_EXTERNAL_RTC
+        RTC.adjust( NTP_Local_Time );
+        Serial.println("[[NTP] RTC Local time adjusted!");
+        dumpTime("RTC.now()", RTC.now() );
+      #endif
       nowDateTime = NTP_Local_Time;
-      Serial.println("[[NTP] RTC Local time adjusted!");
-      dumpTime("RTC.now()", RTC.now() );
       return true;
     }
   }
