@@ -63,11 +63,24 @@ static const int AMIGABALL_YPOS = 50;
 
   // custom M5Stack/Odroid-Go go TFT/SD/RTC/GPS settings here (see ARDUINO_ESP32_DEV profile for available settings)
   #if defined( ARDUINO_M5STACK_Core2 ) // M5Core2
+    #undef HAS_EXTERNAL_RTC
     #define HAS_EXTERNAL_RTC true
-    //#undef RTC_SDA
-    //#undef RTC_SCL
-    //#define RTC_SDA 21 // pin number
-    //#define RTC_SCL 22 // pin number
+    #undef RTC_SDA
+    #undef RTC_SCL
+    #define RTC_SDA 21 // pin number
+    #define RTC_SCL 22 // pin number
+
+    #define WITH_WIFI // enable WiFi features since M5Core2 has plenty of ram
+
+    //#undef hasHID
+    //#define hasHID() (bool)false // disable buttons/touch
+
+    // adjust per-device core affinity settings here
+    //#undef SERIALTASK_CORE
+    //#define SERIALTASK_CORE 1
+    //#undef HEAPGRAPH_CORE
+    //#define HEAPGRAPH_CORE 0
+
   #endif
 
 #elif defined( ARDUINO_DDUINO32_XS )
@@ -134,6 +147,12 @@ static const int AMIGABALL_YPOS = 50;
 
 #elif defined( ARDUINO_T ) || defined( ARDUINO_T_Watch )// || defined( ARDUINO_M5STACK_Core2 ) // M5Core2 loads MPU implicitely
 
+  // => Hardware select
+  // #define LILYGO_WATCH_2019_WITH_TOUCH        // To use T-Watch2019 with touchscreen, please uncomment this line
+  // #define LILYGO_WATCH_2019_NO_TOUCH       // To use T-Watch2019 Not touchscreen , please uncomment this line
+  // #define LILYGO_WATCH_BLOCK               // To use T-Watch Block , please uncomment this line
+  #define LILYGO_WATCH_2020_V1              // To use T-Watch2020 , please uncomment this line
+
 /*
   // TODO: implement pcf8563.h from https://github.com/Xinyuan-LilyGO/TTGO-T-Watch
   #undef HAS_EXTERNAL_RTC
@@ -142,21 +161,34 @@ static const int AMIGABALL_YPOS = 50;
   #define RTC_SDA 21
   #define RTC_SC  22
 */
-  #undef hasHID
-  #define hasHID() (bool)false // disable buttons
 
-  #undef BLE_FS_TYPE
-  #define BLE_FS_TYPE "sdcard" // "sd" = fs::SD, "sdcard" = fs::SD_MMC
+  #ifdef LILYGO_WATCH_2019_NO_TOUCH
+    #undef hasHID
+    #define hasHID() (bool)false // disable buttons
+  #endif
+
+  #if defined LILYGO_WATCH_2019_WITH_TOUCH || defined LILYGO_WATCH_2019_NO_TOUCH
+    #undef BLE_FS_TYPE
+    #define BLE_FS_TYPE "sdcard" // "sd" = fs::SD, "sdcard" = fs::SD_MMC
+    #warning "Scroll is fucked up with LILYGO_WATCH_2019 displays :-("
+  #else
+    #undef BLE_FS
+    #undef BLE_FS_TYPE
+    #define BLE_FS SPIFFS // inherited from ESP32-Chimera-Core
+    #define BLE_FS_TYPE "spiffs" // sd = fs::SD, sdcard = fs::SD_MMC, spiffs = fs::SPIFFS
+    #undef SD_begin
+    #define SD_begin SPIFFS.begin
+  #endif
 
   #undef tft_initOrientation
   #define tft_initOrientation() tft.setRotation(0) // default orientation for hardware scroll
 
   #undef BASE_BRIGHTNESS
-  #define BASE_BRIGHTNESS 128
+  #define BASE_BRIGHTNESS 16
 
   #undef SCROLL_OFFSET
-  #define SCROLL_OFFSET 320-240
-  //#error "TWATCH DETECTED"
+  #define SCROLL_OFFSET 320-240 // these 240x240 displays have graphic memory mapped as 320x240
+
 
 #else
 
@@ -182,13 +214,13 @@ void tft_begin() {
   //tft.init();
   //M5.ScreenShot.init( &tft, BLE_FS );
   //M5.ScreenShot.begin();
-
   #if HAS_EXTERNAL_RTC
-    //Wire.begin(RTC_SDA, RTC_SCL);
-    //M5.I2C.scan();
+    //DateTime(__DATE__, __TIME__).unixtime()
+    Wire.begin(RTC_SDA, RTC_SCL);
+    M5.I2C.scan();
+    M5.update();
   #endif
   delay( 100 );
-
   //tft.init();
   //tft.setRotation(1);
 
@@ -307,20 +339,32 @@ void tft_scrollTo(int32_t vsp) {
 }
 
 // hardware scroll
-void tft_setupHScrollArea(uint16_t tfa, uint16_t vsa, uint16_t bfa) {
+void tft_setupHScrollArea(int32_t tfa, int32_t vsa, int32_t bfa) {
+
+  tft.setCursor(0,0);
+
+
+  tft.writecommand( 0x37 ); // VSCRADD Vertical Scroll definition.
+  tft.writedata(0 >> 8);
+  tft.writedata(0 & 0xFF);
+
   bfa += SCROLL_OFFSET; // compensate for stubborn firmware
-  tft.writecommand(0x33/*ILI9341_VSCRDEF*/); // Vertical scroll definition
+
+  tft.writecommand(0x33); // ILI9341_VSCRDEF Vertical scroll definition
   tft.writedata(tfa >> 8);           // Top Fixed Area line count
   tft.writedata(tfa);
   tft.writedata(vsa >> 8);  // Vertical Scrolling Area line count
   tft.writedata(vsa);
   tft.writedata(bfa >> 8);           // Bottom Fixed Area line count
   tft.writedata(bfa);
-  log_w("Init Hardware Scroll area with tfa/vsa/bfa %d/%d/%d on w/h %d/%d", tfa, vsa, bfa, scrollpanel_width(), scrollpanel_height());
+
+  log_d("Init Hardware Scroll area with tfa/vsa/bfa %d/%d/%d on w/h %d/%d", tfa, vsa, bfa, scrollpanel_width(), scrollpanel_height());
 }
+
+
 // hardware scroll
 void tft_hScrollTo(uint16_t vsp) {
-  tft.writecommand(0x37/*ILI9341_VSCRSADD*/); // Vertical scrolling pointer
+  tft.writecommand(0x37); // ILI9341_VSCRSADD Vertical scrolling pointer
   tft.writedata(vsp>>8);
   tft.writedata(vsp);
 }
