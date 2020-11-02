@@ -31,9 +31,6 @@
 
 #define TICKS_TO_DELAY 1000
 
-
-
-
 const char* processTemplateLong = "%s%d%s%d";
 const char* processTemplateShort = "%s%d";
 static char processMessage[20];
@@ -332,10 +329,12 @@ class BLEScanUtils {
         }
 
         if( DB.initDone ) {
+          /*
           if( fileSharingEnabled ) {
             log_w("DONOR mode: some db files will be shared via FTP");
-            xTaskCreatePinnedToCore( startFtpServer, "startFtpServer", 16384, NULL, 16, NULL, TASKLAUNCHER_CORE ); /* last = Task Core */
+            xTaskCreatePinnedToCore( startFtpServer, "startFtpServer", 16384, NULL, 16, NULL, TASKLAUNCHER_CORE ); // last = Task Core
           }
+          */
         } else {
           log_w("HOBO mode: some db files are missing, will download...");
           xTaskCreatePinnedToCore( runWifiDownloader, "runWifiDownloader", 16384, NULL, 16, NULL, WIFITASK_CORE ); /* last = Task Core */
@@ -389,24 +388,7 @@ class BLEScanUtils {
         vTaskDelete( NULL );
       }
 
-      static void startFtpServer( void * param ) {
-        /*
-          $ lftp ftp://esp32@esp32-blecollector
-          Password: esp32
-          lftp:~> set ftp:passive-mode on
-          lftp:~> set ftp:use-feat false
-          lftp:~> set ftp:ssl-allow false
-          lftp:~> mirror /db
-        */
-        FtpServer ftpSrv( BLE_FS );
-        ftpSrv.onDisconnect = ESP_Restart;
-        ftpSrv.begin("esp32","esp32"); // username, password for ftp.  set ports in ESP32FtpServer.h  (default 21, 50009 for PASV)
-        while (1) {
-          ftpSrv.handleFTP();
-          vTaskDelay(1);
-        }
-        vTaskDelete( NULL );
-      }
+
 
       static void runWifiDownloader( void * param ) {
 
