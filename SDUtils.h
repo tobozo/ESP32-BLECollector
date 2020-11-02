@@ -26,9 +26,9 @@ bool SDSetup() {
       log_e("[SD] Mount Failed");
       delay(max_wait);
       if(attempts%2==0) {
-        IconRender( &SDLoaderIcon, ICON_STATUS_SET, (tft.width()-30)/2, 100 );
+        IconRender( &SDLoaderIcon, ICON_STATUS_disk00, (tft.width()-30)/2, 100 );
       } else {
-        IconRender( &SDLoaderIcon, ICON_STATUS_UNSET, (tft.width()-30)/2, 100 );
+        IconRender( &SDLoaderIcon, ICON_STATUS_disk01, (tft.width()-30)/2, 100 );
       }
       attempts--;
     }
@@ -39,8 +39,14 @@ bool SDSetup() {
   return sd_mounted;
 }
 
-static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char* needle=NULL){
-  Serial.printf("\nListing directory: %s\n\n", dirname);
+
+
+
+
+
+
+static void listDirs(fs::FS &fs, const char * dirname, uint8_t levels, const char* needle=NULL) {
+  Serial.printf("\nListing directories: %s\n\n", dirname);
 
   File root = fs.open(dirname);
   if(!root){
@@ -55,7 +61,7 @@ static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char
   File file = root.openNextFile();
   Serial.println("    NAME                             |                    |     SIZE");
   Serial.println("-------------------------------------------------------------------------");
-  unsigned long totalSize = 0;
+  //unsigned long totalSize = 0;
   char fileDate[64] = "1980-01-01 00:07:20";
   time_t lastWrite;
   struct tm * tmstruct;
@@ -75,9 +81,29 @@ static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char
     file.close();
     file = root.openNextFile();
   }
+  file.close();
+  root.close();
+}
 
-  root.rewindDirectory();
-  file = root.openNextFile();
+
+static void listFiles(fs::FS &fs, const char * dirname, uint8_t levels, const char* needle=NULL) {
+  //Serial.printf("\nListing Files: %s\n\n", dirname);
+
+  File root = fs.open(dirname);
+  if(!root){
+    Serial.println("Failed to open directory");
+    return;
+  }
+  if(!root.isDirectory()){
+    Serial.println("Not a directory");
+    return;
+  }
+
+  File file = root.openNextFile();
+  unsigned long totalSize = 0;
+  char fileDate[64] = "1980-01-01 00:07:20";
+  time_t lastWrite;
+  struct tm * tmstruct;
 
   // show files (TODO: sort by date)
   while( file ) {
@@ -105,6 +131,14 @@ static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char
     file.close();
     file = root.openNextFile();
   }
+  file.close();
+  root.close();
 
   Serial.printf("\nTotal space used: %ld Bytes\n\n", totalSize);
+}
+
+
+static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char* needle=NULL) {
+  listDirs( fs, dirname, levels, needle );
+  listFiles( fs, dirname, levels, needle );
 }
