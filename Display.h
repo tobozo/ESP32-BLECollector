@@ -70,7 +70,7 @@ static const int AMIGABALL_YPOS = 50;
     #define RTC_SDA 21 // pin number
     #define RTC_SCL 22 // pin number
 
-    #define WITH_WIFI // enable WiFi features since M5Core2 has plenty of ram
+    //#define WITH_WIFI // enable WiFi features since M5Core2 has plenty of ram
 
     //#undef hasHID
     //#define hasHID() (bool)false // disable buttons/touch

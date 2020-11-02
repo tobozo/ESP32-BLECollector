@@ -264,7 +264,7 @@ struct IconBar {
       if( icons[i]->type == ICON_TYPE_WIDGET && icons[i]->widgetStatus[0]->widget->type == ICON_WIDGET_TEXT ) continue;
       icons[i]->posY = height/2 - icons[i]->height/2;
     }
-    log_w("Iconbar dimensions:[%d*%d] with %d icons", width, height, totalIcons);
+    log_d("Iconbar dimensions:[%d*%d] with %d icons", width, height, totalIcons);
   }
   void pushIcon( Icon *icon ) {
     icons = (Icon**)realloc( (Icon**)icons , (totalIcons + 1) * (sizeof(Icon*)));

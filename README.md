@@ -1,6 +1,7 @@
 # ESP32-BLECollector
 
 [![Join the chat at https://gitter.im/ESP32-BLECollector/ESP32-BLECollector](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/ESP32-BLECollector/ESP32-BLECollector)
+[![Build Status](https://travis-ci.com/tobozo/ESP32-BLECollector.svg?branch=master)](https://travis-ci.com/github/tobozo/ESP32-BLECollector)
 
 A BLE Scanner with persistence.
 
