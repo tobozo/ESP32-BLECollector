@@ -48,8 +48,8 @@
 #define HAS_EXTERNAL_RTC   false // uses I2C, search this file for RTC_SDA or RTC_SCL to change pins
 #define HAS_GPS            false // uses hardware serial, search this file for GPS_RX and GPS_TX to change pins
 #define TIME_UPDATE_SOURCE TIME_UPDATE_GPS // TIME_UPDATE_GPS // soon deprecated, will be implicit
-int8_t timeZone = 2; // 1 = GMT+1, 2 = GMT+2, etc
-//#define WITH_WIFI          1 // enable this on first run to download oui databases, or for sharing other .db files
+int8_t timeZone = 1; // 1 = GMT+1, 2 = GMT+2, etc
+#define WITH_WIFI          1 // enable this on first run to download oui databases, or for sharing other .db files
 const char* NTP_SERVER = "europe.pool.ntp.org";
 
 byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
@@ -158,7 +158,32 @@ Preferences preferences;
 #define takeMuxSemaphore() if( mux ) { xSemaphoreTake(mux, portMAX_DELAY); log_v("Took Semaphore"); }
 #define giveMuxSemaphore() if( mux ) { xSemaphoreGive(mux); log_v("Gave Semaphore"); }
 
-#include "Display.h"
+// core affinity
+#define SCANTASK_CORE       0
+#define TASKLAUNCHER_CORE   1-SCANTASK_CORE
+#define TIMESERVERTASK_CORE 1
+#define TIMECLIENTTASK_CORE 1
+#define FILESHARETASK_CORE  0
+#define WIFITASK_CORE       1
+#define SERIALTASK_CORE     1
+#define CLOCKSYNC_CORE      1
+#define STATUSBAR_CORE      1
+#define HEAPGRAPH_CORE      1
+#define SCROLLINTRO_CORE    0
+
+static void destroyTaskNow( TaskHandle_t &task ) {
+  vTaskSuspendAll();
+  TaskHandle_t xTask = task;
+  if( task != NULL ) {
+    //log_w("[Free Heap: %d] Killing BLE Task %s", freeheap, task);
+    task = NULL; // The task is going to be deleted, Set the handle to NULL.
+    vTaskDelete( xTask ); // Delete using the copy of the handle.
+  }
+  xTaskResumeAll();
+}
+
+
+#include "Display.h" // some config settings are forced here
 #include "DateTime.h"
 
 #if HAS_EXTERNAL_RTC
@@ -188,12 +213,13 @@ Preferences preferences;
   __attribute__((unused)) static bool GPSHasDateTime = false;
 #endif
 
+
 // RF stack
 
 #ifdef WITH_WIFI
   // minimal spiffs partition size is required for that
-  #include "ESP32FtpServer.h"
-  #include <WiFi.h>
+  // #include "ftpserver/ESP32FtpServer.h"
+  // #include <WiFi.h>
   #include <HTTPClient.h>
   #include <WiFiClientSecure.h>
 
@@ -203,7 +229,6 @@ Preferences preferences;
   HTTPClient http;
 
 #endif
-
 
 // NimBLE Stack from https://github.com/h2zero/NimBLE-Arduino
 #include <NimBLEDevice.h>
@@ -242,8 +267,6 @@ static int sessDevicesCount = 0; // total devices count per session
 static int results          = 0; // total results during last query
 static unsigned int entries = 0; // total entries in database
 static byte prune_trigger   = 0; // incremented on every insertion, reset on prune()
-
-
 
 // load application stack
 #include "BLECache.h" // data struct

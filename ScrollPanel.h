@@ -85,7 +85,7 @@ class ScrollableOutput {
       BGColorStart = colorstart;
       BGColorEnd = colorend;
       tft.setCursor(0, TFA);
-      uint16_t VSA = height-TFA-BFA;
+      uint16_t VSA = height-(TFA+BFA);
 
       scrollTopFixedArea    = TFA;
       scrollBottomFixedArea = BFA;
@@ -94,13 +94,14 @@ class ScrollableOutput {
       scrollPosY = scrollTopFixedArea;
       yArea = height - scrollTopFixedArea - scrollBottomFixedArea;
 
+      tft_setupHScrollArea(0, 0, 0); // reset ?
       tft_setupHScrollArea(TFA, VSA, BFA);
       s_x_tmp = 0;
       s_y_tmp = scrollTopFixedArea;
       s_w_tmp = width;
       s_h_tmp = yArea;
 
-      log_w("*** NEW Scroll Setup: Top=%d Bottom=%d YArea=%d", TFA, BFA, yArea);
+      log_d("*** NEW Scroll Setup: Top=%d Bottom=%d YArea=%d", TFA, BFA, yArea);
       if (clear) {
         tft_fillGradientHRect( 0, TFA, width/2, yArea, BGColorStart, BGColorEnd );
         tft_fillGradientHRect( width/2, TFA, width/2, yArea, BGColorEnd, BGColorStart );
