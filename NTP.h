@@ -7,7 +7,7 @@ static bool checkForTimeUpdate( DateTime &internalDateTime ) {
   //DateTime externalDateTime = internalDateTime;
   int64_t seconds_since_last_ntp_update = abs( internalDateTime.unixtime() - lastSyncDateTime.unixtime() );
   if ( seconds_since_last_ntp_update >= 3500 ) { // GPS sync every hour +/- 3% precision
-    log_e("seconds_since_last_ntp_update = now(%d) - last(%d) = %d seconds", internalDateTime.unixtime(), lastSyncDateTime.unixtime(), seconds_since_last_ntp_update);
+    log_d("seconds_since_last_ntp_update = now(%d) - last(%d) = %d seconds", internalDateTime.unixtime(), lastSyncDateTime.unixtime(), seconds_since_last_ntp_update);
     #if TIME_UPDATE_SOURCE==TIME_UPDATE_BLE // will trigger bletime if any BLETimeServer is found
       ForceBleTime = true;
       HasBTTime = false;
@@ -48,7 +48,7 @@ void TimeInit() {
   #if HAS_EXTERNAL_RTC
     if(clockUpdateSource==SOURCE_NONE) {
       if(RTC.isrunning()) {
-        log_d("[RTC] Forcing source to RTC and rebooting");
+        log_w("[RTC] Forcing source to RTC and rebooting");
         logTimeActivity(SOURCE_RTC, 0);
         ESP.restart();
       } else {
@@ -63,13 +63,91 @@ void TimeInit() {
     settimeofday(tv, NULL);
     struct tm now;
     if( getLocalTime(&now,0) ) {
-      dumpTime("RTC setTime Success", nowDateTime);
+      dumpTime("System RTC setTime Success", nowDateTime);
     } else {
-      log_e("[RTC] setTime Failed");
-      dumpTime("RTC.now() :", nowDateTime);
+      #ifdef WITH_WIFI
+      log_e("System RTC setTime from External RTC failed, run stopBLE command to sync from NTP");
+      #endif
+      dumpTime("RTC.now()", nowDateTime);
     }
-
-
     TimeIsSet = true;
   #endif
 }
+
+
+time_t compileTime() {
+    const time_t FUDGE(10);     // fudge factor to allow for compile time (seconds, YMMV)
+    const char *compDate = __DATE__, *compTime = __TIME__, *months = "JanFebMarAprMayJunJulAugSepOctNovDec";
+    char chMon[3], *m;
+    tmElements_t tm;
+
+    strncpy(chMon, compDate, 3);
+    chMon[3] = '\0';
+    m = strstr(months, chMon);
+    tm.Month = ((m - months) / 3 + 1);
+
+    tm.Day = atoi(compDate + 4);
+    tm.Year = atoi(compDate + 7) - 1970;
+    tm.Hour = atoi(compTime);
+    tm.Minute = atoi(compTime + 3);
+    tm.Second = atoi(compTime + 6);
+    time_t t = makeTime(tm);
+    return t + FUDGE;           // add fudge factor to allow for compile time
+}
+
+
+#ifdef WITH_WIFI
+
+
+  #include <sys/time.h>
+  #include "lwip/apps/sntp.h"
+
+  //const char* NTP_SERVER = "europe.pool.ntp.org";
+  static bool getNTPTime(void);
+  static void initNTP(void);
+
+
+  static bool getNTPTime(void) {
+    initNTP();
+    time_t now = 0;
+    struct tm timeinfo = {};
+    int retry = 0;
+    const int retry_count = 10;
+    while(timeinfo.tm_year < (2016 - 1900) && ++retry < retry_count) {
+      Serial.printf("Waiting for system time to be set... (%d/%d)\n", retry, retry_count);
+      vTaskDelay(2000 / portTICK_PERIOD_MS);
+      time(&now);
+      localtime_r(&now, &timeinfo);
+    }
+    if( retry == retry_count ) {
+      Serial.println("Failed to set system time from NTP...");
+      return false;
+    } else {
+      struct timeval tv;
+      //bt_time_t _time;
+      struct tm* _t;
+      gettimeofday(&tv, nullptr);
+      _t = localtime(&(tv.tv_sec));
+      DateTime NTP_UTC_Time( _t->tm_year-70/*1900 to 1970 offset*/, _t->tm_mon + 1, _t->tm_mday, _t->tm_hour, _t->tm_min, _t->tm_sec );
+      DateTime NTP_Local_Time = NTP_UTC_Time.unixtime() + timeZone*3600;
+
+      dumpTime("[NTP] UTC Time", NTP_UTC_Time );
+      dumpTime("[NTP] Local Time", NTP_Local_Time );
+
+      RTC.adjust( NTP_Local_Time );
+      nowDateTime = NTP_Local_Time;
+      Serial.println("[[NTP] RTC Local time adjusted!");
+      dumpTime("RTC.now()", RTC.now() );
+      return true;
+    }
+  }
+
+  static void initNTP(void) {
+    Serial.println("Initializing SNTP");
+    sntp_setoperatingmode(SNTP_OPMODE_POLL);
+    sntp_setservername(0, (char*)NTP_SERVER);
+    sntp_init();
+  }
+
+
+#endif // WITH_WIFI
