@@ -47,6 +47,11 @@ bool onScanDone = true;
 bool scanTaskRunning = false;
 bool scanTaskStopped = true;
 
+#ifdef WITH_WIFI
+static bool WiFiStarted = false;
+static bool NTPDateSet = false;
+#endif
+
 extern size_t devicesStatCount;
 
 static char* serialBuffer = NULL;
@@ -276,7 +281,7 @@ class BLEScanUtils {
       }
 
       static void startAlternateSourceTask( void * param = NULL ) {
-        xTaskCreatePinnedToCore( setAlternateSource, "setAlternateSource", 16000, NULL, 2, NULL, 1);
+        xTaskCreatePinnedToCore( setAlternateSource, "setAlternateSource", 16000, NULL, 2, NULL, TASKLAUNCHER_CORE );
       }
 
       static void setWiFiSSID( void * param = NULL ) {
@@ -291,7 +296,7 @@ class BLEScanUtils {
 
       static void stopBLECB( void * param = NULL ) {
         stopScanCB();
-        xTaskCreatePinnedToCore( stopBLE, "stopBLE", 8192, NULL, 5, NULL, 1 ); /* last = Task Core */
+        xTaskCreatePinnedToCore( stopBLE, "stopBLE", 8192, NULL, 5, NULL, TASKLAUNCHER_CORE ); /* last = Task Core */
       }
 
       static void stopBLE( void * param = NULL ) {
@@ -312,9 +317,40 @@ class BLEScanUtils {
 
         log_w("[Free Heap: %d] BT Shutdown finished", freeheap);
 
-        xTaskCreatePinnedToCore( startWifi, "startWifi", 16384, NULL, 16, NULL, 1 ); /* last = Task Core */
+        xTaskCreatePinnedToCore( startWifi, "startWifi", 16384, NULL, 16, NULL, TASKLAUNCHER_CORE ); /* last = Task Core */
+
+        while( WiFiStarted == false ) {
+          // TODO: timeout this
+          vTaskDelay( 100 );
+        }
+
+        NTPDateSet = false;
+        xTaskCreatePinnedToCore( startNTPUpdater, "startNTPUpdater", 16384, NULL, 16, NULL, TASKLAUNCHER_CORE ); /* last = Task Core */
+        while( NTPDateSet == false ) {
+          // TODO: timeout this
+          vTaskDelay( 100 );
+        }
+
+        if( DB.initDone ) {
+          if( fileSharingEnabled ) {
+            log_w("DONOR mode: some db files will be shared via FTP");
+            xTaskCreatePinnedToCore( startFtpServer, "startFtpServer", 16384, NULL, 16, NULL, TASKLAUNCHER_CORE ); /* last = Task Core */
+          }
+        } else {
+          log_w("HOBO mode: some db files are missing, will download...");
+          xTaskCreatePinnedToCore( runWifiDownloader, "runWifiDownloader", 16384, NULL, 16, NULL, WIFITASK_CORE ); /* last = Task Core */
+        }
+
+        xTaskCreatePinnedToCore( stopWiFi, "stopWiFi", 8192, NULL, 5, NULL, TASKLAUNCHER_CORE ); /* last = Task Core */
+        while( WiFiStarted == true ) {
+          // TODO: timeout this
+          vTaskDelay( 100 );
+        } // wait until wifi stopped
+        log_w("Restarting");
+        ESP.restart();
         vTaskDelete( NULL );
       }
+
 
       static void startWifi( void * param = NULL ) {
         WiFi.mode(WIFI_STA);
@@ -335,12 +371,21 @@ class BLEScanUtils {
         Serial.println(WiFi.localIP());
         Serial.println("");
 
-        if( DB.initDone ) {
-          xTaskCreatePinnedToCore( startFtpServer, "startFtpServer", 16384, NULL, 16, NULL, 1 ); /* last = Task Core */
-        } else {
-          log_w("HOBO mode: some db files are missing, will download...");
-          xTaskCreatePinnedToCore( runWifiDownloader, "runWifiDownloader", 16384, NULL, 16, NULL, 1 ); /* last = Task Core */
-        }
+        WiFiStarted = true;
+
+        vTaskDelete( NULL );
+      }
+
+      static void stopWiFi( void* param = NULL ) {
+        log_w("Stopping WiFi");
+        WiFi.mode(WIFI_OFF);
+        WiFiStarted = false;
+        vTaskDelete( NULL );
+      }
+
+
+      static void startNTPUpdater( void * param ) {
+        NTPDateSet = getNTPTime();
         vTaskDelete( NULL );
       }
 
@@ -360,6 +405,7 @@ class BLEScanUtils {
           ftpSrv.handleFTP();
           vTaskDelay(1);
         }
+        vTaskDelete( NULL );
       }
 
       static void runWifiDownloader( void * param ) {
@@ -484,17 +530,6 @@ class BLEScanUtils {
       if( fileSharingClientTaskIsRunning ) destroyTaskNow( FileClientTaskHandle );
     }
 
-    static void destroyTaskNow( TaskHandle_t &task ) {
-      vTaskSuspendAll();
-      TaskHandle_t xTask = task;
-      if( task != NULL ) {
-        //log_w("[Free Heap: %d] Killing BLE Task %s", freeheap, task);
-        task = NULL; // The task is going to be deleted, Set the handle to NULL.
-        vTaskDelete( xTask ); // Delete using the copy of the handle.
-      }
-      xTaskResumeAll();
-    }
-
     static void startScanCB( void * param = NULL ) {
 
       if( timeClientisStarted )            destroyTaskNow( TimeClientTaskHandle );
@@ -505,7 +540,7 @@ class BLEScanUtils {
       if ( !scanTaskRunning ) {
         log_d("Starting scan" );
         uint16_t stackSize = DB.hasPsram ? 5120 : 5120;
-        xTaskCreatePinnedToCore( scanTask, "scanTask", stackSize, NULL, 5, NULL, 1 ); /* last = Task Core */
+        xTaskCreatePinnedToCore( scanTask, "scanTask", stackSize, NULL, 8, NULL, SCANTASK_CORE ); /* last = Task Core */
         while ( scanTaskStopped ) {
           log_d("Waiting for scan to start...");
           vTaskDelay(1000);
@@ -530,22 +565,30 @@ class BLEScanUtils {
     }
 
     static void restartCB( void * param = NULL ) {
-      stopScanCB();
-      xTaskCreatePinnedToCore( doRestart, "doRestart", 16384, param, 5, NULL, 1 ); // last = Task Core
+      // detach from this thread before it's destroyed
+      xTaskCreatePinnedToCore( doRestart, "doRestart", 16384, param, 5, NULL, TASKLAUNCHER_CORE ); // last = Task Core
     }
 
     static void doRestart( void * param = NULL ) {
       // "restart now" command skips db replication
-      if ( strcmp( "now", (const char*)param ) != 0 ) {
+      stopScanCB();
+      stopBLETasks();
+
+      if ( param != NULL && strcmp( "now", (const char*)param ) != 0 ) {
         DB.updateDBFromCache( BLEDevRAMCache, false, false );
       }
+
+      log_w("Will restart");
+      //tft.writeCommand( 0x01 ); // force display reset
+      //digitalWrite( 33, HIGH );
+      delay( 50 );
       ESP.restart();
     }
 
     static void startFileSharingServer( void * param = NULL ) {
       if ( ! fileDownloadingEnabled ) {
         fileDownloadingEnabled = true;
-        xTaskCreatePinnedToCore( startFileSharingServerTask, "startFileSharingServerTask", 2048, param, 0, NULL, 0 ); // last = Task Core
+        xTaskCreatePinnedToCore( startFileSharingServerTask, "startFileSharingServerTask", 2048, param, 0, NULL, TASKLAUNCHER_CORE ); // last = Task Core
       }
     }
 
@@ -563,7 +606,7 @@ class BLEScanUtils {
 
       fileSharingServerTaskIsRunning = true;
       BLERoleIcon.setStatus( ICON_STATUS_ROLE_FILE_SEEKING );
-      xTaskCreatePinnedToCore( FileSharingServerTask, "FileSharingServerTask", 12000, NULL, 5, &FileServerTaskHandle, 0 );
+      xTaskCreatePinnedToCore( FileSharingServerTask, "FileSharingServerTask", 12000, NULL, 5, &FileServerTaskHandle, FILESHARETASK_CORE );
       if ( scanWasRunning ) {
         while ( fileSharingServerTaskIsRunning ) {
           vTaskDelay( 1000 );
@@ -592,7 +635,7 @@ class BLEScanUtils {
 
       fileSharingClientTaskIsRunning = true;
       BLERoleIcon.setStatus( ICON_STATUS_ROLE_FILE_SHARING );
-      xTaskCreatePinnedToCore( FileSharingClientTask, "FileSharingClientTask", 12000, param, 5, &FileClientTaskHandle, 0 ); // last = Task Core
+      xTaskCreatePinnedToCore( FileSharingClientTask, "FileSharingClientTask", 12000, param, 5, &FileClientTaskHandle, FILESHARETASK_CORE ); // last = Task Core
       if ( scanWasRunning ) {
         while ( fileSharingClientTaskIsRunning ) {
           vTaskDelay( 1000 );
@@ -610,7 +653,7 @@ class BLEScanUtils {
     static void setTimeClientOn( void * param = NULL ) {
       if( !timeClientisStarted ) {
         timeClientisStarted = true;
-        xTaskCreatePinnedToCore( startTimeClient, "startTimeClient", 2560, param, 0, NULL, 0 ); // last = Task Core
+        xTaskCreatePinnedToCore( startTimeClient, "startTimeClient", 2560, param, 0, NULL, TASKLAUNCHER_CORE ); // last = Task Core
       } else {
         log_w("startTimeClient already called, time is also about patience");
       }
@@ -625,7 +668,7 @@ class BLEScanUtils {
       }
       if ( scanTaskRunning ) stopScanCB();
       BLERoleIcon.setStatus( ICON_STATUS_ROLE_CLOCK_SEEKING );
-      xTaskCreatePinnedToCore( TimeClientTask, "TimeClientTask", 2560, NULL, 5, &TimeClientTaskHandle, 0 ); // TimeClient task prefers core 0
+      xTaskCreatePinnedToCore( TimeClientTask, "TimeClientTask", 2560, NULL, 5, &TimeClientTaskHandle, TIMECLIENTTASK_CORE ); // TimeClient task prefers core 0
       if ( scanWasRunning ) {
         while ( timeClientisRunning ) {
           vTaskDelay( 1000 );
@@ -644,7 +687,7 @@ class BLEScanUtils {
     static void setTimeServerOn( void * param = NULL ) {
       if( !timeServerStarted ) {
         timeServerStarted = true;
-        xTaskCreatePinnedToCore( startTimeServer, "startTimeServer", 8192, param, 0, NULL, 0 ); // last = Task Core
+        xTaskCreatePinnedToCore( startTimeServer, "startTimeServer", 8192, param, 0, NULL, TASKLAUNCHER_CORE ); // last = Task Core
       }
     }
 
@@ -657,7 +700,7 @@ class BLEScanUtils {
       BLERoleIcon.setStatus(ICON_STATUS_ROLE_CLOCK_SHARING );
       UI.headerStats( "Starting Time Server" );
       vTaskDelay(1);
-      xTaskCreatePinnedToCore( TimeServerTask, "TimeServerTask", 4096, NULL, 1, &TimeServerTaskHandle, 1 ); // TimeServerTask prefers core 1
+      xTaskCreatePinnedToCore( TimeServerTask, "TimeServerTask", 4096, NULL, 1, &TimeServerTaskHandle, TIMESERVERTASK_CORE ); // TimeServerTask prefers core 1
       log_w("TimeServerTask started");
       if ( scanWasRunning ) {
         while( ! timeServerStarted ) {
@@ -708,6 +751,7 @@ class BLEScanUtils {
       DBneedsReplication = true;
       bool scanWasRunning = scanTaskRunning;
       if ( scanTaskRunning ) stopScanCB();
+      DB.maintain();
       while ( DBneedsReplication ) {
         vTaskDelay(1000);
       }
@@ -721,7 +765,7 @@ class BLEScanUtils {
     }
 
     static void rmFileCB( void * param = NULL ) {
-      xTaskCreatePinnedToCore(rmFileTask, "rmFileTask", 5000, param, 2, NULL, 1); /* last = Task Core */
+      xTaskCreatePinnedToCore(rmFileTask, "rmFileTask", 5000, param, 2, NULL, TASKLAUNCHER_CORE ); /* last = Task Core */
     }
 
     static void rmFileTask( void * param = NULL ) {
@@ -771,7 +815,7 @@ class BLEScanUtils {
     }
 
     static void listDirCB( void * param = NULL ) {
-      xTaskCreatePinnedToCore(listDirTask, "listDirTask", 5000, param, 2, NULL, 1); /* last = Task Core */
+      xTaskCreatePinnedToCore(listDirTask, "listDirTask", 5000, param, 8, NULL, TASKLAUNCHER_CORE ); /* last = Task Core */
     }
 
     static void listDirTask( void * param = NULL ) {
@@ -782,10 +826,14 @@ class BLEScanUtils {
         if(! BLE_FS.exists( (const char*)param ) ) {
           Serial.printf("Directory %s does not exist\n", (const char*)param );
         } else {
+          takeMuxSemaphore();
           listDir(BLE_FS, (const char*)param, 0, DB.BLEMacsDbFSPath);
+          giveMuxSemaphore();
         }
       } else {
+        takeMuxSemaphore();
         listDir(BLE_FS, "/", 0, DB.BLEMacsDbFSPath);
+        giveMuxSemaphore();
       }
       if ( scanWasRunning ) startScanCB();
       isQuerying = false;
@@ -821,7 +869,7 @@ class BLEScanUtils {
     static void startSerialTask() {
       serialBuffer = (char*)calloc( SERIAL_BUFFER_SIZE, sizeof(char) );
       tempBuffer   = (char*)calloc( SERIAL_BUFFER_SIZE, sizeof(char) );
-      xTaskCreatePinnedToCore(serialTask, "serialTask", 8192 + SERIAL_BUFFER_SIZE, NULL, 0, NULL, 1); /* last = Task Core */
+      xTaskCreatePinnedToCore(serialTask, "serialTask", 8192 + SERIAL_BUFFER_SIZE, NULL, 0, NULL, SERIALTASK_CORE ); /* last = Task Core */
     }
 
     static void serialTask( void * parameter ) {
@@ -889,7 +937,8 @@ class BLEScanUtils {
       #if HAS_EXTERNAL_RTC
       if( TimeIsSet ) {
         // auto share time if available
-        runCommand( (char*)"bleclock" );
+        // TODO: fix this, broken since NimBLE
+        // runCommand( (char*)"bleclock" );
       }
       #endif
 
@@ -1283,7 +1332,7 @@ class BLEScanUtils {
           if( fileServerBLEAddress != "" ) {
             UI.headerStats("File Sharing ...");
             log_w("Launching FileSharingClient Task");
-            xTaskCreatePinnedToCore( startFileSharingClient, "startFileSharingClient", 2048, NULL, 5, NULL, 1 );
+            xTaskCreatePinnedToCore( startFileSharingClient, "startFileSharingClient", 2048, NULL, 5, NULL, TASKLAUNCHER_CORE );
             while( scanTaskRunning ) {
               vTaskDelay( 10 );
             }
@@ -1297,7 +1346,7 @@ class BLEScanUtils {
           if( timeServerBLEAddress != "" ) {
             UI.headerStats("BLE Time sync ...");
             log_w("HOBO mode: found a peer with time provider service, launching BLE TimeClient Task");
-            xTaskCreatePinnedToCore(startTimeClient, "startTimeClient", 2048, NULL, 0, NULL, 0); /* last = Task Core */
+            xTaskCreatePinnedToCore(startTimeClient, "startTimeClient", 2048, NULL, 0, NULL, TASKLAUNCHER_CORE ); /* last = Task Core */
             while( scanTaskRunning ) {
               vTaskDelay( 10 );
             }
@@ -1394,7 +1443,7 @@ class BLEScanUtils {
       Out.serialEcho   = preferences.getBool("serialEcho", true);
       UI.filterVendors = preferences.getBool("filterVendors", false);
       UI.brightness    = preferences.getUChar("brightness", BASE_BRIGHTNESS);
-      log_w("Defrosted brightness: %d", UI.brightness );
+      log_d("Defrosted brightness: %d", UI.brightness );
       preferences.end();
     }
     static void setPrefs() {
