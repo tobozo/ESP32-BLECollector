@@ -88,13 +88,13 @@ Time Sharing
 File Sharing (still experimental)
 ------------
   - ⚠ BLE file sharing is probably broken since Nimble-Arduino
-  - ⚠ A new WiFi file sharing feature can now be enabled, but psram is strongly recommended for that.
+  - ~~⚠ A new WiFi file sharing feature can now be enabled, but psram is strongly recommended for that.~~
   - ~~This feature is currently limited to sharing the two necessary .db files, if at least one of those files is missing or corrupted at boot, the BLECollector will start a BLE File server and wait for another BLECollector to send those files.~~
   - ~~Sending files is still a manual operation, just issue the `blesend` command when another BLECollector is ready to receive the files.~~
   - ~~Possible outcomes of this feature: sharing/propagating the collected data (e.g. whitelists/blacklists)~~
   - Enable the WiFi sharing by uncommenting `#define WITH_WIFI` in `Settings.h`
-  - Issue the `stopBLE` command to stop BLE and start WiFi
-  - If the oui database isn't present, it will download it from github, otherwise it'll start the [FTP Server](#ftp-server-still-experimental) and share the collected data
+  - Issue the `stopBLE` command, it will stop BLE, start WiFi and synchronize time to a nearby NTP server
+  - If the oui database isn't present, it will download it from github ~~ otherwise it'll start the [FTP Server](#ftp-server-still-experimental) and share the collected data~~
 
 
 Serial command interface
@@ -125,29 +125,6 @@ Serial command interface
     21)          stopBLE : Stop BLE and start WiFi (experimental)
     22)      setWiFiSSID : Set WiFi SSID
     23)      setWiFiPASS : Set WiFi Password
-
-
-Ftp Server (still experimental)
-------------
-
-  This feature will run a FTP server so the .db files can be retrieved from a FTP client over the WiFi network.
-  Since FTP sends password as clear text, the username and password are "esp32" and "esp32" (without the quotes).
-  This feature assumes the ESP32 had a previous successful connection to a known AP, or had its ssid/password previously set using `setWiFiSSID` and `setWiFiPASS` serial interface commands.
-  To start the FTP server, just issue the `stopBLE` command line from the serial interface.
-  Required lftp commands, "/path/to/your/local/folder" refers to your PC/Mac :
-
-    $ lftp ftp://esp32@esp32-blecollector
-    Password: esp32
-    lftp:~> set ftp:passive-mode on
-    lftp:~> set ftp:use-feat false
-    lftp:~> set ftp:ssl-allow false
-    lftp:~> lcd /path/to/your/local/folder
-    lftp:~> mirror /
-
-Limitations:
-
-  - ⚠ This FTP Server has only been tested with lftp as a client
-  - ⚠ This FTP Server can only be started from the serial interface
 
 
 Contributions are welcome :-)
