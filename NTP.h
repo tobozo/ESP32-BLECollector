@@ -103,8 +103,15 @@ time_t compileTime() {
   #include "lwip/apps/sntp.h"
 
   //const char* NTP_SERVER = "europe.pool.ntp.org";
-  static bool getNTPTime(void);
-  static void initNTP(void);
+  //static bool getNTPTime(void);
+  //static void initNTP(void);
+
+  static void initNTP(void) {
+    Serial.println("Initializing SNTP");
+    sntp_setoperatingmode(SNTP_OPMODE_POLL);
+    sntp_setservername(0, (char*)NTP_SERVER);
+    sntp_init();
+  }
 
 
   static bool getNTPTime(void) {
@@ -142,12 +149,7 @@ time_t compileTime() {
     }
   }
 
-  static void initNTP(void) {
-    Serial.println("Initializing SNTP");
-    sntp_setoperatingmode(SNTP_OPMODE_POLL);
-    sntp_setservername(0, (char*)NTP_SERVER);
-    sntp_init();
-  }
+
 
 
 #endif // WITH_WIFI

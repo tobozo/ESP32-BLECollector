@@ -51,8 +51,8 @@ before_install:
   - install_ide '("newest")'
 
   # Install the library from the repository
-  #- install_library ESP32-Chimera-Core
-  - install_library https://github.com/tobozo/ESP32-Chimera-Core/archive/Touch.zip
+  - install_library "ESP32-Chimera-Core"
+  #- install_library https://github.com/tobozo/ESP32-Chimera-Core/archive/Touch.zip
   - install_library https://github.com/PaulStoffregen/Time/archive/master.zip
   - install_library "LovyanGFX"
   - install_library "M5Stack-SD-Updater"
@@ -88,12 +88,6 @@ script:
   - set_ide_preference "build.path=/tmp/m5fire"
   - build_sketch "${TRAVIS_BUILD_DIR}/ESP32-BLECollector.ino" "esp32:esp32:m5stack-fire:PartitionScheme=default" "false" "newest"
   - cp "/tmp/m5fire/ESP32-BLECollector.ino.bin" "/tmp/BLECollector-binaries/M5Fire-BLECollector.bin"
-
-  - build_sketch "${TRAVIS_BUILD_DIR}/ESP32-BLECollector.ino" "m5stack:esp32:m5stack-core2:PartitionScheme=default" "false" "newest"
-  - cp "/tmp/m5core2/ESP32-BLECollector.ino.bin" "/tmp/BLECollector-binaries/M5Core2-BLECollector.bin"
-
-  - ls /tmp/BLECollector-binaries -la
-
   - set_ide_preference "build.path=/tmp/m5core2"
   - build_sketch "${TRAVIS_BUILD_DIR}/ESP32-BLECollector.ino" "m5stack:esp32:m5stack-core2:PartitionScheme=default" "false" "newest"
   - cp "/tmp/m5core2/ESP32-BLECollector.ino.bin" "/tmp/BLECollector-binaries/M5Core2-BLECollector.bin"
