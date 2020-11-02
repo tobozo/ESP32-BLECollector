@@ -51,16 +51,18 @@ before_install:
   - install_ide '("newest")'
 
   # Install the library from the repository
-  #- install_library ESP32-Chimera-Core
-  - install_library https://github.com/tobozo/ESP32-Chimera-Core/archive/lgfx_test.zip
+  - install_library "ESP32-Chimera-Core"
+  #- install_library https://github.com/tobozo/ESP32-Chimera-Core/archive/Touch.zip
   - install_library https://github.com/PaulStoffregen/Time/archive/master.zip
-  #- install_library M5Stack-SD-Updater
+  - install_library "LovyanGFX"
   - install_library "M5Stack-SD-Updater"
   - install_library Sqlite3Esp32
   - install_library https://github.com/mikalhart/TinyGPSPlus/archive/master.zip
+  - install_library "NimBLE-Arduino"
   #- install_library https://github.com/tobozo/ESP32-BLECollector/releases/download/1.3/BLE.zip
-  - install_library https://github.com/tobozo/NimBLE-Arduino/archive/master.zip
+  #- install_library https://github.com/tobozo/NimBLE-Arduino/archive/master.zip
   - install_package "esp32:esp32" "https://dl.espressif.com/dl/package_esp32_index.json" #  # esp32:esp32:m5stack-core-esp32
+  - install_package "m5stack:esp32" "https://m5stack.oss-cn-shenzhen.aliyuncs.com/resource/arduino/package_m5stack_index.json" # m5stack:esp32:m5stack-core2
   - pip install pyserial
 
 script:
@@ -74,6 +76,7 @@ script:
   - mkdir "/tmp/m5stack"
   - mkdir "/tmp/odroidgo"
   - mkdir "/tmp/m5fire"
+  - mkdir "/tmp/m5core2"
 
   #- set_ide_preference "custom_PartitionScheme=min_spiffs"
   - set_ide_preference "build.path=/tmp/m5stack"
@@ -85,6 +88,9 @@ script:
   - set_ide_preference "build.path=/tmp/m5fire"
   - build_sketch "${TRAVIS_BUILD_DIR}/ESP32-BLECollector.ino" "esp32:esp32:m5stack-fire:PartitionScheme=default" "false" "newest"
   - cp "/tmp/m5fire/ESP32-BLECollector.ino.bin" "/tmp/BLECollector-binaries/M5Fire-BLECollector.bin"
+  - set_ide_preference "build.path=/tmp/m5core2"
+  - build_sketch "${TRAVIS_BUILD_DIR}/ESP32-BLECollector.ino" "m5stack:esp32:m5stack-core2:PartitionScheme=default" "false" "newest"
+  - cp "/tmp/m5core2/ESP32-BLECollector.ino.bin" "/tmp/BLECollector-binaries/M5Core2-BLECollector.bin"
   - ls /tmp/BLECollector-binaries -la
 
   #- if [ "$TRAVIS_BRANCH" != "master" ]; then echo "This commit was made against the $TRAVIS_BRANCH, skipping examples compilation"; exit 0; fi
@@ -115,7 +121,8 @@ deploy:
       - "/tmp/BLECollector-binaries/M5stack-BLECollector.bin"
       - "/tmp/BLECollector-binaries/OdroidGo-BLECollector.bin"
       - "/tmp/BLECollector-binaries/M5Fire-BLECollector.bin"
+      - "/tmp/BLECollector-binaries/M5Core2-BLECollector.bin"
     skip_cleanup: true
     # draft: true
     on:
-      branch: unstable
+      branch: master
