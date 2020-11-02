@@ -162,6 +162,10 @@ struct MacSwap {
 #include "SDUtils.h"
 
 
+TaskHandle_t ClockSyncTaskHandle;
+TaskHandle_t DrawableItemsTaskHandle;
+TaskHandle_t HeapGraphTaskHandle;
+
 
 class UIUtils {
   public:
@@ -191,7 +195,7 @@ class UIUtils {
     void init() {
       Serial.begin(115200);
       Serial.println(welcomeMessage);
-      Serial.printf("HAS BUTTONS: %s,\nHAS_XPAD: %s\nHAS PSRAM: %s\nRTC_PROFILE: %s\nHAS_EXTERNAL_RTC: %s\nHAS_GPS: %s\nTIME_UPDATE_SOURCE: %d\n",
+      Serial.printf("HAS HID: %s,\nHAS_XPAD: %s\nHAS PSRAM: %s\nRTC_PROFILE: %s\nHAS_EXTERNAL_RTC: %s\nHAS_GPS: %s\nTIME_UPDATE_SOURCE: %d\n",
         hasHID() ? "true" : "false",
         hasXPaxShield() ? "true" : "false",
         psramInit() ? "true" : "false",
@@ -203,6 +207,7 @@ class UIUtils {
       Serial.println("Free heap at boot: " + String(initial_free_heap));
 
       bool clearScreen = true;
+
       if (resetReason == 12) { // SW Reset
         clearScreen = false;
       }
@@ -212,7 +217,7 @@ class UIUtils {
       tft_setBrightness( brightness );
 
       // start heap graph
-      xTaskCreatePinnedToCore(taskHeapGraph, "taskHeapGraph", 1024, NULL, 0, NULL, 1);
+      xTaskCreatePinnedToCore(taskHeapGraph, "taskHeapGraph", 1024, NULL, 0, &HeapGraphTaskHandle, HEAPGRAPH_CORE );
 
       // make sure non-printable chars aren't printed (also disables utf8)
       tft.setAttribute( lgfx::cp437_switch, true );
@@ -316,6 +321,9 @@ class UIUtils {
 
       Out.setupScrollArea( headerHeight, footerHeight, colorstart, colorend );
 
+      uint32_t tftstatus = tft.readCommand( 0x09 );
+      log_n("TFT Status = 0x%08X", tftstatus ); // 0x00245384 before setup scroll and 0x00A45284 after
+
       SDSetup();
       timeSetup();
       SetTimeStateIcon();
@@ -325,6 +333,7 @@ class UIUtils {
       if ( clearScreen ) {
         playIntro();
       } else {
+        playIntro();
         Out.scrollNextPage();
       }
     }
@@ -374,7 +383,18 @@ class UIUtils {
       takeMuxSemaphore();
       Out.scrollNextPage();
       giveMuxSemaphore();
-      xTaskCreatePinnedToCore(introUntilScroll, "introUntilScroll", 2048, NULL, 8, NULL, 0);
+      xTaskCreatePinnedToCore(introUntilScroll, "introUntilScroll", 2048, NULL, 8, NULL, SCROLLINTRO_CORE );
+    }
+
+
+    static void stopUITasks( void * param = NULL ) {
+      destroyTaskNow( ClockSyncTaskHandle );
+      destroyTaskNow( DrawableItemsTaskHandle );
+      destroyTaskNow( HeapGraphTaskHandle );
+      //if( timeServerIsRunning )            destroyTaskNow( TimeServerTaskHandle );
+      //if( timeClientisStarted )            destroyTaskNow( TimeClientTaskHandle );
+      //if( fileSharingServerTaskIsRunning ) destroyTaskNow( FileServerTaskHandle );
+      //if( fileSharingClientTaskIsRunning ) destroyTaskNow( FileClientTaskHandle );
     }
 
 
@@ -654,8 +674,8 @@ class UIUtils {
       heapGraphSprite.createSprite( graphLineWidth, graphLineHeight );
       giveMuxSemaphore();
 
-      xTaskCreatePinnedToCore(clockSync, "clockSync", 2048, NULL, 2, NULL, 1); // RTC wants to run on core 1 or it fails
-      xTaskCreatePinnedToCore(drawableItems, "drawableItems", 6144, NULL, 2, NULL, 1);
+      xTaskCreatePinnedToCore(clockSync, "clockSync", 2048, NULL, 2, &ClockSyncTaskHandle, CLOCKSYNC_CORE ); // RTC wants to run on core 1 or it fails
+      xTaskCreatePinnedToCore(drawableItems, "drawableItems", 6144, NULL, 2, &DrawableItemsTaskHandle, STATUSBAR_CORE );
       vTaskDelete(NULL);
     }
 
@@ -1616,8 +1636,8 @@ class UIUtils {
           sprintf(seenDevicesCountSpacer, "%s", "   "); // Seen
           sprintf(scansCountSpacer, "%s", "  "); // Scans
           iconAppX            = 120;
-          headerHeight        = 37; // Important: resulting scrollHeight must be a multiple of font height, default font height is 8px
-          footerHeight        = 11; // Important: resulting scrollHeight must be a multiple of font height, default font height is 8px
+          headerHeight        = 36; // Important: resulting scrollHeight must be a multiple of font height, default font height is 8px
+          footerHeight        = 12; // Important: resulting scrollHeight must be a multiple of font height, default font height is 8px
           scrollHeight        = ( Out.height - ( headerHeight + footerHeight ));
           leftMargin          = 2;
           footerBottomPosY    = Out.height;
@@ -1691,7 +1711,7 @@ class UIUtils {
       dcpmFirstY = baseCoordY;
       dcpmppFirstY = baseCoordY;
 
-      log_w("Allocating heapgraph buffers (%d and %d bytes)", heapMapBuffLen*sizeof( uint16_t ),  heapMapBuffLen*sizeof( uint32_t ));
+      log_d("Allocating heapgraph buffers (%d and %d bytes)", heapMapBuffLen*sizeof( uint16_t ),  heapMapBuffLen*sizeof( uint32_t ));
 
       devCountPerMinutePerPeriod = (uint16_t*)calloc( heapMapBuffLen, sizeof( uint16_t ) );
       if( devCountPerMinutePerPeriod != NULL ) {
