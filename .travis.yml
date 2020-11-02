@@ -123,6 +123,6 @@ deploy:
       - "/tmp/BLECollector-binaries/M5Fire-BLECollector.bin"
       - "/tmp/BLECollector-binaries/M5Core2-BLECollector.bin"
     skip_cleanup: true
-    # draft: true
+    draft: true
     on:
       branch: master
