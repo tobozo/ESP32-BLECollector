@@ -47,6 +47,7 @@ bool scanTaskStopped = true;
 #ifdef WITH_WIFI
 static bool WiFiStarted = false;
 static bool NTPDateSet = false;
+static bool WiFiDownloaderRunning = false;
 #endif
 
 extern size_t devicesStatCount;
@@ -248,10 +249,13 @@ class BLEScanUtils {
         Out.scrollNextPage();
         UI.PrintFatalError( "[ERROR]: .db files not found" );
         giveMuxSemaphore();
-        startFileSharingServer();
-
         #ifdef WITH_WIFI
-          startAlternateSourceTask( NULL );
+          DB.initDone = false;
+          stopBLE();
+          //startAlternateSourceTask( NULL );
+
+        #else
+          startFileSharingServer();
         #endif
 
       } else {
@@ -329,6 +333,7 @@ class BLEScanUtils {
         }
 
         if( DB.initDone ) {
+          log_w("DB is okay, nothing to download");
           /*
           if( fileSharingEnabled ) {
             log_w("DONOR mode: some db files will be shared via FTP");
@@ -337,7 +342,11 @@ class BLEScanUtils {
           */
         } else {
           log_w("HOBO mode: some db files are missing, will download...");
+          WiFiDownloaderRunning = true;
           xTaskCreatePinnedToCore( runWifiDownloader, "runWifiDownloader", 16384, NULL, 16, NULL, WIFITASK_CORE ); /* last = Task Core */
+          while( WiFiDownloaderRunning ) {
+            vTaskDelay( 100 );
+          }
         }
 
         xTaskCreatePinnedToCore( stopWiFi, "stopWiFi", 8192, NULL, 5, NULL, TASKLAUNCHER_CORE ); /* last = Task Core */
@@ -414,8 +423,8 @@ class BLEScanUtils {
         } else {
           log_w("Skipping download for %s file ", MAC_OUI_NAMES_DB_FS_PATH );
         }
-
-        ESP_Restart();
+        WiFiDownloaderRunning = false;
+        //ESP_Restart();
         vTaskDelete( NULL );
 
       }

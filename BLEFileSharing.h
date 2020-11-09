@@ -43,6 +43,17 @@ static BLEUUID StopCovidServiceUUID("0000fd64-0000-1000-8000-00805f9b34fb"); // 
 static BLEUUID StopCovidCharUUID("a8f12d00-ee67-478b-b95f-65d599407756");
 
 
+// Covid Trackers Sources
+
+// https://github.com/fs0c131y/covid19-tracker-apps
+// https://docs.google.com/spreadsheets/d/1ATalASO8KtZMx__zJREoOvFh0nmB-sAqJ1-CjVRSCOw/edit#gid=0
+
+
+// Australia CovidSafe  https://github.com/xssfox/covidsafescan         PRODUCTION_UUID = 'b82ab3fc-1595-4f6a-80f0-fe094cc218f9' STAGING_UUID = '17e033d3-490e-4bc9-9fe8-2f567643f4d3'
+// Belgium   Coronalert https://github.com/covid-be-app/cwa-app-android CharacteristicID = 0xFD6 / 0xFD6F
+// Singapore TraceTogether https://github.com/lupyuen/ble-explorer      ServiceID = 'b82ab3fc-1595-4f6a-80f0-fe094cc218f9'
+
+
 
 
 static BLEUUID FileSharingServiceUUID( "f59f6622-1540-0001-8d71-362b9e155667" ); // generated UUID for the service
