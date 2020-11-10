@@ -53,6 +53,7 @@ enum IconSrcStatusType {
   ICON_STATUS_name,
   ICON_STATUS_BLECollector,
   ICON_STATUS_ble,
+  ICON_STATUS_ble_off,
   ICON_STATUS_db,
   ICON_STATUS_tbz,
   ICON_STATUS_disk00,
@@ -408,6 +409,9 @@ const IconSrc *Icon8h_name_src          = new IconSrc( name_jpeg,              n
 const IconSrc *Icon8h_BLECollector_src  = new IconSrc( BLECollector_Title_jpg, BLECollector_Title_jpg_len, 82, 8 );
 // ?x? icons
 const IconSrc *Icon_ble_src             = new IconSrc( ble_jpeg,               ble_jpeg_len,               7,  11 );
+const IconSrc *Icon_ble_off_src         = new IconSrc( ble_off_jpeg,           ble_off_jpeg_len,           7,  11 );
+
+
 const IconSrc *Icon_db_src              = new IconSrc( db_jpeg,                db_jpeg_len,                12, 11 );
 const IconSrc *Icon_tbz_src             = new IconSrc( tbz_28x28_jpg,          tbz_28x28_jpg_len,          28, 28 );
 const IconSrc *SDLoaderIcon_SET_src     = new IconSrc( disk00_jpg,             disk00_jpg_len,             30, 30 );
@@ -459,8 +463,11 @@ IconSrcStatus IconSrcStatus_nic16(         ICON_STATUS_nic16,        Icon8h_nic1
 IconSrcStatus IconSrcStatus_ibm8(          ICON_STATUS_ibm8,         Icon8h_ibm8_src );
 IconSrcStatus IconSrcStatus_speaker(       ICON_STATUS_speaker,      Icon8h_speaker_src );
 IconSrcStatus IconSrcStatus_name(          ICON_STATUS_name,         Icon8h_name_src );
-IconSrcStatus IconSrcStatus_BLECollector(  ICON_STATUS_BLECollector, Icon8h_BLECollector_src );
-IconSrcStatus IconSrcStatus_ble(           ICON_STATUS_ble,          Icon_ble_src );
+//IconSrcStatus IconSrcStatus_BLECollector(  ICON_STATUS_BLECollector, Icon8h_BLECollector_src );
+//IconSrcStatus IconSrcStatus_ble(           ICON_STATUS_ble,          Icon_ble_src );
+//IconSrcStatus IconSrcStatus_ble_off(       ICON_STATUS_ble_off,      Icon_ble_off_src );
+
+
 IconSrcStatus IconSrcStatus_db(            ICON_STATUS_db,           Icon_db_src );
 IconSrcStatus IconSrcStatus_tbz(           ICON_STATUS_tbz,          Icon_tbz_src );
 IconSrcStatus IconSrcStatus_disk00(        ICON_STATUS_disk00,       SDLoaderIcon_SET_src );
@@ -493,6 +500,8 @@ IconWidgetStatus TextCounter_uptime_status(   &TextCountersWidget, ICON_STATUS_U
 IconWidgetStatus BLERssi_SET_status(          &BLERssiWidget,      ICON_STATUS_SET );
 IconWidgetStatus BLERssi_UNSET_status(        &BLERssiWidget,      ICON_STATUS_UNSET );
 
+//IconSrcStatus *BLERadioStatuses[]              = { &IconSrcStatus_ble, &IconSrcStatus_ble_off };
+
 IconSrcStatus *SDLoaderIconSrcStatuses[]       = { &IconSrcStatus_disk00, &IconSrcStatus_disk01 };
 IconSrcStatus *TimeIconsStatuses[]             = { &IconSrcStatus_clock, &IconSrcStatus_clock2, &IconSrcStatus_clock3 };
 IconShapeStatus *BLEActivityShapeStatuses[]    = { &Shape_BLE_OFF_status, &Shape_BLE_IDLE_status, &Shape_BLE_ADV_SCAN_status, &Shape_BLE_ADV_WHITELISTED_status };
@@ -503,6 +512,9 @@ IconSrcStatus *VendorFilterIconSrcStatuses[]   = { &IconSrcStatus_filter, &IconS
 IconWidgetStatus *TextCounterWidgetStatuses[]  = { &TextCounter_heap_status, &TextCounter_entries_status, &TextCounter_last_status, &TextCounter_seen_status, &TextCounter_scans_status, &TextCounter_uptime_status };
 IconSrcStatus    *TextCounterIconSrcStatuses[] = { &IconSrcStatus_disk,      &IconSrcStatus_ghost,        &IconSrcStatus_earth,     &IconSrcStatus_insert,    &IconSrcStatus_moai,       &IconSrcStatus_ram };
 IconWidgetStatus *BLERssiStatuses[]            = { &BLERssi_SET_status, &BLERssi_UNSET_status };
+
+
+//Icon BLERadioStatusIcon( "BLE Radio Status", 7, 11, ICON_TYPE_JPG, ICON_STATUS_ble_off, BLERadioStatuses, sizeof BLERadioStatuses / sizeof BLERadioStatuses[0]  );
 
 Icon SDLoaderIcon( "Initial load SD status", 30, 30, ICON_TYPE_JPG, ICON_STATUS_disk00, SDLoaderIconSrcStatuses, sizeof SDLoaderIconSrcStatuses / sizeof SDLoaderIconSrcStatuses[0] );
 Icon TimeIcon( "Time status Icon", 8, 8, ICON_TYPE_JPG, ICON_STATUS_clock, TimeIconsStatuses, sizeof TimeIconsStatuses / sizeof TimeIconsStatuses[0] );
