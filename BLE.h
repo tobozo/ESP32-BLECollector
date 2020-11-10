@@ -44,6 +44,7 @@ bool onScanDone = true;
 bool scanTaskRunning = false;
 bool scanTaskStopped = true;
 
+
 #ifdef WITH_WIFI
 static bool WiFiStarted = false;
 static bool NTPDateSet = false;
@@ -79,10 +80,6 @@ enum AfterScanSteps {
   PROPAGATE = 3
 };
 
-
-static void ESP_Restart() {
-  ESP.restart();
-}
 
 /*
 // work in progress: MAC blacklist/whitelist
@@ -239,28 +236,31 @@ class BLEScanUtils {
       BLEDevice::init( PLATFORM_NAME " BLE Collector");
       getPrefs(); // load prefs from NVS
       UI.init(); // launch all UI tasks
+      UI.BLEStarted = true;
+      setBrightnessCB();
       VendorFilterIcon.setStatus( UI.filterVendors ? ICON_STATUS_filter : ICON_STATUS_filter_unset );
+      startSerialTask();
+
       if ( ! DB.init() ) { // mount DB
-        log_e("Error with .db files (not found or corrupted), starting BLE File Sharing");
-        startSerialTask();
+        log_e("Error with .db files (not found or corrupted)");
+        UI.stopUITasks();
         takeMuxSemaphore();
         Out.scrollNextPage();
         Out.println();
         Out.scrollNextPage();
-        UI.PrintFatalError( "[ERROR]: .db files not found" );
         giveMuxSemaphore();
+        //UI.PrintMessage( "[ERROR]: .db files not found", Out.scrollPosY );
+        UI.PrintMessage( "Some db files were not found or corrupted"  );
         #ifdef WITH_WIFI
-          DB.initDone = false;
-          stopBLE();
-          //startAlternateSourceTask( NULL );
-
+          UI.PrintMessage("Running WiFi Downloader...");
+          doRunWiFiDownloader();
         #else
-          startFileSharingServer();
+          // TODO: fix file transfer with NimBLE
+          UI.PrintMessage("Please copy db files on SD");
         #endif
 
       } else {
         WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); //disable brownout detector
-        startSerialTask();
         startScanCB();
         RamCacheReady = true;
       }
@@ -268,6 +268,7 @@ class BLEScanUtils {
 
     #ifdef WITH_WIFI
 
+    /*
       static void setAlternateSource( void * param = NULL ) {
         unsigned long beggingStart = millis();
         while(! isFileSharingClientConnected ) {
@@ -284,6 +285,7 @@ class BLEScanUtils {
       static void startAlternateSourceTask( void * param = NULL ) {
         xTaskCreatePinnedToCore( setAlternateSource, "setAlternateSource", 16000, NULL, 2, NULL, TASKLAUNCHER_CORE );
       }
+    */
 
       static void setWiFiSSID( void * param = NULL ) {
         if( param == NULL ) return;
@@ -295,70 +297,37 @@ class BLEScanUtils {
         sprintf( WiFi_PASS, "%s", (const char*)param);
       }
 
-      static void stopBLECB( void * param = NULL ) {
-        stopScanCB();
-        xTaskCreatePinnedToCore( stopBLE, "stopBLE", 8192, NULL, 5, NULL, TASKLAUNCHER_CORE ); /* last = Task Core */
+      static void doStopBLE( void * param = NULL ) {
+        xTaskCreatePinnedToCore( stopBLE, "stopBLE", 8192, param, 5, NULL, TASKLAUNCHER_CORE ); /* last = Task Core */
+        while( UI.BLEStarted == true ) {
+          vTaskDelay( 100 );
+        }
+        log_w("BLE stopped");
+        UI.PrintMessage("Stopped BLE...");
+
       }
 
       static void stopBLE( void * param = NULL ) {
-        log_w("[Free Heap: %d] Deleting BLE Tasks", freeheap);
-
+        stopScanCB();
         stopBLETasks();
+        stopBLEController();
+        UI.BLEStarted = false;
+        vTaskDelete( NULL );
+      }
 
-        log_w("[Free Heap: %d] Shutting Down BlueTooth LE", freeheap);
 
-        log_w("[Free Heap: %d] esp_bt_controller_disable()", freeheap);
-        esp_bt_controller_disable();
-
-        log_w("[Free Heap: %d] esp_bt_controller_deinit()", freeheap);
-        esp_bt_controller_deinit() ;
-
-        log_w("[Free Heap: %d] esp_bt_mem_release(ESP_BT_MODE_BTDM)", freeheap);
-        esp_bt_mem_release(ESP_BT_MODE_BTDM);
-
-        log_w("[Free Heap: %d] BT Shutdown finished", freeheap);
-
-        xTaskCreatePinnedToCore( startWifi, "startWifi", 16384, NULL, 16, NULL, TASKLAUNCHER_CORE ); /* last = Task Core */
-
+      static void doStartWiFi( void * param = NULL ) {
+        if( UI.BLEStarted ) {
+          doStopBLE();
+        }
+        if( WiFiStarted ) return;
+        xTaskCreatePinnedToCore( startWifi, "startWifi", 16384, param, 16, NULL, TASKLAUNCHER_CORE ); /* last = Task Core */
         while( WiFiStarted == false ) {
           // TODO: timeout this
           vTaskDelay( 100 );
         }
-
-        NTPDateSet = false;
-        xTaskCreatePinnedToCore( startNTPUpdater, "startNTPUpdater", 16384, NULL, 16, NULL, TASKLAUNCHER_CORE ); /* last = Task Core */
-        while( NTPDateSet == false ) {
-          // TODO: timeout this
-          vTaskDelay( 100 );
-        }
-
-        if( DB.initDone ) {
-          log_w("DB is okay, nothing to download");
-          /*
-          if( fileSharingEnabled ) {
-            log_w("DONOR mode: some db files will be shared via FTP");
-            xTaskCreatePinnedToCore( startFtpServer, "startFtpServer", 16384, NULL, 16, NULL, TASKLAUNCHER_CORE ); // last = Task Core
-          }
-          */
-        } else {
-          log_w("HOBO mode: some db files are missing, will download...");
-          WiFiDownloaderRunning = true;
-          xTaskCreatePinnedToCore( runWifiDownloader, "runWifiDownloader", 16384, NULL, 16, NULL, WIFITASK_CORE ); /* last = Task Core */
-          while( WiFiDownloaderRunning ) {
-            vTaskDelay( 100 );
-          }
-        }
-
-        xTaskCreatePinnedToCore( stopWiFi, "stopWiFi", 8192, NULL, 5, NULL, TASKLAUNCHER_CORE ); /* last = Task Core */
-        while( WiFiStarted == true ) {
-          // TODO: timeout this
-          vTaskDelay( 100 );
-        } // wait until wifi stopped
-        log_w("Restarting");
-        ESP.restart();
-        vTaskDelete( NULL );
+        UI.PrintMessage("Started WiFi...");
       }
-
 
       static void startWifi( void * param = NULL ) {
         WiFi.mode(WIFI_STA);
@@ -384,11 +353,57 @@ class BLEScanUtils {
         vTaskDelete( NULL );
       }
 
+      static void doStopWiFi( void * param = NULL ) {
+        xTaskCreatePinnedToCore( stopWiFi, "stopWiFi", 8192, param, 5, NULL, TASKLAUNCHER_CORE ); /* last = Task Core */
+        while( WiFiStarted == true ) {
+          // TODO: timeout this
+          vTaskDelay( 100 );
+        } // wait until wifi stopped
+        UI.PrintMessage("Stopped WiFi...");
+      }
+
       static void stopWiFi( void* param = NULL ) {
         log_w("Stopping WiFi");
         WiFi.mode(WIFI_OFF);
         WiFiStarted = false;
         vTaskDelete( NULL );
+      }
+
+
+      static void setPoolZone( void * param = NULL ) {
+        if( param == NULL ) {
+          log_e("No pool zone to set, valid values are: africa, antarctica, asia, europe, north-america, oceania, south-america");
+          return;
+        }
+        int poolZoneID = getPoolZoneID( (char*)param );
+        if( poolZoneID > -1 ) {
+          preferences.begin("BLEClock", false);
+          preferences.putString( "poolZone", (const char*)param );
+          preferences.end();
+          Serial.printf("NTP Server will use %s.pool.ntp.org on next update\n", (const char*)param );
+        } else {
+          log_n("Error: %s is not a valid pool zone", (const char*)param );
+        }
+      }
+
+      static void doStartNTPUpdater( void * param = NULL ) {
+        if( UI.BLEStarted ) {
+          doStopBLE();
+        }
+        if( !WiFiStarted ) {
+          doStartWiFi();
+        }
+        UI.PrintMessage("Contacting NTP Server...");
+        NTPDateSet = false;
+        xTaskCreatePinnedToCore( startNTPUpdater, "startNTPUpdater", 16384, param, 16, NULL, TASKLAUNCHER_CORE ); /* last = Task Core */
+        while( NTPDateSet == false ) {
+          // TODO: timeout this
+          vTaskDelay( 100 );
+        }
+        if( param == NULL ) {
+          UI.PrintMessage("Restarting...");
+          ESP.restart();
+        }
       }
 
 
@@ -398,33 +413,62 @@ class BLEScanUtils {
       }
 
 
+      static void doRunWiFiDownloader( void * param = NULL ) {
+        if( UI.BLEStarted ) {
+          doStopBLE();
+        }
+        if( !WiFiStarted ) {
+          doStartWiFi();
+        }
+        if( !NTPDateSet ) {
+          doStartNTPUpdater( (void*)true ); // Keep WiFi up after NTP Update
+        }
+        UI.PrintMessage("Checking DB Files...");
+
+        WiFiDownloaderRunning = true;
+        xTaskCreatePinnedToCore( runWifiDownloader, "runWifiDownloader", 16384, param, 16, NULL, WIFITASK_CORE ); /* last = Task Core */
+        while( WiFiDownloaderRunning ) {
+          vTaskDelay( 100 );
+        }
+        doStopWiFi();
+        ESP.restart();
+      }
+
 
       static void runWifiDownloader( void * param ) {
 
-        vTaskDelay(100);
         BLE_FS.begin();
 
         if( !DB.checkOUIFile() ) {
           if( ! wget( MAC_OUI_NAMES_DB_URL, BLE_FS, MAC_OUI_NAMES_DB_FS_PATH ) ) {
+            UI.PrintMessage("OUIFile download fail");
+
             log_e("Failed to download %s from url %s", MAC_OUI_NAMES_DB_FS_PATH, MAC_OUI_NAMES_DB_URL );
           } else {
+            UI.PrintMessage("OUIFile download success!");
             log_w("Successfully downloaded %s from url %s", MAC_OUI_NAMES_DB_FS_PATH, MAC_OUI_NAMES_DB_URL );
           }
         } else {
+          UI.PrintMessage("OUIFile is up to date");
           log_w("Skipping download for %s file ", MAC_OUI_NAMES_DB_FS_PATH );
         }
+        vTaskDelay( 1000 );
 
         if( !DB.checkVendorFile() ) {
           if( ! wget( BLE_VENDOR_NAMES_DB_URL, BLE_FS, BLE_VENDOR_NAMES_DB_FS_PATH ) ) {
+            UI.PrintMessage("VendorFile download fail");
             log_e("Failed to download %s from url %s", BLE_VENDOR_NAMES_DB_FS_PATH, BLE_VENDOR_NAMES_DB_URL );
           } else {
+            UI.PrintMessage("VendorFile download success!");
             log_w("Successfully downloaded %s from url %s", BLE_VENDOR_NAMES_DB_FS_PATH, BLE_VENDOR_NAMES_DB_URL );
           }
         } else {
+          UI.PrintMessage("VendorFile is up to date");
           log_w("Skipping download for %s file ", MAC_OUI_NAMES_DB_FS_PATH );
         }
+        vTaskDelay( 1000 );
+
         WiFiDownloaderRunning = false;
-        //ESP_Restart();
         vTaskDelete( NULL );
 
       }
@@ -487,11 +531,16 @@ class BLEScanUtils {
           return false;
         }
 
-        uint8_t buff[512] = { 0 };
-        size_t sizeOfBuff = sizeof(buff);
+        //uint8_t buff[4096] = { 0 };
+        //size_t sizeOfBuff = sizeof(buff);
+        size_t sizeOfBuff = 4096;
+        uint8_t *buff = new uint8_t[sizeOfBuff];//
+
         int len = http.getSize();
         int bytesLeftToDownload = len;
         int bytesDownloaded = 0;
+
+        UI.PrintMessage("Download in progress...");
 
         while(http.connected() && (len > 0 || len == -1)) {
           size_t size = stream->available();
@@ -507,6 +556,8 @@ class BLEScanUtils {
           }
         }
         outFile.close();
+        free( buff );
+        free( client );
         return fs.exists( path );
       }
 
@@ -515,10 +566,22 @@ class BLEScanUtils {
 
 
     static void stopBLETasks( void * param = NULL ) {
+      log_w("[Free Heap: %d] Deleting BLE Tasks", freeheap);
       if( timeServerIsRunning )            destroyTaskNow( TimeServerTaskHandle );
       if( timeClientisStarted )            destroyTaskNow( TimeClientTaskHandle );
       if( fileSharingServerTaskIsRunning ) destroyTaskNow( FileServerTaskHandle );
       if( fileSharingClientTaskIsRunning ) destroyTaskNow( FileClientTaskHandle );
+    }
+
+    static void stopBLEController() {
+      log_w("[Free Heap: %d] Shutting Down BlueTooth LE", freeheap);
+      log_w("[Free Heap: %d] esp_bt_controller_disable()", freeheap);
+      esp_bt_controller_disable();
+      log_w("[Free Heap: %d] esp_bt_controller_deinit()", freeheap);
+      esp_bt_controller_deinit() ;
+      log_w("[Free Heap: %d] esp_bt_mem_release(ESP_BT_MODE_BTDM)", freeheap);
+      esp_bt_mem_release(ESP_BT_MODE_BTDM);
+      log_w("[Free Heap: %d] BT Shutdown finished", freeheap);
     }
 
     static void startScanCB( void * param = NULL ) {
@@ -548,7 +611,7 @@ class BLEScanUtils {
         BLEDevice::getScan()->stop();
         while (!scanTaskStopped) {
           log_d("Waiting for scan to stop...");
-          vTaskDelay(1000);
+          vTaskDelay(100);
         }
         Serial.println("Scan stopped...");
         UI.headerStats("Scan stopped...");
@@ -576,6 +639,7 @@ class BLEScanUtils {
       ESP.restart();
     }
 
+    /*
     static void startFileSharingServer( void * param = NULL ) {
       if ( ! fileDownloadingEnabled ) {
         fileDownloadingEnabled = true;
@@ -639,7 +703,7 @@ class BLEScanUtils {
         log_w("FileSharingClientTask spawned with no held task");
       }
       vTaskDelete( NULL );
-    }
+    }*/
 
     static void setTimeClientOn( void * param = NULL ) {
       if( !timeClientisStarted ) {
@@ -805,6 +869,26 @@ class BLEScanUtils {
       vTaskDelete(NULL);
     }
 
+
+    static void setTimeZome( void * param = NULL ) {
+      if( param == NULL ) {
+        log_n("Please provide a valid timeZone (0-24), floats are accepted");
+        return;
+      }
+      float oldTimeZone = timeZone;
+      timeZone = strtof((char*)param, NULL);
+      float diff = oldTimeZone - timeZone;
+      Serial.printf("Local time will use timeZone %.2g on next NTP update\n", timeZone );
+      setPrefs();
+    }
+
+    static void setSummerTime( void * param = NULL ) {
+      summerTime = !summerTime;
+      Serial.printf("Local time will use [%s] on next NTP update\n", summerTime?"CEST":"CET");
+      setPrefs();
+    }
+
+
     static void listDirCB( void * param = NULL ) {
       xTaskCreatePinnedToCore(listDirTask, "listDirTask", 5000, param, 8, NULL, TASKLAUNCHER_CORE ); /* last = Task Core */
     }
@@ -866,15 +950,25 @@ class BLEScanUtils {
     static void serialTask( void * parameter ) {
       CommandTpl Commands[] = {
         { "help",          nullCB,                 "Print this list" },
+        { "halp",          nullCB,                 "Same as help except it doesn't print anything" },
         { "start",         startScanCB,            "Start/resume scan" },
         { "stop",          stopScanCB,             "Stop scan" },
         { "toggleFilter",  toggleFilterCB,         "Toggle vendor filter on the TFT (persistent)" },
         { "toggleEcho",    toggleEchoCB,           "Toggle BLECards in the Serial Console (persistent)" },
+        { "setTimeZone",   setTimeZome,            "Set the timezone for next NTP Sync (persistent)"},
+        { "setSummerTime", setSummerTime,          "Toggle CEST / CET for next NTP Sync (persistent)" },
         { "dump",          startDumpCB,            "Dump returning BLE devices to the display and updates DB" },
-        { "setBrightness", setBrightnessCB,        "Set brightness to [value] (0-255)" },
+        { "setBrightness", setBrightnessCB,        "Set brightness to [value] (0-255) (persistent)" },
         { "ls",            listDirCB,              "Show [dir] Content on the SD" },
         { "rm",            rmFileCB,               "Delete [file] from the SD" },
         { "restart",       restartCB,              "Restart BLECollector ('restart now' to skip replication)" },
+        //{ "blereceive",    startFileSharingServer, "Update .db files from another BLE app"},
+        //{ "blesend",       setFileSharingClientOn, "Share .db files with anothe BLE app" },
+        { "screenshot",    screenShotCB,           "Make a screenshot and save it on the SD" },
+        { "screenshow",    screenShowCB,           "Show screenshot" },
+        { "toggle",        toggleCB,               "toggle a bool value" },
+        { "resetDB",       resetCB,                "Hard Reset DB + forced restart" },
+        { "pruneDB",       pruneCB,                "Soft Reset DB without restarting (hopefully)" },
         #if HAS_EXTERNAL_RTC
           { "bleclock",      setTimeServerOn,        "Broadcast time to another BLE Device (implicit)" },
           { "bletime",       setTimeClientOn,        "Get time from another BLE Device (explicit)" },
@@ -882,21 +976,19 @@ class BLEScanUtils {
           { "bleclock",      setTimeServerOn,        "Broadcast time to another BLE Device (explicit)" },
           { "bletime",       setTimeClientOn,        "Get time from another BLE Device (implicit)" },
         #endif
-        { "blereceive",    startFileSharingServer, "Update .db files from another BLE app"},
-        { "blesend",       setFileSharingClientOn, "Share .db files with anothe BLE app" },
-        { "screenshot",    screenShotCB,           "Make a screenshot and save it on the SD" },
-        { "screenshow",    screenShowCB,           "Show screenshot" },
-        { "toggle",        toggleCB,               "toggle a bool value" },
         #if HAS_GPS
-          { "gpstime",       setGPSTime,     "sync time from GPS" },
+          { "gpstime",       setGPSTime,             "Sync time from GPS" },
         #endif
-        { "resetDB",       resetCB,        "Hard Reset DB + forced restart" },
-        { "pruneDB",       pruneCB,        "Soft Reset DB without restarting (hopefully)" },
         #ifdef WITH_WIFI
-          { "stopBLE",       stopBLECB,      "Stop BLE and start WiFi (experimental)" },
-          { "setWiFiSSID",   setWiFiSSID,    "Set WiFi SSID" },
-          { "setWiFiPASS",   setWiFiPASS,    "Set WiFi Password" },
+          { "stopBLE",       doStopBLE,              "Stop BLE (use 'restart' command to re-enable)" },
+          { "startWiFi",     doStartWiFi,            "Start WiFi (will stop BLE)" },
+          { "setPoolZone",   setPoolZone,            "Set NTP Pool Zone (persistent)" },
+          { "NTPSync",       doStartNTPUpdater,      "Update time from NTP (will start WiFi)" },
+          { "DownloadDB",    doRunWiFiDownloader,    "Download missing .db files (will start WiFi and update NTP first)" },
+          { "setWiFiSSID",   setWiFiSSID,            "Set WiFi SSID" },
+          { "setWiFiPASS",   setWiFiPASS,            "Set WiFi Password" },
         #endif
+
       };
 
       SerialCommands = Commands;
@@ -914,7 +1006,7 @@ class BLEScanUtils {
         { "DayChangeTrigger",    DayChangeTrigger },
         { "HourChangeTrigger",   HourChangeTrigger },
         { "fileSharingEnabled",  fileSharingEnabled },
-        { "timeServerIsRunning", timeServerIsRunning }
+        { "timeServerIsRunning", timeServerIsRunning },
       };
       TogglableProps = ToggleProps;
       Tsize = (sizeof(ToggleProps) / sizeof(ToggleProps[0]));
@@ -1318,6 +1410,7 @@ class BLEScanUtils {
 
       UI.stopBlink();
 
+      /*
       if ( fileSharingEnabled ) { // found a peer to share with ?
         if( !fileSharingClientStarted ) { // fire file sharing client task
           if( fileServerBLEAddress != "" ) {
@@ -1331,6 +1424,7 @@ class BLEScanUtils {
           }
         }
       }
+      */
 
       if ( foundTimeServer && (!TimeIsSet || ForceBleTime) ) {
         if( ! timeClientisStarted ) {
@@ -1434,7 +1528,19 @@ class BLEScanUtils {
       Out.serialEcho   = preferences.getBool("serialEcho", true);
       UI.filterVendors = preferences.getBool("filterVendors", false);
       UI.brightness    = preferences.getUChar("brightness", BASE_BRIGHTNESS);
+      timeZone         = preferences.getFloat("timeZone", timeZone);
+      summerTime       = preferences.getBool("summerTime", summerTime);
       log_d("Defrosted brightness: %d", UI.brightness );
+      log_w("Loaded NVS Prefs:");
+      log_w("  serialEcho\t%s",    Out.serialEcho?"true":"false");
+      log_w("  filterVendors\t%s", UI.filterVendors?"true":"false");
+      log_w("  brightness\t%d",    UI.brightness );
+      log_w("  timeZone\t\t%.2g",    timeZone );
+      log_w("  summerTime\t%s",    summerTime?"true":"false");
+      #ifdef WITH_WIFI
+        String poolZone  = preferences.getString( "poolZone", String( DEFAULT_NTP_SERVER ) );
+        log_w("  poolZone\t\t%s", poolZone );
+      #endif
       preferences.end();
     }
     static void setPrefs() {
@@ -1442,6 +1548,8 @@ class BLEScanUtils {
       preferences.putBool("serialEcho", Out.serialEcho);
       preferences.putBool("filterVendors", UI.filterVendors );
       preferences.putUChar("brightness", UI.brightness );
+      preferences.putFloat("timeZone", timeZone);
+      preferences.putBool("summerTime", summerTime);
       preferences.end();
     }
 

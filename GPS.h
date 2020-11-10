@@ -57,13 +57,14 @@ static bool setGPSTime() {
     // fetch GPS Time
     DateTime GPS_UTC_Time = DateTime(gps.date.year(), gps.date.month(), gps.date.day(), gps.time.hour(), gps.time.minute(), gps.time.second());
     // apply timeZone
-    DateTime GPS_Local_Time = GPS_UTC_Time.unixtime() + timeZone*3600;
+    DateTime GPS_Local_Time = GPS_UTC_Time.unixtime() + (int(timeZone*100)*36) + (summerTime ? 3600 : 0);
     #if HAS_EXTERNAL_RTC
       RTC.adjust( GPS_Local_Time );
       // TODO: check if RTC.adjust worked
-      Serial.printf("External RTC adjusted from GPS Time (GMT%s%d): %04d-%02d-%02d %02d:%02d:%02d\n",
+      Serial.printf("External RTC adjusted from GPS Time (GMT%s%f [%s]): %04d-%02d-%02d %02d:%02d:%02d\n",
         timeZone>0 ? "+" : "",
         timeZone,
+        summerTime ? "CEST" : "CET",
         GPS_Local_Time.year(),
         GPS_Local_Time.month(),
         GPS_Local_Time.day(),

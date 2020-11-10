@@ -104,7 +104,6 @@
     tmpDate.WeekDay = RTC_DateStruct->Wday;
     tmpDate.Month   = RTC_DateStruct->Month;
     tmpDate.Year    = RTC_DateStruct->Year + 1970;
-    log_w("Year value: %d", RTC_DateStruct->Year );
     M5_RTC.SetDate( &tmpDate );
   }
 

@@ -166,6 +166,10 @@ TaskHandle_t ClockSyncTaskHandle;
 TaskHandle_t DrawableItemsTaskHandle;
 TaskHandle_t HeapGraphTaskHandle;
 
+static bool ClockSyncTaskIsRunning = false;
+static bool DrawableItemsTaskIsRunning = false;
+static bool HeapGraphTaskIsRunning = false;
+
 
 class UIUtils {
   public:
@@ -174,6 +178,7 @@ class UIUtils {
     bool ScreenShotLoaded = false;
     byte brightness = BASE_BRIGHTNESS; // multiple of 8 otherwise can't turn off ^^
     byte brightnessIncrement = 8;
+    bool BLEStarted = false;
 
     struct BLECardStyle {
       uint16_t textColor = BLE_WHITE;
@@ -195,7 +200,7 @@ class UIUtils {
     void init() {
       Serial.begin(115200);
       Serial.println(welcomeMessage);
-      Serial.printf("HAS HID: %s,\nHAS_XPAD: %s\nHAS PSRAM: %s\nRTC_PROFILE: %s\nHAS_EXTERNAL_RTC: %s\nHAS_GPS: %s\nTIME_UPDATE_SOURCE: %d\n",
+      Serial.printf("  HAS HID: %s,\n  HAS_XPAD: %s\n  HAS PSRAM: %s\n  RTC_PROFILE: %s\n  HAS_EXTERNAL_RTC: %s\n  HAS_GPS: %s\n  TIME_UPDATE_SOURCE: %d\n",
         hasHID() ? "true" : "false",
         hasXPaxShield() ? "true" : "false",
         psramInit() ? "true" : "false",
@@ -214,10 +219,11 @@ class UIUtils {
 
       tft_begin();
       tft_initOrientation(); // messing with this may break the scroll
+      delay(100); // otherwise brightness is ignored
       tft_setBrightness( brightness );
 
       // start heap graph
-      xTaskCreatePinnedToCore(taskHeapGraph, "taskHeapGraph", 1024, NULL, 0, &HeapGraphTaskHandle, HEAPGRAPH_CORE );
+      xTaskCreatePinnedToCore(taskHeapGraph, "taskHeapGraph", 1024, (void*)this, 0, &HeapGraphTaskHandle, HEAPGRAPH_CORE );
 
       // make sure non-printable chars aren't printed (also disables utf8)
       tft.setAttribute( lgfx::cp437_switch, true );
@@ -321,8 +327,8 @@ class UIUtils {
 
       Out.setupScrollArea( headerHeight, footerHeight, colorstart, colorend );
 
-      uint32_t tftstatus = tft.readCommand( 0x09 );
-      log_n("TFT Status = 0x%08X", tftstatus ); // 0x00245384 before setup scroll and 0x00A45284 after
+      //uint32_t tftstatus = tft.readCommand( 0x09 );
+      //log_n("TFT Status = 0x%08X", tftstatus ); // 0x00245384 before setup scroll and 0x00A45284 after
 
       SDSetup();
       timeSetup();
@@ -388,13 +394,9 @@ class UIUtils {
 
 
     static void stopUITasks( void * param = NULL ) {
-      destroyTaskNow( ClockSyncTaskHandle );
-      destroyTaskNow( DrawableItemsTaskHandle );
-      destroyTaskNow( HeapGraphTaskHandle );
-      //if( timeServerIsRunning )            destroyTaskNow( TimeServerTaskHandle );
-      //if( timeClientisStarted )            destroyTaskNow( TimeClientTaskHandle );
-      //if( fileSharingServerTaskIsRunning ) destroyTaskNow( FileServerTaskHandle );
-      //if( fileSharingClientTaskIsRunning ) destroyTaskNow( FileClientTaskHandle );
+      if( ClockSyncTaskIsRunning )     destroyTaskNow( ClockSyncTaskHandle );
+      if( DrawableItemsTaskIsRunning ) destroyTaskNow( DrawableItemsTaskHandle );
+      if( HeapGraphTaskIsRunning )     destroyTaskNow( HeapGraphTaskHandle );
     }
 
 
@@ -591,6 +593,14 @@ class UIUtils {
       }
     }
 
+    static void PrintMessage( const char* message ) {
+      takeMuxSemaphore();
+      tft.setCursor( 0, tft.getCursorY() );
+      Out.println( message );
+      Out.println( SPACE );
+      giveMuxSemaphore();
+    }
+
     static void PrintFatalError( const char* message, uint16_t yPos = AMIGABALL_YPOS ) {
       alignTextAt( message, 0, yPos, BLE_YELLOW, BLECARD_BGCOLOR, ALIGN_CENTER );
     }
@@ -661,7 +671,8 @@ class UIUtils {
     }
 
     // spawn subtasks and leave
-    static void taskHeapGraph( void * pvParameters ) { // always running
+    static void taskHeapGraph( void * param = NULL ) { // always running
+      HeapGraphTaskIsRunning = true;
       mux = xSemaphoreCreateMutex();
       takeMuxSemaphore();
       for( uint16_t i = 0; i < hallOfMacSize; i++ ) {
@@ -674,13 +685,19 @@ class UIUtils {
       heapGraphSprite.createSprite( graphLineWidth, graphLineHeight );
       giveMuxSemaphore();
 
-      xTaskCreatePinnedToCore(clockSync, "clockSync", 2048, NULL, 2, &ClockSyncTaskHandle, CLOCKSYNC_CORE ); // RTC wants to run on core 1 or it fails
-      xTaskCreatePinnedToCore(drawableItems, "drawableItems", 6144, NULL, 2, &DrawableItemsTaskHandle, STATUSBAR_CORE );
+      xTaskCreatePinnedToCore(clockSync, "clockSync", 2048, param, 2, &ClockSyncTaskHandle, CLOCKSYNC_CORE ); // RTC wants to run on core 1 or it fails
+      xTaskCreatePinnedToCore(drawableItems, "drawableItems", 6144, param, 2, &DrawableItemsTaskHandle, STATUSBAR_CORE );
+      HeapGraphTaskIsRunning = false;
       vTaskDelete(NULL);
     }
 
-
     static void drawableItems( void * param ) {
+
+      DrawableItemsTaskIsRunning = true;
+
+      UIUtils *_UI = (UIUtils*)param;
+      bool _BLEStarted = _UI->BLEStarted;
+
       while(1) {
         if( freeheap != lastfreeheap ) {
           takeMuxSemaphore();
@@ -689,6 +706,18 @@ class UIUtils {
           lastfreeheap = freeheap;
           giveMuxSemaphore();
         }
+
+        if( _UI->BLEStarted != _BLEStarted ) {
+          _BLEStarted = _UI->BLEStarted;
+          takeMuxSemaphore();
+          if( _BLEStarted ) {
+            IconRender( Icon_ble_src, 91, 2 );
+          } else {
+            IconRender( Icon_ble_off_src, 91, 2 );
+          }
+          giveMuxSemaphore();
+        }
+
         PrintBlinkableWidgets();
         BLECollectorIconBar.draw( BLECollectorIconBarX, BLECollectorIconBarY );
         vTaskDelay( 100 );
@@ -847,6 +876,7 @@ class UIUtils {
       TickType_t lastWaketime;
       lastWaketime = xTaskGetTickCount();
       devGraphFirstStatTime = millis();
+      ClockSyncTaskIsRunning = true;
 
       int32_t *sorted     = new int32_t[hallOfMacSize+1];
       int32_t *lastsorted = new int32_t[hallOfMacSize+1];

@@ -46,6 +46,8 @@ void logTimeActivity(TimeUpdateSources source, int epoch) {
   //DateTime epoch = RTC.now();
   preferences.putUInt("epoch", epoch);
   preferences.putUChar("source", source);
+  preferences.putFloat("timeZone", timeZone);
+  preferences.putBool("summerTime", summerTime);
   preferences.end();
 }
 
@@ -54,6 +56,8 @@ void resetTimeActivity(TimeUpdateSources source) {
   preferences.clear();
   preferences.putUInt("epoch", 0);
   preferences.putUChar("source", source);
+  preferences.putFloat("timeZone", timeZone);
+  preferences.putBool("summerTime", summerTime);
   preferences.end();
 }
 

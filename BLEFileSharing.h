@@ -318,7 +318,7 @@ uint8_t* getBLETime() {
   // gettimeofday(&tv, nullptr);
   // _t = localtime(&(tv.tv_sec));
   LocalTime = DateTime(year(), month(), day(), hour(), minute(), second());
-  UTCTime   = LocalTime.unixtime() - timeZone * 3600;
+  UTCTime   = LocalTime.unixtime() - (int(timeZone*100)*36) -  + (summerTime ? 3600 : 0);
   BLELocalTime.year     = UTCTime.year();   // 1900 + _t->tm_year;
   BLELocalTime.month    = UTCTime.month();  // _t->tm_mon + 1;
   BLELocalTime.wday     = 0;        // _t->tm_wday == 0 ? 7 : _t->tm_wday;
@@ -701,6 +701,7 @@ void stopFileSharingServer() {
 }
 
 // server as a slave service: wait for an upload signal
+__attribute__((unused))
 static void FileSharingServerTask(void* p) {
 
   BLEDevice::setMTU(517);
@@ -997,6 +998,7 @@ void stopFileSharingClient() {
 }
 
 
+__attribute__((unused))
 static void FileSharingClientTask( void * param ) {
   fileSharingClientLastActivity = millis();
 

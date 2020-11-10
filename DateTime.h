@@ -153,10 +153,11 @@ void dumpTime(const char* message, tmElements_t tm) {
   );
 }
 void dumpTime(const char* message, struct tm *info) {
-  Serial.printf("%s (GMT%s%d): %04d-%02d-%02d %02d:%02d:%02d\n",
+  Serial.printf("%s (GMT%s%.2g [%s]): %04d-%02d-%02d %02d:%02d:%02d\n",
     message,
     timeZone>0 ? "+" : "",
     timeZone,
+    summerTime ? "CEST" : "CET",
     info->tm_year + 1900,
     info->tm_mon+1,
     info->tm_mday,

@@ -48,9 +48,14 @@
 #define HAS_EXTERNAL_RTC   false // uses I2C, search this file for RTC_SDA or RTC_SCL to change pins
 #define HAS_GPS            false // uses hardware serial, search this file for GPS_RX and GPS_TX to change pins
 #define TIME_UPDATE_SOURCE TIME_UPDATE_GPS // TIME_UPDATE_GPS // soon deprecated, will be implicit
-int8_t timeZone = 1; // 1 = GMT+1, 2 = GMT+2, etc
-#define WITH_WIFI          1 // enable this on first run to download oui databases, or for sharing other .db files
-const char* NTP_SERVER = "europe.pool.ntp.org";
+
+// Timezone is using a float because Newfoundland, India, Iran, Afghanistan, Myanmar, Sri Lanka, the Marquesas,
+// as well as parts of Australia use half-hour deviations from standard time, and some nations,
+// such as Nepal, and some provinces, such as the Chatham Islands of New Zealand, use quarter-hour deviations.
+float timeZone = 1; // 1 = GMT+1, 2 = GMT+2, etc
+bool summerTime = false;
+
+#define WITH_WIFI          1 // used to download oui databases, NTP sync, can be disabled if HAS_GPS is used
 
 byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define MIN_SCAN_DURATION 10 // seconds min
