@@ -75,12 +75,12 @@ DateTime::DateTime(uint32_t unixtime) {
   yOff = tm.Year; // offset from 1970;
 };
 DateTime::DateTime(tmElements_t dateTimeNow) {
-  tm = dateTimeNow;
-  m = tm.Month;
-  d = tm.Day;
-  hh = tm.Hour;
-  mm = tm.Minute;
-  ss = tm.Second;
+  tm   = dateTimeNow;
+  m    = tm.Month;
+  d    = tm.Day;
+  hh   = tm.Hour;
+  mm   = tm.Minute;
+  ss   = tm.Second;
   yOff = tm.Year; // offset from 1970;
 };
 DateTime::DateTime(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t min, uint8_t sec) {
@@ -142,11 +142,12 @@ void dumpTime(const char* message, DateTime dateTime) {
 }
 
 void dumpTime(const char* message, tmElements_t tm) {
-  Serial.printf("[%s]: %04d-%02d-%02d %02d:%02d:%02d\n",
+  Serial.printf("[%s]: %04d-%02d-%02d (WDay:%d) %02d:%02d:%02d\n",
     message,
     tm.Year + 1970,
     tm.Month,
     tm.Day,
+    tm.Wday,
     tm.Hour,
     tm.Minute,
     tm.Second

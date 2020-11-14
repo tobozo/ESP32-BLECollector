@@ -978,13 +978,14 @@ class BLEScanUtils {
         #endif
         #if HAS_GPS
           { "gpstime",       setGPSTime,             "Sync time from GPS" },
+          { "latlng",        getLatLng,              "Print the GPS lat/lng" },
         #endif
         #ifdef WITH_WIFI
           { "stopBLE",       doStopBLE,              "Stop BLE (use 'restart' command to re-enable)" },
           { "startWiFi",     doStartWiFi,            "Start WiFi (will stop BLE)" },
-          { "setPoolZone",   setPoolZone,            "Set NTP Pool Zone (persistent)" },
+          { "setPoolZone",   setPoolZone,            "Set NTP Pool Zone for next NTP Sync (persistent)" },
           { "NTPSync",       doStartNTPUpdater,      "Update time from NTP (will start WiFi)" },
-          { "DownloadDB",    doRunWiFiDownloader,    "Download missing .db files (will start WiFi and update NTP first)" },
+          { "DownloadDB",    doRunWiFiDownloader,    "Download or update db files (will start WiFi and update NTP first)" },
           { "setWiFiSSID",   setWiFiSSID,            "Set WiFi SSID" },
           { "setWiFiPASS",   setWiFiPASS,            "Set WiFi Password" },
         #endif
@@ -1130,7 +1131,7 @@ class BLEScanUtils {
 
         }
 
-        vTaskDelay(1);
+        vTaskDelay(10);
       }
     }
 

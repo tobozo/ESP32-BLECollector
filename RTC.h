@@ -179,12 +179,24 @@
   };
 
   int ZEROINT = 0;
+  /*
   static uint8_t BLE_RTC_bcd2bin (uint8_t val) { return val - 6 * (val >> 4); }
   static uint8_t BLE_RTC_bin2bcd (uint8_t val) { return val + 6 * (val / 10); }
+  */
+
+  /** Fonction de conversion BCD -> decimal */
+  static uint8_t BLE_RTC_bcd2bin (uint8_t bcd) {
+    return (bcd / 16 * 10) + (bcd % 16);
+  }
+
+/** Fonction de conversion decimal -> BCD */
+  static uint8_t BLE_RTC_bin2bcd (uint8_t decimal) {
+    return (decimal / 10 * 16) + (decimal % 10);
+  }
 
 
   bool BLE_RTC_DS1307::begin(uint8_t sdaPin, uint8_t sclPin) {
-    Wire1.begin(sdaPin, sclPin);
+    Wire.begin(sdaPin, sclPin);
     return true;
   }
   void BLE_RTC_DS1307::adjust(const DateTime& dt) {
@@ -200,41 +212,52 @@
   uint32_t BLE_RTC_DS1307::unixtime() {
     return DateTime::tm2unixtime( now() );
   }
+
   uint8_t BLE_RTC_DS1307::isrunning(void) {
-    Wire1.beginTransmission(DS1307_ADDR);
-    Wire1.write(ZEROINT);
-    Wire1.endTransmission();
-    Wire1.requestFrom(DS1307_ADDR, 1);
-    uint8_t ss = Wire1.read();
+    Wire.beginTransmission(DS1307_ADDR);
+    Wire.write(ZEROINT);
+    Wire.endTransmission();
+    Wire.requestFrom(DS1307_ADDR, 1);
+    uint8_t ss = Wire.read();
     return !(ss>>7);
   }
+
   void BLE_RTC_DS1307::adjust(const tmElements_t& dt) {
-    //dumpTime("RTC Will adjust from tmElements_t ", dt );
-    Wire1.beginTransmission(DS1307_ADDR);
-    Wire1.write(ZEROINT);
-    Wire1.write(BLE_RTC_bin2bcd(dt.Second));
-    Wire1.write(BLE_RTC_bin2bcd(dt.Minute));
-    Wire1.write(BLE_RTC_bin2bcd(dt.Hour));
-    Wire1.write(BLE_RTC_bin2bcd(0));
-    Wire1.write(BLE_RTC_bin2bcd(dt.Day));
-    Wire1.write(BLE_RTC_bin2bcd(dt.Month));
-    Wire1.write(BLE_RTC_bin2bcd(dt.Year)); // 2000 to 1970 offset
-    Wire1.write(ZEROINT);
-    Wire1.endTransmission();
+    dumpTime("RTC Will adjust from tmElements_t ", dt );
+    Wire.beginTransmission(DS1307_ADDR);
+    Wire.write(ZEROINT);
+    Wire.write(BLE_RTC_bin2bcd(dt.Second) );
+    Wire.write(BLE_RTC_bin2bcd(dt.Minute));
+    Wire.write(BLE_RTC_bin2bcd(dt.Hour) ); // mode 24h
+    Wire.write(BLE_RTC_bin2bcd(dt.Wday)); // day of week ?
+    Wire.write(BLE_RTC_bin2bcd(dt.Day));
+    Wire.write(BLE_RTC_bin2bcd(dt.Month));
+    Wire.write(BLE_RTC_bin2bcd(tmYearToY2k(dt.Year))); // 2000 to 1970 offset
+    Wire.write(ZEROINT);
+    if ( Wire.endTransmission() != 0 ) log_e( "[RTC] Unexpected end of transmission" );
   }
+
+
   tmElements_t BLE_RTC_DS1307::now() {
-    Wire1.beginTransmission(DS1307_ADDR);
-    Wire1.write(ZEROINT);
-    Wire1.endTransmission();
-    Wire1.requestFrom(DS1307_ADDR, 7);
-    uint8_t ss = BLE_RTC_bcd2bin(Wire1.read() & 0x7F);
-    uint8_t mm = BLE_RTC_bcd2bin(Wire1.read());
-    uint8_t hh = BLE_RTC_bcd2bin(Wire1.read());
-    Wire1.read();
-    uint8_t d = BLE_RTC_bcd2bin(Wire1.read());
-    uint8_t m = BLE_RTC_bcd2bin(Wire1.read());
-    uint8_t y = BLE_RTC_bcd2bin(Wire1.read()); // 2000 to 1970 offset
-    return tmElements_t {ss, mm, hh, 0, d, m, y};
+    tmElements_t tm;
+    uint8_t sec;
+    Wire.beginTransmission( DS1307_ADDR );
+    Wire.write( (int)0 );
+    if ( Wire.endTransmission() != 0 ) {
+      log_e( "[RTC] Unexpected end of transmission" );
+      return tm;
+    }
+    Wire.requestFrom( DS1307_ADDR, 7 );
+    sec = Wire.read();
+    tm.Second = BLE_RTC_bcd2bin( sec & 0x7f );
+    tm.Minute = BLE_RTC_bcd2bin( Wire.read() );
+    tm.Hour   = BLE_RTC_bcd2bin( Wire.read() & 0x3f );  // mask assumes 24hr clock
+    tm.Wday   = BLE_RTC_bcd2bin( Wire.read() );
+    tm.Day    = BLE_RTC_bcd2bin( Wire.read() );
+    tm.Month  = BLE_RTC_bcd2bin( Wire.read() );
+    tm.Year   = y2kYearToTm( BLE_RTC_bcd2bin( Wire.read() ) ); // 2000 to 1970 offset
+    if ( sec & 0x80 ) log_e("[RTC] Module is DOWN");
+    return tm;
   }
 
 #endif

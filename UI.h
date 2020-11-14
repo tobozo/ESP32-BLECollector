@@ -685,7 +685,7 @@ class UIUtils {
       heapGraphSprite.createSprite( graphLineWidth, graphLineHeight );
       giveMuxSemaphore();
 
-      xTaskCreatePinnedToCore(clockSync, "clockSync", 2048, param, 2, &ClockSyncTaskHandle, CLOCKSYNC_CORE ); // RTC wants to run on core 1 or it fails
+      xTaskCreatePinnedToCore(clockSync, "clockSync", 4096, param, 2, &ClockSyncTaskHandle, CLOCKSYNC_CORE ); // RTC wants to run on core 1 or it fails
       xTaskCreatePinnedToCore(drawableItems, "drawableItems", 6144, param, 2, &DrawableItemsTaskHandle, STATUSBAR_CORE );
       HeapGraphTaskIsRunning = false;
       vTaskDelete(NULL);

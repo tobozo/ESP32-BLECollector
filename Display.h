@@ -70,6 +70,11 @@ static const int AMIGABALL_YPOS = 50;
     #define RTC_SDA 21 // pin number
     #define RTC_SCL 22 // pin number
 
+    #undef GPS_RX
+    #undef GPS_TX
+    #define GPS_RX 33 // io pin number
+    #define GPS_TX 32 // io pin number
+
     //#define WITH_WIFI // enable WiFi features since M5Core2 has plenty of ram
 
     //#undef hasHID
