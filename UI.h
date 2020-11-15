@@ -38,14 +38,16 @@ char *macAddressToColorStr = new char[MAC_LEN+1];
 // bytes in the mac address, two first bytes are used to
 // allocate a color, the four last bytes are drawn with
 // that color
-struct MacAddressColors {
+struct MacAddressColors
+{
   uint8_t MACBytes[8]; // 8x8
   uint16_t color;
   uint8_t scaleX, scaleY;
   int width = -1, height = -1;
   size_t size;
   size_t choplevel = 0;
-  MacAddressColors( const char* address, byte _scaleX, byte _scaleY ) {
+  MacAddressColors( const char* address, byte _scaleX, byte _scaleY )
+  {
     scaleX = _scaleX;
     scaleY = _scaleY;
     size = 8 * 8 * scaleX * scaleY;
@@ -70,7 +72,8 @@ struct MacAddressColors {
     }
     color = (msb*256) + lsb;
   }
-  void spriteDraw( TFT_eSprite *sprite, uint16_t x, uint16_t y ) {
+  void spriteDraw( TFT_eSprite *sprite, uint16_t x, uint16_t y )
+  {
     if( width==-1 && height==-1 ) {
       width  = scaleX*8;
       height = scaleY*8;
@@ -93,7 +96,8 @@ struct MacAddressColors {
     sprite->pushSprite( x, y );
   }
   // vertical blitter for upscaled rendering
-  void chopDraw( int32_t posx, int32_t posy, uint16_t _height ) {
+  void chopDraw( int32_t posx, int32_t posy, uint16_t _height )
+  {
     if( width==-1 && height==-1 ) {
       width  = scaleX*8;
       height = scaleY*8;
@@ -126,26 +130,30 @@ struct MacAddressColors {
 };
 
 
-struct MacSwap {
+struct MacSwap
+{
   void swap(int32_t *xp, int32_t *yp) {
     uint32_t temp = *xp;
     *xp = *yp;
     *yp = temp;
   }
-  bool exists( int32_t needle, int32_t *haystack, size_t haystack_size ) {
+  bool exists( int32_t needle, int32_t *haystack, size_t haystack_size )
+  {
     for( size_t i=0; i< haystack_size; i++ ) {
       if( haystack[i] == needle ) return true;
     }
     return false;
   }
-  int32_t hasRecentActivity( int32_t needle, int32_t *haystack, size_t haystack_size ) {
+  int32_t hasRecentActivity( int32_t needle, int32_t *haystack, size_t haystack_size )
+  {
     if( haystack_size == 0 ) return true;
     for( size_t i=0; i< haystack_size; i++ ) {
       if( BLEDevRAMCache[haystack[i]]->updated_at.unixtime() < BLEDevRAMCache[needle]->updated_at.unixtime() ) return i;
     }
     return -1;
   }
-  int32_t hasEnoughHits( int32_t needle, int32_t *haystack, size_t haystack_size ) {
+  int32_t hasEnoughHits( int32_t needle, int32_t *haystack, size_t haystack_size )
+  {
     if( haystack_size == 0 ) return true;
     for( size_t i=0; i< haystack_size; i++ ) {
       if( BLEDevRAMCache[haystack[i]]->hits < BLEDevRAMCache[needle]->hits ) return i;
@@ -171,7 +179,8 @@ static bool DrawableItemsTaskIsRunning = false;
 static bool HeapGraphTaskIsRunning = false;
 
 
-class UIUtils {
+class UIUtils
+{
   public:
 
     bool filterVendors = false;
@@ -180,11 +189,13 @@ class UIUtils {
     byte brightnessIncrement = 8;
     bool BLEStarted = false;
 
-    struct BLECardStyle {
+    struct BLECardStyle
+    {
       uint16_t textColor = BLE_WHITE;
       uint16_t borderColor = BLE_WHITE;
       uint16_t bgColor = BLECARD_BGCOLOR;
-      void setTheme( BLECardThemes themeID ) {
+      void setTheme( BLECardThemes themeID )
+      {
         switch ( themeID ) {
           case IN_CACHE_ANON:         borderColor = IN_CACHE_COLOR;     textColor = ANONYMOUS_COLOR;     break; // = 0,
           case IN_CACHE_NOT_ANON:     borderColor = IN_CACHE_COLOR;     textColor = NOT_ANONYMOUS_COLOR; break; // = 1,
@@ -197,14 +208,14 @@ class UIUtils {
 
     BLECardStyle BLECardTheme;
 
-    void init() {
+    void init()
+    {
       Serial.begin(115200);
       Serial.println(welcomeMessage);
-      Serial.printf("  HAS HID: %s,\n  HAS_XPAD: %s\n  HAS PSRAM: %s\n  RTC_PROFILE: %s\n  HAS_EXTERNAL_RTC: %s\n  HAS_GPS: %s\n  TIME_UPDATE_SOURCE: %d\n",
+      Serial.printf("  HAS HID: %s,\n  HAS_XPAD: %s\n  HAS PSRAM: %s\n  HAS_EXTERNAL_RTC: %s\n  HAS_GPS: %s\n  TIME_UPDATE_SOURCE: %d\n",
         hasHID() ? "true" : "false",
         hasXPaxShield() ? "true" : "false",
         psramInit() ? "true" : "false",
-        RTC_PROFILE,
         HAS_EXTERNAL_RTC ? "true" : "false",
         HAS_GPS ? "true" : "false",
         TIME_UPDATE_SOURCE
@@ -345,7 +356,8 @@ class UIUtils {
     }
 
 
-    void update() {
+    void update()
+    {
       if ( freeheap + heap_tolerance < min_free_heap ) {
         headerStats("Out of heap..!");
         log_e("[FATAL] Heap too low: %d", freeheap);
@@ -357,7 +369,8 @@ class UIUtils {
     }
 
 
-    void playIntro() {
+    void playIntro()
+    {
       takeMuxSemaphore();
       uint16_t pos = 0;
 
@@ -393,24 +406,18 @@ class UIUtils {
     }
 
 
-    static void stopUITasks( void * param = NULL ) {
+    static void stopUITasks( void * param = NULL )
+    {
       if( ClockSyncTaskIsRunning )     destroyTaskNow( ClockSyncTaskHandle );
       if( DrawableItemsTaskIsRunning ) destroyTaskNow( DrawableItemsTaskHandle );
       if( HeapGraphTaskIsRunning )     destroyTaskNow( HeapGraphTaskHandle );
     }
 
 
-    static void screenShot() {
-
+    static void screenShot()
+    {
       takeMuxSemaphore();
       isQuerying = true;
-
-      /*
-      if( !ScreenShotLoaded ) {
-        M5.ScreenShot.init( &tft, BLE_FS );
-        M5.ScreenShot.begin();
-        ScreenShotLoaded = true;
-      }*/
 
       int16_t yRef = Out.yRef - Out.scrollTopFixedArea;
       // match pixel copy area with scroll area
@@ -428,11 +435,10 @@ class UIUtils {
 
       isQuerying = false;
       giveMuxSemaphore();
-
     }
 
-    static void screenShow( void * fileName = NULL ) {
-
+    static void screenShow( void * fileName = NULL )
+    {
       if( fileName == NULL ) return;
       isQuerying = true;
 
@@ -461,12 +467,12 @@ class UIUtils {
           vTaskDelay( 5000 );
         }
       }
-
       isQuerying = false;
     }
 
 
-    static void introUntilScroll( void * param ) {
+    static void introUntilScroll( void * param )
+    {
       char randomAddressStr[18] = {0};
       uint8_t randomAddress[6] = {0,0,0,0,0,0};
       uint16_t x;
@@ -498,7 +504,8 @@ class UIUtils {
     }
 
 
-    static void headerStats(const char *status = "") {
+    static void headerStats(const char *status = "")
+    {
       if ( isInScroll() || isInQuery() ) return;
       takeMuxSemaphore();
       int16_t posX = tft.getCursorX();
@@ -527,13 +534,13 @@ class UIUtils {
         IconRender( Icon_tbz_src, iconAppX, iconAppY ); // app icon
         appIconRendered = true;
       }
-
       tft.setCursor(posX, posY);
       giveMuxSemaphore();
     }
 
 
-    void footerStats() {
+    void footerStats()
+    {
       if ( isInScroll() || isInQuery() ) return;
       takeMuxSemaphore();
       int16_t posX = tft.getCursorX();
@@ -548,7 +555,8 @@ class UIUtils {
     }
 
 
-    void cacheStats() {
+    void cacheStats()
+    {
       takeMuxSemaphore();
       percentBox( percentBoxX, percentBoxY - 3*(percentBoxSize+2), percentBoxSize, percentBoxSize, BLEDevCacheUsed, BLE_CYAN,        BLE_BLACK);
       percentBox( percentBoxX, percentBoxY - 2*(percentBoxSize+2), percentBoxSize, percentBoxSize, VendorCacheUsed, BLE_ORANGE,      BLE_BLACK);
@@ -557,7 +565,8 @@ class UIUtils {
     }
 
 
-    static void startBlink() { // runs one and detaches
+    static void startBlink()
+    { // runs one and detaches
       blinkit = true;
       blinknow = millis();
       scanTime = SCAN_DURATION * 1000;
@@ -567,7 +576,8 @@ class UIUtils {
     }
 
 
-    static void stopBlink() {
+    static void stopBlink()
+    {
       blinkit = false;
       int32_t totalrssi = 0;
       size_t count      = 0;
@@ -583,7 +593,8 @@ class UIUtils {
     }
 
     // sqlite state (read/write/inert) icon
-    static void SetDBStateIcon(int state) {
+    static void SetDBStateIcon(int state)
+    {
       switch (state) {
         case 2:/*DB OPEN FOR WRITING*/ DBIcon.setStatus( ICON_STATUS_DB_WRITE ); break;
         case 1:/*DB_OPEN FOR READING*/ DBIcon.setStatus( ICON_STATUS_DB_READ );  break;
@@ -593,7 +604,8 @@ class UIUtils {
       }
     }
 
-    static void PrintMessage( const char* message ) {
+    static void PrintMessage( const char* message )
+    {
       takeMuxSemaphore();
       tft.setCursor( 0, tft.getCursorY() );
       Out.println( message );
@@ -601,14 +613,18 @@ class UIUtils {
       giveMuxSemaphore();
     }
 
-    static void PrintFatalError( const char* message, uint16_t yPos = AMIGABALL_YPOS ) {
+    static void PrintFatalError( const char* message, uint16_t yPos = AMIGABALL_YPOS )
+    {
       alignTextAt( message, 0, yPos, BLE_YELLOW, BLECARD_BGCOLOR, ALIGN_CENTER );
     }
-    static void PrintProgressBar(float progress, float magnitude) {
+
+    static void PrintProgressBar(float progress, float magnitude)
+    {
       PrintProgressBar( (Out.width * progress) / magnitude );
     }
 
-    static void PrintProgressBar(uint16_t width) {
+    static void PrintProgressBar(uint16_t width)
+    {
       takeMuxSemaphore();
       if( width > Out.width || width == 0 ) { // clear
         tft.fillRect(0,     progressBarY, Out.width, 2, BLE_DARKGREY);
@@ -619,7 +635,8 @@ class UIUtils {
       giveMuxSemaphore();
     }
 
-    static void SetTimeStateIcon() {
+    static void SetTimeStateIcon()
+    {
       if (RTCisRunning) {
         TimeIcon.setStatus( ICON_STATUS_clock3 );
       } else {
@@ -637,7 +654,8 @@ class UIUtils {
     }
 
 
-    static void PrintBlinkableWidgets() {
+    static void PrintBlinkableWidgets()
+    {
       if (!blinkit || blinknow >= blinkthen) {
         blinkit = false;
         if( BLEActivityIcon.status != ICON_STATUS_IDLE ) {
@@ -671,7 +689,8 @@ class UIUtils {
     }
 
     // spawn subtasks and leave
-    static void taskHeapGraph( void * param = NULL ) { // always running
+    static void taskHeapGraph( void * param = NULL )
+    { // always running
       HeapGraphTaskIsRunning = true;
       mux = xSemaphoreCreateMutex();
       takeMuxSemaphore();
@@ -691,7 +710,8 @@ class UIUtils {
       vTaskDelete(NULL);
     }
 
-    static void drawableItems( void * param ) {
+    static void drawableItems( void * param )
+    {
 
       DrawableItemsTaskIsRunning = true;
 
@@ -724,9 +744,8 @@ class UIUtils {
       }
     }
 
-    static void hallOfMac( int32_t * sorted, int32_t * lastsorted ) {
-
-
+    static void hallOfMac( int32_t * sorted, int32_t * lastsorted )
+    {
       if( !RamCacheReady ) return;
 
       // get the n top hits in the cache ( n=hallOfMacSize )
@@ -791,7 +810,8 @@ class UIUtils {
       giveMuxSemaphore();
     }
 
-    static void textCounters() {
+    static void textCounters()
+    {
       if( !showScanStats ) {
         unsigned long timer_sec = (millis()/3000);
         showHeap    = timer_sec%5==0;
@@ -830,7 +850,8 @@ class UIUtils {
     }
 
 
-    static void devicesGraphStats() {
+    static void devicesGraphStats()
+    {
         devGraphStartedSince = millis() - devGraphFirstStatTime;
         devCountPerMinuteIndex = int( devGraphStartedSince / devGraphPeriodShort )%60;
         devCountPerMinute[devCountPerMinuteIndex] = devicesStatCount;
@@ -871,7 +892,8 @@ class UIUtils {
     }
 
 
-    static void clockSync(void * parameter) {
+    static void clockSync(void * parameter)
+    {
 
       TickType_t lastWaketime;
       lastWaketime = xTaskGetTickCount();
@@ -909,7 +931,8 @@ class UIUtils {
     }
 
 
-    static void heapGraph() {
+    static void heapGraph()
+    {
       if ( isInScroll() || isInQuery() ) {
         return;
       }
@@ -1042,7 +1065,8 @@ class UIUtils {
     }
 
 
-    void printBLECard( BlueToothDeviceLink BleLink /*BlueToothDevice *BleCard*/ ) {
+    void printBLECard( BlueToothDeviceLink BleLink /*BlueToothDevice *BleCard*/ )
+    {
       //unsigned long renderstart = millis();
       BlueToothDevice *BleCard = BleLink.device;
       // don't render if already on screen
@@ -1274,11 +1298,11 @@ class UIUtils {
 
       //unsigned long rendertime = millis() - renderstart;
       //log_w("Rendered %s in %d ms", BleCard->address, rendertime );
-
     }
 
 
-    static bool BLECardIsOnScreen( const char* address ) {
+    static bool BLECardIsOnScreen( const char* address )
+    {
       log_v("Checking if %s is visible onScreen", address);
       uint16_t card_index;
       int16_t offset = 0;
@@ -1300,7 +1324,8 @@ class UIUtils {
       return false;
     }
 
-    static void highlightBLECard( uint16_t card_index, int16_t offset ) {
+    static void highlightBLECard( uint16_t card_index, int16_t offset )
+    {
       if( card_index >= BLECARD_MAC_CACHE_SIZE) return; // bad value
       if( isEmpty( MacScrollView[card_index].address ) ) return; // empty slot
       int newYPos = Out.translate( Out.scrollPosY, offset );
@@ -1317,7 +1342,8 @@ class UIUtils {
       giveMuxSemaphore();
     }
 
-    static void percentBox(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t percent, uint16_t barcolor, uint16_t bgcolor, uint16_t bordercolor = BLE_DARKGREY) {
+    static void percentBox(uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t percent, uint16_t barcolor, uint16_t bgcolor, uint16_t bordercolor = BLE_DARKGREY)
+    {
       if (percent == 0) {
         tft.drawRect(x - 1, y - 1, w + 2, h + 2, bordercolor);
         tft.fillRect(x, y, w, h, bgcolor);
@@ -1347,14 +1373,16 @@ class UIUtils {
     }
 
 
-    static void lineTo( uint16_t x, uint16_t y, uint16_t color) {
+    static void lineTo( uint16_t x, uint16_t y, uint16_t color)
+    {
       tft.drawLine( prevx, prevy, x, y, color );
       prevx = x;
       prevy = y;
     }
 
 
-    static void drawBluetoothLogo( uint16_t x, uint16_t y, uint8_t height = 10, uint16_t color = BLE_WHITE, uint16_t bgcolor = BLUETOOTH_COLOR ) {
+    static void drawBluetoothLogo( uint16_t x, uint16_t y, uint8_t height = 10, uint16_t color = BLE_WHITE, uint16_t bgcolor = BLUETOOTH_COLOR )
+    {
       if( height<10) height=10; // low cap
       if( height%2!=0) height++; // lame centering
 
@@ -1380,7 +1408,8 @@ class UIUtils {
 
 
     // draws a RSSI Bar for the BLECard
-    static void drawRSSIBar(int16_t x, int16_t y, int16_t rssi, uint16_t bgcolor, float size=1.0) {
+    static void drawRSSIBar(int16_t x, int16_t y, int16_t rssi, uint16_t bgcolor, float size=1.0)
+    {
       uint16_t barColors[4] = { bgcolor, bgcolor, bgcolor, bgcolor };
       switch(rssi%6) {
       case 5:
@@ -1419,7 +1448,8 @@ class UIUtils {
 
   private:
 
-    static void animClearRect( int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t color ) {
+    static void animClearRect( int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t color )
+    {
       while( w > 0 && h > 0 ) {
         tft.drawRect( x, y, w, h, color );
         x++;
@@ -1429,12 +1459,14 @@ class UIUtils {
         delay(10);
       }
     }
-    static void animClear( int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t bgcolor, uint16_t highlightcolor ) {
+    static void animClear( int16_t x, int16_t y, uint16_t w, uint16_t h, uint16_t bgcolor, uint16_t highlightcolor )
+    {
       animClearRect( x, y, w, h, highlightcolor );
       animClearRect( x, y, w, h, bgcolor );
     }
 
-    void setIconBar() {
+    void setIconBar()
+    {
 
       // configure widgets
       BLERssiWidget.type        = ICON_WIDGET_RSSI;
@@ -1471,7 +1503,8 @@ class UIUtils {
     }
 
 
-    static void alignTextAt(const char* text, uint16_t x, uint16_t y, uint16_t color = BLE_YELLOW, uint16_t bgcolor = BLE_TRANSPARENT, uint8_t textAlign = ALIGN_FREE) {
+    static void alignTextAt(const char* text, uint16_t x, uint16_t y, uint16_t color = BLE_YELLOW, uint16_t bgcolor = BLE_TRANSPARENT, uint8_t textAlign = ALIGN_FREE)
+    {
       if( isEmpty( text ) ) return;
       if( bgcolor != BLE_TRANSPARENT ) {
         tft.setTextColor( color, bgcolor );
@@ -1496,7 +1529,8 @@ class UIUtils {
       tft.drawString( text, tft.getCursorX(), tft.getCursorY() );
     }
 
-    static DisplayMode getDisplayMode() {
+    static DisplayMode getDisplayMode()
+    {
       if( tft.width() > tft.height() ) {
         return TFT_LANDSCAPE;
       }
@@ -1507,7 +1541,8 @@ class UIUtils {
     }
 
     // landscape / portrait theme switcher
-    static void setUISizePos() {
+    static void setUISizePos()
+    {
       // TODO: dynamize these
       iconBleX = 104;
       iconBleY = 7;

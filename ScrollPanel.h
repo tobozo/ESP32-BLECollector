@@ -31,13 +31,16 @@
 
 #define SPACE " "
 static bool isScrolling = false;
-static bool isInScroll() {
+static bool isInScroll()
+{
   return isScrolling;
 }
 
-class ScrollableOutput {
+class ScrollableOutput
+{
 
-  enum ScrollType {
+  enum ScrollType
+  {
     SCROLL_HARDWARE,
     SCROLL_SOFTWARE
   };
@@ -60,28 +63,34 @@ class ScrollableOutput {
     RGBColor BGColorEnd;
     ScrollType scrollType = SCROLL_HARDWARE;
 
-    void init() {
+    void init()
+    {
       height = scrollpanel_height();
       width  = scrollpanel_width();
     }
 
-    int println() {
+    int println()
+    {
       return println(" ");
     }
-    int println(const char* str) {
+
+    int println(const char* str)
+    {
       char output[256] = {'\0'};
       sprintf(output, "%s\n", str);
       return print(output);
     }
 
-    int print(const char* str) {
+    int print(const char* str)
+    {
       if(strcmp(str, " \n")!=0 && serialEcho) {
         Serial.print( str );
       }
       return scroll(str);
     }
 
-    void setupScrollArea(uint16_t TFA, uint16_t BFA, RGBColor colorstart, RGBColor colorend, bool clear = false) {
+    void setupScrollArea(uint16_t TFA, uint16_t BFA, RGBColor colorstart, RGBColor colorend, bool clear = false)
+    {
       BGColorStart = colorstart;
       BGColorEnd = colorend;
       tft.setCursor(0, TFA);
@@ -108,7 +117,8 @@ class ScrollableOutput {
       }
     }
 
-    void scrollNextPage() {
+    void scrollNextPage()
+    {
       tft_getTextBounds("O", scrollPosX, scrollPosY, &x1_tmp, &y1_tmp, &w_tmp, &h_tmp);
       int linesInPage = (yArea-(scrollPosY-scrollTopFixedArea)) / h_tmp;
       for(int i=0; i<linesInPage; i++) {
@@ -116,12 +126,14 @@ class ScrollableOutput {
       }
     }
 
-    int translate(int y, int distance=0) {
+    int translate(int y, int distance=0)
+    {
       return ( ( yArea + ( ( y - scrollTopFixedArea) + distance) ) % yArea ) + scrollTopFixedArea;
     }
 
     // draw rounded corners boxes inside the scroll view, with scroll limit overlap support
-    void drawScrollableRoundRect(uint16_t x, uint16_t y, uint16_t _width, uint16_t _height, uint16_t radius, uint16_t bordercolor, bool fill = false ) {
+    void drawScrollableRoundRect(uint16_t x, uint16_t y, uint16_t _width, uint16_t _height, uint16_t radius, uint16_t bordercolor, bool fill = false )
+    {
       int yStart = translate(y, 0); // get the scrollview-translated y position
       if ( yStart >= scrollTopFixedArea && (yStart+_height)<(height-scrollBottomFixedArea) ) {
         // no scroll loop point overlap, just render the translated box using the native method
@@ -167,7 +179,8 @@ class ScrollableOutput {
 
   private:
 
-    int scroll(const char* str) {
+    int scroll(const char* str)
+    {
       //tft.drawFastHLine( 0, scrollTopFixedArea, 8, BLE_RED );
       isScrolling = true;
       if (scrollPosY == -1) {
@@ -203,7 +216,8 @@ class ScrollableOutput {
       return h_tmp;
     }
     // change this function if your TFT does not handle hardware scrolling
-    int scroll_slow(int lines, int wait) {
+    int scroll_slow(int lines, int wait)
+    {
       int yTemp = yRef;
       //scrollPosY = -1;
 

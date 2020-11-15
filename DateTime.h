@@ -34,7 +34,8 @@
 #include <TimeLib.h> // https://github.com/PaulStoffregen/Time
 
 // helper
-static uint8_t DateTimeConv2d(const char* p) {
+static uint8_t DateTimeConv2d(const char* p)
+{
   uint8_t v = 0;
   if ('0' <= *p && *p <= '9')
     v = *p - '0';
@@ -44,7 +45,8 @@ static uint8_t DateTimeConv2d(const char* p) {
 static bool TimeIsSet = false;
 
 // Simple general-purpose date/time class (no TZ / DST / leap second handling!)
-class DateTime {
+class DateTime
+{
   public:
     DateTime( uint32_t t=0 );
     DateTime( tmElements_t dateTimeNow );
@@ -65,7 +67,8 @@ class DateTime {
     tmElements_t tm;
 };
 
-DateTime::DateTime(uint32_t unixtime) {
+DateTime::DateTime(uint32_t unixtime)
+{
   breakTime(unixtime, tm);
   m = tm.Month;
   d = tm.Day;
@@ -74,7 +77,8 @@ DateTime::DateTime(uint32_t unixtime) {
   ss = tm.Second;
   yOff = tm.Year; // offset from 1970;
 };
-DateTime::DateTime(tmElements_t dateTimeNow) {
+DateTime::DateTime(tmElements_t dateTimeNow)
+{
   tm   = dateTimeNow;
   m    = tm.Month;
   d    = tm.Day;
@@ -83,7 +87,8 @@ DateTime::DateTime(tmElements_t dateTimeNow) {
   ss   = tm.Second;
   yOff = tm.Year; // offset from 1970;
 };
-DateTime::DateTime(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t min, uint8_t sec) {
+DateTime::DateTime(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint8_t min, uint8_t sec)
+{
   if (year >= 1970)
       year -= 1970; // year to offset
   yOff = year;
@@ -94,7 +99,8 @@ DateTime::DateTime(uint16_t year, uint8_t month, uint8_t day, uint8_t hour, uint
   ss = sec;
   tm = {ss, mm, hh, 0, d, m, yOff};
 };
-DateTime::DateTime (const char* date, const char* time) {
+DateTime::DateTime (const char* date, const char* time)
+{
   // A convenient constructor for using "the compiler's time":
   //   DateTime now (__DATE__, __TIME__);
   // sample input: date = "Dec 26 2009", time = "12:34:56"
@@ -117,10 +123,12 @@ DateTime::DateTime (const char* date, const char* time) {
   ss = DateTimeConv2d(time + 6);
   tm = {ss, mm, hh, 0, d, m, yOff};
 };
-uint32_t DateTime::unixtime() const {
+uint32_t DateTime::unixtime() const
+{
   return tm2unixtime( tm );
 }
-uint32_t DateTime::tm2unixtime(tmElements_t tm_)  {
+uint32_t DateTime::tm2unixtime(tmElements_t tm_)
+{
   uint32_t unixtime = makeTime(tm_); // convert time elements into time_t
   return unixtime;
 }
@@ -129,7 +137,8 @@ uint32_t DateTime::tm2unixtime(tmElements_t tm_)  {
 
 // for debug
 
-void dumpTime(const char* message, DateTime dateTime) {
+void dumpTime(const char* message, DateTime dateTime)
+{
    Serial.printf("[%s]: %04d-%02d-%02d %02d:%02d:%02d\n",
     message,
     dateTime.year(),
@@ -141,7 +150,8 @@ void dumpTime(const char* message, DateTime dateTime) {
   );
 }
 
-void dumpTime(const char* message, tmElements_t tm) {
+void dumpTime(const char* message, tmElements_t tm)
+{
   Serial.printf("[%s]: %04d-%02d-%02d (WDay:%d) %02d:%02d:%02d\n",
     message,
     tm.Year + 1970,
@@ -153,7 +163,8 @@ void dumpTime(const char* message, tmElements_t tm) {
     tm.Second
   );
 }
-void dumpTime(const char* message, struct tm *info) {
+void dumpTime(const char* message, struct tm *info)
+{
   Serial.printf("%s (GMT%s%.2g [%s]): %04d-%02d-%02d %02d:%02d:%02d\n",
     message,
     timeZone>0 ? "+" : "",
@@ -168,7 +179,8 @@ void dumpTime(const char* message, struct tm *info) {
   );
 }
 
-void dumpTime(const char* message, time_t epoch) {
+void dumpTime(const char* message, time_t epoch)
+{
   tmElements_t nowUnixDateTime;
   breakTime( epoch, nowUnixDateTime );
   dumpTime( message, nowUnixDateTime );

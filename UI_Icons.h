@@ -6,7 +6,8 @@
 #include "Assets.h" // bitmaps
 
 
-enum IconSrcStatusType {
+enum IconSrcStatusType
+{
   ICON_STATUS_AVAILABLE,
   ICON_STATUS_UNAVAILABLE,
   ICON_STATUS_SET,
@@ -63,13 +64,15 @@ enum IconSrcStatusType {
   ICON_STATUS_DISABLED
 };
 
-enum IconType {
+enum IconType
+{
   ICON_TYPE_JPG,
   ICON_TYPE_GEOMETRIC,
   ICON_TYPE_WIDGET
 };
 
-enum IconShapeType {
+enum IconShapeType
+{
   ICON_SHAPE_NONE,
   ICON_SHAPE_DISC,
   ICON_SHAPE_CIRCLE,
@@ -77,7 +80,8 @@ enum IconShapeType {
   ICON_SHAPE_TRIANGLE
 };
 
-enum IconWidgetType {
+enum IconWidgetType
+{
   ICON_WIDGET_NONE,
   ICON_WIDGET_RSSI,
   ICON_WIDGET_PERCENT,
@@ -112,28 +116,32 @@ void (*fillRectPointer)( uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_
 void (*fillTrianglePointer)( uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t color);
 
 
-struct IconSrcStatus {
+struct IconSrcStatus
+{
   IconSrcStatusType status;
   const IconSrc *src;
   IconSrcStatus( IconSrcStatusType s, const IconSrc *sr ) : status(s), src(sr) { };
   IconSrcStatus( const IconSrc *sr, IconSrcStatusType s ) : status(s), src(sr) { };
 };
 
-struct IconWidgetStatus {
+struct IconWidgetStatus
+{
   IconWidget        *widget;
   IconSrcStatusType status;
   IconWidgetStatus( IconWidget *w, IconSrcStatusType s ) : widget(w), status(s) { };
   IconWidgetStatus( IconSrcStatusType s, IconWidget *w ) : widget(w), status(s) { };
 };
 
-struct IconShapeStatus {
+struct IconShapeStatus
+{
   IconShape         *shape;
   IconSrcStatusType status;
   IconShapeStatus( IconShape *s, IconSrcStatusType st ) : shape(s), status(st) { };
   IconShapeStatus( IconSrcStatusType st, IconShape *s ) : shape(s), status(st) { };
 };
 
-struct IconSrc {
+struct IconSrc
+{
   const unsigned char *jpeg;
   size_t   jpeg_len;
   uint16_t width;
@@ -142,20 +150,23 @@ struct IconSrc {
 };
 
 
-struct IconWidget {
+struct IconWidget
+{
   IconWidgetType type;
   int32_t        value;
   char           *text;
   uint16_t       color;
   uint8_t        align;
   void (*cb)( uint16_t posX, uint16_t posY, uint16_t bgcolor );
-  void setValue( int32_t val ) {
+  void setValue( int32_t val )
+  {
     if( value != val ) {
       value = val;
       if( cb ) cb( 0, 0, 0 );
     }
   }
-  void setText( char* intext, uint16_t posX, uint16_t posY, uint16_t textcolor, uint16_t bgcolor, uint8_t textalign ) {
+  void setText( char* intext, uint16_t posX, uint16_t posY, uint16_t textcolor, uint16_t bgcolor, uint8_t textalign )
+  {
     text  = intext;
     color = textcolor;
     align = textalign;
@@ -164,17 +175,20 @@ struct IconWidget {
 };
 
 
-struct IconShape {
+struct IconShape
+{
   IconShapeType type;
   uint16_t      color;
-  IconShape( IconShapeType _type, uint16_t _color ) {
+  IconShape( IconShapeType _type, uint16_t _color )
+  {
     type  = _type;
     color = _color;
   }
 };
 
 
-struct Icon {
+struct Icon
+{
   const char* name;     // just a dummy name for debugging
   uint16_t    width;
   uint16_t    height;
@@ -201,21 +215,25 @@ struct Icon {
   Icon( const char*_n, uint16_t _w, uint16_t _h, IconType _t, IconSrcStatusType _s, IconSrcStatus **_sr, IconWidgetStatus **_wi, uint8_t _st )
     :        name{_n}, width{_w},  height{_h},   type{_t},    status{_s},           srcStatus{_sr},      widgetStatus{_wi},      statuses{_st} {
   };
-  void init() {
+  void init()
+  {
     render = true;
     posX = 0;
     posY = 0;
     bgcolor = HEADER_BGCOLOR;
     log_d("Inited icon '%s' [%d*%d] using %d states", name, width, height, statuses);
   }
-  void setRender( bool _render = true ) {
+  void setRender( bool _render = true )
+  {
     render = _render;
   }
-  void setStatus( int8_t _status ) {
+  void setStatus( int8_t _status )
+  {
     IconSrcStatusType *newstatus = reinterpret_cast<IconSrcStatusType*>(&_status);
     setStatus( *newstatus );
   }
-  void setStatus( IconSrcStatusType _status ) {
+  void setStatus( IconSrcStatusType _status )
+  {
     bool statusexists = false;
     if( _status == status ) {
       log_v("Status unchanged");
@@ -239,14 +257,16 @@ struct Icon {
 };
 
 
-struct IconBar {
+struct IconBar
+{
   uint16_t    width;
   uint16_t    height;
   uint8_t     margin = 2;
   size_t      totalIcons = 0;
   Icon        **icons;
   IconBar() { };
-  void init() {
+  void init()
+  {
     if( totalIcons == 0 ) {
       log_e("Nothing to init!!");
       return;
@@ -267,15 +287,18 @@ struct IconBar {
     }
     log_d("Iconbar dimensions:[%d*%d] with %d icons", width, height, totalIcons);
   }
-  void pushIcon( Icon *icon ) {
+  void pushIcon( Icon *icon )
+  {
     icons = (Icon**)realloc( (Icon**)icons , (totalIcons + 1) * (sizeof(Icon*)));
     icons[totalIcons] = icon;
     totalIcons++;
   }
-  void setMargin( uint8_t _margin ) {
+  void setMargin( uint8_t _margin )
+  {
     margin = _margin;
   }
-  void draw(uint16_t x, uint16_t y ) {
+  void draw(uint16_t x, uint16_t y )
+  {
     uint16_t posx = 0;
     uint8_t rendered = 0;
     for( byte i=0; i<totalIcons; i++ ) {
@@ -289,11 +312,13 @@ struct IconBar {
 };
 
 // renderers
-void IconRender( const IconSrc* src, uint16_t x, uint16_t y ) {
+void IconRender( const IconSrc* src, uint16_t x, uint16_t y )
+{
   tft_drawJpg( src->jpeg, src->jpeg_len, x, y );
 }
 
-void IconRender( IconWidget* widget, uint16_t posX, uint16_t posY, uint16_t width, uint16_t height, uint16_t offsetX, uint16_t offsetY, uint16_t bgcolor ) {
+void IconRender( IconWidget* widget, uint16_t posX, uint16_t posY, uint16_t width, uint16_t height, uint16_t offsetX, uint16_t offsetY, uint16_t bgcolor )
+{
   switch( widget->type ) {
     case ICON_WIDGET_RSSI: // this widget uses relative positioning
       rssiPointer( offsetX+posX+1, offsetY+posY, widget->value, widget->color, 1.0 );
@@ -309,7 +334,8 @@ void IconRender( IconWidget* widget, uint16_t posX, uint16_t posY, uint16_t widt
   }
 }
 
-void IconRender( IconShape *shape, uint16_t posX, uint16_t posY, uint16_t width, uint16_t height, uint16_t offsetX, uint16_t offsetY ) {
+void IconRender( IconShape *shape, uint16_t posX, uint16_t posY, uint16_t width, uint16_t height, uint16_t offsetX, uint16_t offsetY )
+{
   switch( shape->type ) {
     case ICON_SHAPE_DISC:
       fillCirclePointer( offsetX+posX+width/2, offsetY-1+posY+height/2, (width/2)-1, shape->color );
@@ -328,7 +354,8 @@ void IconRender( IconShape *shape, uint16_t posX, uint16_t posY, uint16_t width,
   }
 }
 
-bool IconRender( Icon *icon, uint16_t offsetX, uint16_t offsetY ) {
+bool IconRender( Icon *icon, uint16_t offsetX, uint16_t offsetY )
+{
   if( !icon->render ) {
     log_v("icon '%s' Already rendered", icon->name);
     return false;
@@ -375,7 +402,8 @@ bool IconRender( Icon *icon, uint16_t offsetX, uint16_t offsetY ) {
   return true;
 }
 
-bool IconRender( Icon *icon, IconSrcStatusType status, uint16_t x, uint16_t y ) {
+bool IconRender( Icon *icon, IconSrcStatusType status, uint16_t x, uint16_t y )
+{
   icon->setStatus( status );
   return IconRender(icon,  x, y );
 }
@@ -526,14 +554,16 @@ Icon VendorFilterIcon( "Vendor Filter Icon", 10, 8, ICON_TYPE_JPG, ICON_STATUS_f
 Icon TextCountersIcon( "Text counters", 8, 8, ICON_TYPE_WIDGET, ICON_STATUS_HEAP, TextCounterIconSrcStatuses, TextCounterWidgetStatuses, sizeof TextCounterIconSrcStatuses / sizeof TextCounterIconSrcStatuses[0] );
 Icon BLERssiIcon( "BLE Global RSSI", 9, 8, ICON_TYPE_WIDGET, ICON_STATUS_UNSET, BLERssiStatuses, sizeof BLERssiStatuses / sizeof BLERssiStatuses[0] );
 
-void TextCountersIconUpdateCB( uint16_t posX, uint16_t posY, uint16_t bgcolor ) {
+void TextCountersIconUpdateCB( uint16_t posX, uint16_t posY, uint16_t bgcolor )
+{
   TextCountersIcon.posX    = posX;
   TextCountersIcon.posY    = posY;
   TextCountersIcon.bgcolor = bgcolor;
   TextCountersIcon.setRender();
 }
 
-void BLERssiIconUpdateCB( uint16_t posX, uint16_t posY, uint16_t bgcolor ) {
+void BLERssiIconUpdateCB( uint16_t posX, uint16_t posY, uint16_t bgcolor )
+{
   if( posX + posY > 0 ) {
     BLERssiIcon.posX = posX;
     BLERssiIcon.posY = posY;

@@ -40,6 +40,7 @@ char *zErrMsg = 0; // holds DB Error message
 const char BACKSLASH = '\\'; // used to clean() slashes
 static char *colNeedle = 0; // search criteria
 static char colValue[32] = {'\0'}; // search result
+static bool DBneedsReplication = false;
 
 
 #define BLEMAC_CREATE_FIELDNAMES " \
@@ -106,7 +107,8 @@ static char searchDeviceQuery[160];
 #define VENDORCACHE_SIZE 16
 #endif
 
-struct VendorHeapCacheStruct {
+struct VendorHeapCacheStruct
+{
   int devid = -1;
   char *vendor = NULL;
   void init( bool hasPsram=false ) {
@@ -123,7 +125,8 @@ uint16_t VendorCacheIndex = 0; // index in the circular buffer
 static int VendorCacheHit = 0;
 
 
-struct VendorPsramCacheStruct {
+struct VendorPsramCacheStruct
+{
   uint16_t *devid = NULL;
   uint16_t hits   = 0; // cache hits
   char *vendor    = NULL;
@@ -139,7 +142,8 @@ VendorPsramCacheStruct** VendorPsramCache = NULL;
 #endif
 
 
-struct OUIHeapCacheStruct {
+struct OUIHeapCacheStruct
+{
   char *mac = NULL;
   char *assignment = NULL;
   void init( bool hasPsram=false ) {
@@ -163,7 +167,8 @@ OUIHeapCacheStruct OuiHeapCache[OUICACHE_SIZE];
 uint16_t OuiCacheIndex = 0; // index in the circular buffer
 static int OuiCacheHit = 0;
 
-struct OUIPsramCacheStruct {
+struct OUIPsramCacheStruct
+{
   char *mac = NULL;
   uint16_t hits    = 0; // cache hits
   char *assignment = NULL;
@@ -191,7 +196,8 @@ OUIPsramCacheStruct** OuiPsramCache = NULL;
 
 
 
-class DBUtils {
+class DBUtils
+{
   public:
 
     char currentBLEAddress[MAC_LEN+1] = "00:00:00:00:00:00"; // used to proxy BLE search term to DB query
@@ -203,7 +209,8 @@ class DBUtils {
     sqlite3 *BLEVendorsDB; // readonly
     sqlite3 *OUIVendorsDB; // readonly
 
-    enum DBMessage {
+    enum DBMessage
+    {
       TABLE_CREATION_FAILED = -1,
       INSERTION_FAILED = -2,
       INCREMENT_FAILED = -3,
@@ -213,19 +220,22 @@ class DBUtils {
       INCREMENT_SUCCESS = 2
     };
 
-    enum DBName {
+    enum DBName
+    {
       BLE_COLLECTOR_DB = 0,
       MAC_OUI_NAMES_DB = 1,
       BLE_VENDOR_NAMES_DB =2
     };
 
-    struct DBInfo {
+    struct DBInfo
+    {
       DBName id;
       char* sqlitepath;
       char* fspath;
     };
 
-    DBInfo dbcollection[3] = {
+    DBInfo dbcollection[3] =
+    {
       { .id=BLE_COLLECTOR_DB,    .sqlitepath=(char *)BLE_COLLECTOR_DB_SQLITE_PATH,    .fspath=(char *)BLE_COLLECTOR_DB_FS_PATH },
       { .id=MAC_OUI_NAMES_DB,    .sqlitepath=(char *)MAC_OUI_NAMES_DB_SQLITE_PATH,    .fspath=(char *)MAC_OUI_NAMES_DB_FS_PATH },
       { .id=BLE_VENDOR_NAMES_DB, .sqlitepath=(char *)BLE_VENDOR_NAMES_DB_SQLITE_PATH, .fspath=(char *)BLE_VENDOR_NAMES_DB_FS_PATH }
@@ -242,7 +252,8 @@ class DBUtils {
     bool initDone = false;
 
 
-    bool init() {
+    bool init()
+    {
       while(SDSetup()==false) {
         UI.headerStats("Card Mount Failed");
         delay(500);
@@ -282,7 +293,8 @@ class DBUtils {
     }
 
 
-    void setBLEDBPath() {
+    void setBLEDBPath()
+    {
       if( TimeIsSet ) {
         //DateTime epoch = RTC.now();
         DateTime epoch = DateTime(year(), month(), day(), hour(), minute(), second());
@@ -306,7 +318,8 @@ class DBUtils {
     }
 
 
-    static bool checkDBFiles() {
+    static bool checkDBFiles()
+    {
       bool OUIFileChecksOut    = checkOUIFile();
       bool VendorFileChecksOut = checkVendorFile();
       if( !OUIFileChecksOut || !VendorFileChecksOut ) return false;
@@ -314,17 +327,20 @@ class DBUtils {
     }
 
 
-    static bool checkOUIFile() {
+    static bool checkOUIFile()
+    {
       return checkFile( MAC_OUI_NAMES_DB_FS_PATH, MAC_OUI_NAMES_DB_FS_SIZE );
     }
 
 
-    static bool checkVendorFile() {
+    static bool checkVendorFile()
+    {
       return checkFile( BLE_VENDOR_NAMES_DB_FS_PATH, BLE_VENDOR_NAMES_DB_FS_SIZE );
     }
 
 
-    static bool checkFile( const char* fileName, const size_t expectedSize ) {
+    static bool checkFile( const char* fileName, const size_t expectedSize )
+    {
       bool ret = true;
       isQuerying = true;
       if( ! BLE_FS.exists( fileName ) ) {
@@ -344,7 +360,8 @@ class DBUtils {
     }
 
 
-    void OUICacheWarmup() {
+    void OUICacheWarmup()
+    {
       if( hasPsram ) {
         OuiPsramCache = (OUIPsramCacheStruct**)ps_calloc(OUIDBSize, sizeof( OUIPsramCacheStruct ) );
         for(int i=0; i<OUIDBSize; i++) {
@@ -364,7 +381,8 @@ class DBUtils {
     }
 
 
-    void VendorCacheWarmup() {
+    void VendorCacheWarmup()
+    {
       if( hasPsram ) {
         VendorPsramCache = (VendorPsramCacheStruct**)ps_calloc(VendorDBSize, sizeof( VendorPsramCacheStruct ) );
         for(int i=0; i<VendorDBSize; i++) {
@@ -384,7 +402,8 @@ class DBUtils {
     }
 
 
-    void *ble_calloc(size_t n, size_t size) {
+    void *ble_calloc(size_t n, size_t size)
+    {
       if( hasPsram ) {
         return ps_calloc( n, size );
       } else {
@@ -393,7 +412,8 @@ class DBUtils {
     }
 
 
-    void BLEDevCacheWarmup() {
+    void BLEDevCacheWarmup()
+    {
       BLEDevRAMCache = (BlueToothDevice**)ble_calloc(BLEDEVCACHE_SIZE, sizeof( BlueToothDevice ) );
       for(uint16_t i=0; i<BLEDEVCACHE_SIZE; i++) {
         BLEDevRAMCache[i] = (BlueToothDevice*)ble_calloc(1, sizeof( BlueToothDevice ) );
@@ -417,7 +437,8 @@ class DBUtils {
     }
 
 
-    void setCacheSize() {
+    void setCacheSize()
+    {
       if( hasPsram ) {
         BLEDEVCACHE_SIZE = BLEDEVCACHE_PSRAM_SIZE;
         log_d("[PSRAM] OK");
@@ -428,8 +449,8 @@ class DBUtils {
     }
 
 
-    bool cacheWarmup() {
-
+    bool cacheWarmup()
+    {
       setCacheSize();
       OUICacheWarmup();
       VendorCacheWarmup();
@@ -453,7 +474,8 @@ class DBUtils {
     }
 
 
-    bool maintain() {
+    bool maintain()
+    {
       bool ret = true;
       if( isOOM ) {
         isOOM = false;
@@ -512,7 +534,8 @@ class DBUtils {
     }
 
 
-    void cacheState() {
+    void cacheState()
+    {
       BLEDevCacheUsed = 0;
       for( uint16_t i=0; i<BLEDEVCACHE_SIZE; i++) {
         if( !isEmpty( BLEDevRAMCache[i]->address ) ) {
@@ -543,7 +566,8 @@ class DBUtils {
     }
 
 
-    int open(DBName dbName, bool readonly=true) {
+    int open(DBName dbName, bool readonly=true)
+    {
      isQuerying = true;
      int rc = 1;
       switch(dbName) {
@@ -579,7 +603,8 @@ class DBUtils {
     }
 
     // close the (hopefully) previously opened DB
-    void close(DBName dbName) {
+    void close(DBName dbName)
+    {
       UI.SetDBStateIcon(0);
       switch(dbName) {
         case BLE_COLLECTOR_DB:    sqlite3_close(BLECollectorDB); break;
@@ -592,7 +617,8 @@ class DBUtils {
     }
 
     // replaces any needle from haystack (defaults to double=>single quotes)
-    static void clean(char *haystack, const char needle = '"', const char replacewith='\'') {
+    static void clean(char *haystack, const char needle = '"', const char replacewith='\'')
+    {
       if( isEmpty( haystack ) ) return;
       int len = strlen( (const char*) haystack );
       for( int _i=0;_i<len;_i++ ) {
@@ -603,7 +629,8 @@ class DBUtils {
     }
 
     // checks if a BLE Device exists, returns its cache index if found
-    int deviceExists(const char* address) {
+    int deviceExists(const char* address)
+    {
       results = 0;
       if( isEmpty( address ) || strlen( address ) > MAC_LEN+1 || strlen( address ) < 17 || address[0]==3) {
         log_w("Cowardly refusing to perform an empty or invalid request : %s / %s", address, currentBLEAddress);
@@ -626,7 +653,8 @@ class DBUtils {
     }
 
     // make a copy of the DB to psram to save the SD ^_^
-    void loadVendorsToPSRam() {
+    void loadVendorsToPSRam()
+    {
       results = 0;
       open(BLE_VENDOR_NAMES_DB);
       //Out.println("Cloning Vendors DB to PSRam...");
@@ -647,7 +675,8 @@ class DBUtils {
     }
 
     // make a copy of the DB to psram to save the SD ^_^
-    void loadOUIToPSRam() {
+    void loadOUIToPSRam()
+    {
       results = 0;
       open(MAC_OUI_NAMES_DB);
       //Out.println("Cloning Manufacturers DB to PSRam...");
@@ -668,7 +697,8 @@ class DBUtils {
     }
 
     // shit happens
-    void error(const char* zErrMsg) {
+    void error(const char* zErrMsg)
+    {
       if( zErrMsg!= nullptr && zErrMsg != NULL ) {
         log_e( "SQL error: %s", zErrMsg );
       } else {
@@ -698,7 +728,8 @@ class DBUtils {
     }
 
 
-    int DBExec(sqlite3 *db, const char *sql, char *_colNeedle = 0) {
+    int DBExec(sqlite3 *db, const char *sql, char *_colNeedle = 0)
+    {
       results = 0;
       //print_results = _print_results;
       colNeedle = _colNeedle;
@@ -712,7 +743,8 @@ class DBUtils {
     }
 
 
-    DBMessage insertBTDevice( BlueToothDevice *CacheItem) {
+    DBMessage insertBTDevice( BlueToothDevice *CacheItem)
+    {
       if(isOOM) {
         // cowardly refusing to use DB when OOM
         return DB_IS_OOM;
@@ -782,7 +814,8 @@ class DBUtils {
       return INSERTION_SUCCESS;
     }
 
-    void deleteBLEDevice( const char* address ) {
+    void deleteBLEDevice( const char* address )
+    {
       char deleteItemStr[64];
       const char* deleteTpl = "DELETE FROM blemacs WHERE address='%s'";
       sprintf(deleteItemStr, deleteTpl, address );
@@ -791,7 +824,8 @@ class DBUtils {
       close(BLE_COLLECTOR_DB);
     }
 
-    void getVendor(uint16_t devid, char *dest) {
+    void getVendor(uint16_t devid, char *dest)
+    {
       if( hasPsram ) {
         getPsramVendor(devid, dest);
       } else {
@@ -800,7 +834,8 @@ class DBUtils {
     }
 
 
-    void getOUI(const char* mac, char* dest) {
+    void getOUI(const char* mac, char* dest)
+    {
       if( hasPsram ) {
         getPsramOUI(mac, dest);
       } else {
@@ -809,7 +844,8 @@ class DBUtils {
     }
 
 
-    unsigned int getEntries(bool _display_results = false) {
+    unsigned int getEntries(bool _display_results = false)
+    {
       open(BLE_COLLECTOR_DB);
       if (_display_results) {
         DBExec( BLECollectorDB, allEntriesQuery );
@@ -822,7 +858,8 @@ class DBUtils {
     }
 
 
-    void resetDB() {
+    void resetDB()
+    {
       Serial.println("Re-creating database :");
       Serial.println( BLEMacsDbFSPath );
       isQuerying = true;
@@ -832,7 +869,8 @@ class DBUtils {
     }
 
 
-    void createDB() {
+    void createDB()
+    {
       log_w("creating %s db", BLEMacsDbSQLitePath);
       UI.headerStats("DB: creating...");
       open(BLE_COLLECTOR_DB, false);
@@ -842,7 +880,8 @@ class DBUtils {
       UI.headerStats(" ");
     }
 
-    void dropDB() {
+    void dropDB()
+    {
       UI.headerStats("Dropping DB");
       open(BLE_COLLECTOR_DB, false);
       log_d("dropped if exists: %s DB", BLEMacsDbSQLitePath);
@@ -851,7 +890,8 @@ class DBUtils {
       UI.headerStats("DB Dropped");
     }
 
-    void pruneDB() {
+    void pruneDB()
+    {
       UI.headerStats("Pruning DB");
       open(BLE_COLLECTOR_DB, false);
       DBExec(BLECollectorDB, pruneTableQuery );
@@ -862,7 +902,8 @@ class DBUtils {
       UI.footerStats();
     }
 
-    bool testVendorNames() {
+    bool testVendorNames()
+    {
       open(BLE_VENDOR_NAMES_DB);
       DBExec( BLEVendorsDB, testVendorNamesQuery );
       close(BLE_VENDOR_NAMES_DB);
@@ -877,7 +918,8 @@ class DBUtils {
       return true;
     }
 
-    bool testOUI() {
+    bool testOUI()
+    {
       open(MAC_OUI_NAMES_DB);
       DBExec( OUIVendorsDB, testOUIQuery );
       close(MAC_OUI_NAMES_DB);
@@ -892,7 +934,8 @@ class DBUtils {
       return true;
     }
 
-    void updateItemFromCache( BlueToothDevice* CacheItem ) {
+    void updateItemFromCache( BlueToothDevice* CacheItem )
+    {
       // not really an update, more of a delete+reinsert
       deleteBLEDevice( CacheItem->address );
       if( insertBTDevice( CacheItem ) != INSERTION_SUCCESS ) {
@@ -904,7 +947,8 @@ class DBUtils {
       }
     }
 
-    bool updateDBFromCache( BlueToothDevice** SourceCache, bool showBLECards = true, bool resetAfter = true ) {
+    bool updateDBFromCache( BlueToothDevice** SourceCache, bool showBLECards = true, bool resetAfter = true )
+    {
       UI.headerStats("DB replicating...");
       UI.PrintProgressBar( Out.width );
       for(uint16_t i=0; i<BLEDEVCACHE_SIZE ;i++) {
@@ -942,20 +986,23 @@ class DBUtils {
 
   private:
 
-    static void VendorHeapCacheSet(uint16_t cacheindex, int devid, const char* manufname) {
+    static void VendorHeapCacheSet(uint16_t cacheindex, int devid, const char* manufname)
+    {
       VendorHeapCache[cacheindex].devid = devid;
       memset( VendorHeapCache[cacheindex].vendor, '\0', MAX_FIELD_LEN+1);
       memcpy( VendorHeapCache[cacheindex].vendor, manufname, strlen(manufname) );
       log_d("[+] VendorHeapCacheSet: %s", manufname );
     }
-    static uint16_t getNextVendorCacheIndex() {
+    static uint16_t getNextVendorCacheIndex()
+    {
       VendorCacheIndex++;
       VendorCacheIndex = VendorCacheIndex % VENDORCACHE_SIZE;
       return VendorCacheIndex;
     }
 
     // checks for existence in heap cache
-    int vendorHeapExists(uint16_t devid) {
+    int vendorHeapExists(uint16_t devid)
+    {
       // try fast answer first
       for(int i=0;i<VENDORCACHE_SIZE;i++) {
         if( VendorHeapCache[i].devid == devid) {
@@ -967,7 +1014,8 @@ class DBUtils {
     }
 
     // vendor Heap/DB lookup
-    void getHeapVendor(uint16_t devid, char *dest) {
+    void getHeapVendor(uint16_t devid, char *dest)
+    {
       int vendorCacheIdIfExists = vendorHeapExists( devid );
       if(vendorCacheIdIfExists>-1) {
         uint16_t vendorCacheLen = strlen( VendorHeapCache[vendorCacheIdIfExists].vendor );
@@ -1004,7 +1052,8 @@ class DBUtils {
     }
 
     // checks for existence in psram cache
-    int vendorPsramExists(uint16_t devid) {
+    int vendorPsramExists(uint16_t devid)
+    {
       // try fast answer first
       for(int i=0;i<VendorDBSize;i++) {
         log_v("comparing %d / %s with %d", VendorPsramCache[i]->devid, VendorPsramCache[i]->vendor, devid );
@@ -1017,7 +1066,8 @@ class DBUtils {
     }
 
     // vendor PSRam lookup
-    void getPsramVendor(uint16_t devid, char *dest) {
+    void getPsramVendor(uint16_t devid, char *dest)
+    {
       *dest = {'\0'};
       int VendorCacheIdIfExists = vendorPsramExists( devid );
       if(VendorCacheIdIfExists>-1) {
@@ -1030,7 +1080,8 @@ class DBUtils {
       memcpy( dest, "[unknown]", 10 ); // sizeof("[unknown]")
     }
 
-    static void OUIHeapCacheSet(uint16_t cacheindex, const char* shortmac, const char* assignment) {
+    static void OUIHeapCacheSet(uint16_t cacheindex, const char* shortmac, const char* assignment)
+    {
       memset( OuiHeapCache[cacheindex].mac, '\0', SHORT_MAC_LEN+1);
       memcpy( OuiHeapCache[cacheindex].mac, shortmac, strlen(shortmac) );
       memset( OuiHeapCache[cacheindex].assignment, '\0', MAX_FIELD_LEN+1);
@@ -1044,7 +1095,8 @@ class DBUtils {
     }
 
     // checks for existence in heap cache
-    int OUIHeapExists(const char* shortmac) {
+    int OUIHeapExists(const char* shortmac)
+    {
       // try fast answer first
       for(int i=0;i<OUICACHE_SIZE;i++) {
         if( strcmp(OuiHeapCache[i].mac, shortmac)==0 ) {
@@ -1056,7 +1108,8 @@ class DBUtils {
     }
 
     // OUI heap/DB lookup
-    void getHeapOUI(const char* mac, char *dest) {
+    void getHeapOUI(const char* mac, char *dest)
+    {
       *dest = {'\0'};
       char shortmac[7] = {'\0'};
       byte bytepos =  0;
@@ -1101,7 +1154,8 @@ class DBUtils {
     }
 
     // checks for existence in PSram cache
-    int OUIPsramExists(const char* shortmac) {
+    int OUIPsramExists(const char* shortmac)
+    {
       // try fast answer first
       for(int i=0; i<OUIDBSize; i++) {
         log_v("comparing %s / %s with %s", OuiPsramCache[i]->mac, OuiPsramCache[i]->assignment, shortmac );
@@ -1114,7 +1168,8 @@ class DBUtils {
     }
 
     // OUI psram lookup
-    void getPsramOUI(const char* mac, char *dest) {
+    void getPsramOUI(const char* mac, char *dest)
+    {
       *dest = {'\0'};
       char shortmac[7] = {'\0'};
       byte bytepos =  0;
@@ -1137,7 +1192,8 @@ class DBUtils {
     }
 
     // loads a DB entry into a BLEDevice struct
-    static int BLEDevDBCacheCallback( void *dataBLE, int argc, char **argv, char **azColName) {
+    static int BLEDevDBCacheCallback( void *dataBLE, int argc, char **argv, char **azColName)
+    {
       results++;
       if(results < 2) {
         //BLEDevCacheIndex = BLEDevHelper.getNextCacheIndex(BLEDevRAMCache, BLEDevCacheIndex);
@@ -1157,7 +1213,8 @@ class DBUtils {
     }
 
     // loads a DB entry into a VendorPsramCache struct
-    static int VendorDBCallback(void *dataVendor, int argc, char **argv, char **azColName) {
+    static int VendorDBCallback(void *dataVendor, int argc, char **argv, char **azColName)
+    {
       results++;
       for (int i = 0; i < argc; i++) {
         if( strcmp( azColName[i], "id" ) == 0 ) {
@@ -1179,7 +1236,8 @@ class DBUtils {
     }
 
     // loads a DB entry into a OuiPsramCache struct
-    static int OUIDBCallback(void *dataOUI, int argc, char **argv, char **azColName) {
+    static int OUIDBCallback(void *dataOUI, int argc, char **argv, char **azColName)
+    {
       results++;
       for (int i = 0; i < argc; i++) {
         if( strcmp( azColName[i], "mac" ) == 0 ) {
@@ -1199,7 +1257,8 @@ class DBUtils {
     }
 
     // counts results from a DB query
-    static int DBCallback(void *data, int argc, char **argv, char **azColName) {
+    static int DBCallback(void *data, int argc, char **argv, char **azColName)
+    {
       //log_e("got one result");
       results++;
       int i;

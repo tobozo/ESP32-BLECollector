@@ -31,7 +31,8 @@
 
 static unsigned long forcedUptime = 0;
 
-enum TimeUpdateSources {
+enum TimeUpdateSources
+{
   SOURCE_NONE = 0,
   SOURCE_COMPILER = 1,
   SOURCE_RTC = 2,
@@ -40,7 +41,8 @@ enum TimeUpdateSources {
   SOURCE_GPS = 5
 };
 
-void logTimeActivity(TimeUpdateSources source, int epoch) {
+void logTimeActivity(TimeUpdateSources source, int epoch)
+{
   preferences.begin("BLEClock", false);
   preferences.clear();
   //DateTime epoch = RTC.now();
@@ -51,7 +53,8 @@ void logTimeActivity(TimeUpdateSources source, int epoch) {
   preferences.end();
 }
 
-void resetTimeActivity(TimeUpdateSources source) {
+void resetTimeActivity(TimeUpdateSources source)
+{
   preferences.begin("BLEClock", false);
   preferences.clear();
   preferences.putUInt("epoch", 0);
@@ -61,7 +64,8 @@ void resetTimeActivity(TimeUpdateSources source) {
   preferences.end();
 }
 
-struct TimeActivity {
+struct TimeActivity
+{
   DateTime epoch;
   byte source;
 };
@@ -92,11 +96,15 @@ struct TimeActivity {
 
 #if HAS_GPS
   #include "GPS.h"
+#else
+  __attribute__((unused)) static bool GPSHasFix = false;
+  __attribute__((unused)) static bool GPSHasDateTime = false;
 #endif
 #include "NTP.h"
 
 
-void uptimeSet() {
+void uptimeSet()
+{
   unsigned long seconds_since_boot = millis() / 1000;
   unsigned long minutes_since_boot = seconds_since_boot / 60;
   unsigned long mm = minutes_since_boot % 60;
@@ -112,7 +120,8 @@ void uptimeSet() {
 }
 
 
-static void timeHousekeeping() {
+static void timeHousekeeping()
+{
   unsigned long seconds_since_boot = millis() / 1000;
   unsigned long minutes_since_boot = seconds_since_boot / 60;
   __attribute__((unused)) unsigned long mm = minutes_since_boot % 60;
@@ -170,7 +179,8 @@ static void timeHousekeeping() {
 
 
 
-bool RTCSetup() {
+bool RTCSetup()
+{
   #if HAS_EXTERNAL_RTC
     RTC.begin( RTC_SDA, RTC_SCL );
     delay(100);
@@ -191,7 +201,8 @@ bool RTCSetup() {
 }
 
 
-void timeSetup() {
+void timeSetup()
+{
   #if HAS_EXTERNAL_RTC
     if(!RTCSetup()) { // RTC failure ....
       log_e("RTC Failure, switching to hobo mode");

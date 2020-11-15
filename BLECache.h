@@ -59,7 +59,8 @@
 
 
 
-struct BLEGATTService {
+struct BLEGATTService
+{
   const char* name;
   const char* type;
   uint32_t    assignedNumber;
@@ -67,7 +68,8 @@ struct BLEGATTService {
 
 static const BLEGATTService BLE_unknownService = {"Unknown", "", 0 };
 
-static const BLEGATTService BLE_gattServices[] = {
+static const BLEGATTService BLE_gattServices[] =
+{
   {"Alert Notification Service",    "org.bluetooth.service.alert_notification",             0x1811},
   {"Automation IO",                 "org.bluetooth.service.automation_io",                  0x1815},
   {"Battery Service",               "org.bluetooth.service.battery_service",                0x180F},
@@ -106,13 +108,15 @@ static const BLEGATTService BLE_gattServices[] = {
   BLE_unknownService // terminator
 };
 
-static bool isEmpty(const char* str ) {
+static bool isEmpty(const char* str )
+{
   if ( !str ) return true;
   if ( str[0] == '\0' ) return true;
   return ( strcmp( str, "" ) == 0 );
 }
 
-static char *formatUnit( int64_t number ) {
+static char *formatUnit( int64_t number )
+{
   *unitOutput = {'\0'};
   if( number > 999999 ) {
     sprintf(unitOutput, "%lldM", number/1000000);
@@ -126,7 +130,8 @@ static char *formatUnit( int64_t number ) {
 
 #define BLECARD_MAC_CACHE_SIZE 8 // "virtual" BLE Card circular cache size, keeps mac addresses to avoid duplicate rendering
                                  // the value is based on the max BLECards visible in the scroll area, don't set a too low value
-struct macScrollView {
+struct macScrollView
+{
   char address[MAC_LEN+1];
   uint16_t blockHeight = 0;
   int scrollPosY = 0;
@@ -152,7 +157,8 @@ static uint16_t OuiCacheUsed = 0; // for statistics
 static DateTime lastSyncDateTime;
 static DateTime nowDateTime;
 
-struct BlueToothDevice {
+struct BlueToothDevice
+{
   bool in_db          = false;
   bool is_anonymous   = true;
   uint16_t hits       = 0; // cache hits
@@ -169,7 +175,8 @@ struct BlueToothDevice {
   DateTime updated_at = 0;
 };
 
-struct BlueToothDeviceLink {
+struct BlueToothDeviceLink
+{
   uint16_t cacheIndex;
   BlueToothDevice *device;
 };
@@ -184,7 +191,8 @@ BlueToothDevice*  BLEDevDBCache = NULL; // temporary placeholder used to hold DB
 
 static int BLEDEVCACHE_SIZE; // will be set after PSRam detection
 
-static void copy(char* dest, const char* source, byte maxlen) {
+static void copy(char* dest, const char* source, byte maxlen)
+{
   if( source == nullptr || source == NULL ) return;
   byte sourcelen = strlen(source);
   if( sourcelen < maxlen ) {
@@ -199,10 +207,12 @@ static void copy(char* dest, const char* source, byte maxlen) {
 BLEUUID checkUrlUUID = (uint16_t)0xfeaa;
 
 
-class BlueToothDeviceHelper {
+class BlueToothDeviceHelper
+{
   public:
 
-    static void init( BlueToothDevice *CacheItem, bool hasPsram=true ) {
+    static void init( BlueToothDevice *CacheItem, bool hasPsram=true )
+    {
       CacheItem->in_db      = false;
       CacheItem->is_anonymous = true;
       CacheItem->hits       = 0;
@@ -226,7 +236,8 @@ class BlueToothDeviceHelper {
       CacheItem->updated_at = 0;
     }
 
-    static void reset( BlueToothDevice *CacheItem ) {
+    static void reset( BlueToothDevice *CacheItem )
+    {
       CacheItem->in_db      = false;
       CacheItem->is_anonymous = true;
       CacheItem->hits       = 0;
@@ -242,29 +253,34 @@ class BlueToothDeviceHelper {
       CacheItem->updated_at = 0;
     }
 
-    static void set( BlueToothDevice *CacheItem, const char* prop, bool val ) {
+    static void set( BlueToothDevice *CacheItem, const char* prop, bool val )
+    {
       if(!prop) return;
       else if(strcmp(prop, "in_db")==0) { CacheItem->in_db = val;}
       else if(strcmp(prop, "is_anonymous")==0) { CacheItem->is_anonymous = val;}
     }
-    static void set( BlueToothDevice *CacheItem, const char* prop, uint8_t val ) {
+    static void set( BlueToothDevice *CacheItem, const char* prop, uint8_t val )
+    {
       //log_d( "setting address type for %s", BLEAddrTypeToString( val ) ); // https://github.com/nkolban/ESP32_BLE_Arduino/blob/934702b6169b92c71cbc850876fd17fb9ee3236d/src/BLEAdvertisedDevice.h#L44
       if(!prop) return;
       else if(strcmp(prop, "addr_type")==0)   { CacheItem->addr_type = (uint8_t)(val); }
     }
-    static void set( BlueToothDevice *CacheItem, const char* prop, DateTime val ) {
+    static void set( BlueToothDevice *CacheItem, const char* prop, DateTime val )
+    {
        if(!prop) return;
        else if(strcmp(prop, "created_at")==0) { CacheItem->created_at = val;}
        else if(strcmp(prop, "updated_at")==0) { CacheItem->updated_at = val;}
     }
-    static void set( BlueToothDevice *CacheItem, const char* prop, const int val ) {
+    static void set( BlueToothDevice *CacheItem, const char* prop, const int val )
+    {
       if(!prop) return;
       else if(strcmp(prop, "appearance")==0) { CacheItem->appearance = val;}
       else if(strcmp(prop, "rssi")==0)       { CacheItem->rssi = val;} // coming from thaw()
       else if(strcmp(prop, "manufid")==0)    { CacheItem->manufid = val;}
       else if(strcmp(prop, "hits")==0)       { CacheItem->hits = val;}
     }
-    static void set( BlueToothDevice *CacheItem, const char* prop, const char* val ) {
+    static void set( BlueToothDevice *CacheItem, const char* prop, const char* val )
+    {
       if(!prop) return;
       else if(strcmp(prop, "name")==0)       { copy( CacheItem->name, val, MAX_FIELD_LEN ); }
       else if(strcmp(prop, "address")==0)    { copy( CacheItem->address, val, MAC_LEN ); }
@@ -278,11 +294,13 @@ class BlueToothDeviceHelper {
     }
 
 
-    static void mergeItems( BlueToothDevice *SourceItem, BlueToothDevice *DestItem ) {
+    static void mergeItems( BlueToothDevice *SourceItem, BlueToothDevice *DestItem )
+    {
       copyItem( SourceItem, DestItem, false );
     }
 
-    static void copyItem( BlueToothDevice *SourceItem, BlueToothDevice *DestItem, bool overwrite=true ) { // overwrite=false will merge
+    static void copyItem( BlueToothDevice *SourceItem, BlueToothDevice *DestItem, bool overwrite=true )
+    { // overwrite=false will merge
       if(!overwrite) {
         if( strcmp(DestItem->address, SourceItem->address)!=0 ) {
           log_e("Warning: trying to merge items with different addresses, Source: %s, Dest: %s\n", SourceItem->address, DestItem->address );
@@ -305,7 +323,8 @@ class BlueToothDeviceHelper {
     }
 
     // stores in cache a given advertised device
-    static void store( BlueToothDevice *CacheItem, BLEAdvertisedDevice *advertisedDevice ) {
+    static void store( BlueToothDevice *CacheItem, BLEAdvertisedDevice *advertisedDevice )
+    {
       reset(CacheItem);// avoid mixing new and old data
       set(CacheItem, "address", advertisedDevice->getAddress().toString().c_str());
       set(CacheItem, "rssi", advertisedDevice->getRSSI());
@@ -330,7 +349,6 @@ class BlueToothDeviceHelper {
         set(CacheItem, "manufid", vint);
       }
 
-
       if( advertisedDevice->haveServiceData() ) {
         //log_d("[%d][%s] Has Service Data[%d]", freeheap, CacheItem->address, strlen( advertisedDevice->getServiceData().c_str() ) );
         //log_d("[%s] GATT ServiceDataUUID: '%s'", CacheItem->address, advertisedDevice->getServiceDataUUID().toString().c_str());
@@ -347,7 +365,6 @@ class BlueToothDeviceHelper {
           Serial.println();
         }*/
       }
-
 
       if ( advertisedDevice->haveServiceUUID() ) {
         set(CacheItem, "uuid", advertisedDevice->getServiceUUID().toString().c_str());
@@ -406,12 +423,10 @@ class BlueToothDeviceHelper {
             Serial.println("\n");
           }
         }
-
         //log_w("Gatt Service UUID to string %s = %s", advertisedDevice->getServiceUUID().toString().c_str(), gattServiceDescription( advertisedDevice->getServiceUUID() ) );
         //uint16_t sUUID = (uint16_t)advertisedDevice->getServiceUUID().getNative();
         //Serial.printf("[%s] GATT ServiceUUID:     '%s'\n", CacheItem->address, advertisedDevice->getServiceUUID().toString().c_str() );
       }
-
       if( TimeIsSet ) {
         CacheItem->created_at = nowDateTime;
         //log_v("Stored created_at DateTime %d", (unsigned long)nowDateTime.unixtime());
@@ -420,7 +435,8 @@ class BlueToothDeviceHelper {
     }
 
     // determines whether a device is worth saving or not
-    static bool isAnonymous( BlueToothDevice *CacheItem ) {
+    static bool isAnonymous( BlueToothDevice *CacheItem )
+    {
       // if( !isEmpty( CacheItem->uuid )) return false; // uuid's are interesting, let's collect
       if( !isEmpty( CacheItem->name )) return false; // has name, let's collect
       if( CacheItem->appearance !=0 ) return false; // has icon, let's collect
@@ -431,7 +447,8 @@ class BlueToothDeviceHelper {
       return true;
     }
 
-    static const char *BLEAddrTypeToString( uint8_t type ) {
+    static const char *BLEAddrTypeToString( uint8_t type )
+    {
       // implented here because the BLELibrary hides this value under debug symbols
       switch (type) {
         case BLE_ADDR_PUBLIC:
@@ -448,7 +465,8 @@ class BlueToothDeviceHelper {
       }
     }
 
-    static const BLEGATTService gattServiceDescription( const char* serviceUUIDStr ) {
+    static const BLEGATTService gattServiceDescription( const char* serviceUUIDStr )
+    {
       //const char* serviceUUIDStr = serviceUUID.toString().c_str();
       if( serviceUUIDStr == NULL ) return BLE_unknownService;
       if( strcmp(serviceUUIDStr, "<NULL>") == 0 ) return BLE_unknownService; // wtf ??
@@ -493,7 +511,8 @@ class BlueToothDeviceHelper {
       return BLE_unknownService;
     } // gattServiceDescription
 
-    static uint16_t getNextCacheIndex( BlueToothDevice **CacheItem, uint16_t CacheItemIndex ) {
+    static uint16_t getNextCacheIndex( BlueToothDevice **CacheItem, uint16_t CacheItemIndex )
+    {
       uint16_t minCacheValue = 65535;
       uint16_t maxCacheValue = 0;
       uint16_t defaultIndex = CacheItemIndex;

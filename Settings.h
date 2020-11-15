@@ -34,7 +34,6 @@
 
 */
 // don't edit those
-//#define HOBO 1
 #define HOBO         1 // No TinyRTC module in your build, will use BLE TimeClient otherwise only uptime will be displayed
 #define ROGUE        2 // TinyRTC module adjusted via flashing or BLE TimeClient
 #define CHRONOMANIAC 3 // TinyRTC module adjusted via flashing, BLE TimeClient or GPS
@@ -44,9 +43,11 @@
 #define TIME_UPDATE_GPS  3 // update from GPS external module, see below for HardwareSerial pin settings
 
 
-// edit these values to fit your mode (can be #undef from Display.ESP32Chimeracore.h)
-#define HAS_EXTERNAL_RTC   true // uses I2C, search this file for RTC_SDA or RTC_SCL to change pins
-#define HAS_GPS            true // uses hardware serial, search this file for GPS_RX and GPS_TX to change pins
+// Edit these values to fit your mode.
+// They will eventually be overriden in Display.h
+// depending on the detected device
+#define HAS_EXTERNAL_RTC   false // uses I2C, search this file for RTC_SDA or RTC_SCL to change pins
+#define HAS_GPS            false // uses hardware serial, search this file for GPS_RX and GPS_TX to change pins
 #define TIME_UPDATE_SOURCE TIME_UPDATE_GPS // TIME_UPDATE_GPS // soon deprecated, will be implicit
 
 // Timezone is using a float because Newfoundland, India, Iran, Afghanistan, Myanmar, Sri Lanka, the Marquesas,
@@ -66,6 +67,25 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define MAC_LEN 17 // chars used by a mac address
 #define SHORT_MAC_LEN 7 // chars used by the oui part of a mac address
 
+
+#if HAS_GPS
+  // this will be overriden in Display.h
+  // depending on the detected device
+  #define GPS_RX 39 // io pin number
+  #define GPS_TX 35 // io pin number
+#endif
+
+#if HAS_EXTERNAL_RTC
+  // this will be overriden in Display.h
+  // depending on the detected device
+  // EX: On Wrover Kit you can use the following pins (from the camera connector)
+  // RTC_SCL = GPIO27 (SIO_C / SCCB Clock 4)
+  // RTC_SDA = GPIO26 (SIO_D / SCCB Data)
+  #define RTC_SDA 21 // pin number
+  #define RTC_SCL 22 // pin number
+#endif
+
+
 // don't edit anything below this
 
 #pragma GCC diagnostic push
@@ -75,10 +95,9 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wempty-body"
 
-
-#define BLE_MENU_NAME "BLEMenu"
-
-#if defined( ARDUINO_M5Stack_Core_ESP32 )
+#if defined( ARDUINO_M5STACK_Core2 )
+  #define PLATFORM_NAME "M5Core2"
+#elif defined( ARDUINO_M5Stack_Core_ESP32 )
   //#warning M5STACK CLASSIC DETECTED !!
   #define PLATFORM_NAME "M5Stack"
 #elif defined( ARDUINO_M5STACK_FIRE )
@@ -94,46 +113,24 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
   #define PLATFORM_NAME "ESP32"
 #endif
 
-
-
-#define BUILD_TYPE BLE_MENU_NAME
-#if HAS_EXTERNAL_RTC
- #if TIME_UPDATE_SOURCE==TIME_UPDATE_NTP
-   #define RTC_PROFILE "CHRONOMANIAC"
- #else
-   #define RTC_PROFILE "ROGUE"
- #endif
-#else
-  #define RTC_PROFILE "HOBO"
-#endif
-
-
 #define MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN 4
 #define MAX_BLECARDS_WITHOUT_TIMESTAMPS_ON_SCREEN 5
 #define BLEDEVCACHE_PSRAM_SIZE 1024 // use PSram to cache BLECards
 #define BLEDEVCACHE_HEAP_SIZE 32 // use some heap to cache BLECards. min = 5, max = 64, higher value = less SD/SD_MMC sollicitation
 #define MAX_DEVICES_PER_SCAN MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN // also max displayed devices on the screen, affects initial scan duration
 
-#define MENU_FILENAME "/" BUILD_TYPE ".bin"
-#define BLE_MENU_FILENAME "/" BLE_MENU_NAME ".bin"
-
-#define BUILD_NEEDLE PLATFORM_NAME " BLE Scanner Compiled On " // this 'signature' string must be unique in the whole source tree
+#define BLE_MENU_NAME "BLEMenu"
+#define BUILD_TYPE BLE_MENU_NAME
+#define BUILD_NEEDLE PLATFORM_NAME "-BLECollector by tobozo, Compiled On "
 #define BUILD_SIGNATURE __DATE__ " - " __TIME__ " - " BUILD_TYPE
 #define WELCOME_MESSAGE BUILD_NEEDLE BUILD_SIGNATURE
-const char* needle = BUILD_NEEDLE;
 const char* welcomeMessage = WELCOME_MESSAGE;
-const char* BUILDSIGNATURE = BUILD_SIGNATURE;
-uint32_t sizeofneedle = strlen(needle);
-uint32_t sizeoftrail = strlen(welcomeMessage) - sizeofneedle;
 
-static xSemaphoreHandle mux = NULL; // this is needed to prevent rendering collisions
-                                    // between scrollpanel and heap graph
-
-static bool DBneedsReplication = false;
-static bool isQuerying = false; // state maintained while SD is accessed, useful when SD is used instead of SD_MMC
+static xSemaphoreHandle mux = NULL; // this is needed to mitigate SPI collisions
 
 // str helpers
-char *substr(const char *src, int pos, int len) {
+char *substr(const char *src, int pos, int len)
+{
   char* dest = NULL;
   if (len > 0) {
     dest = (char*)calloc(len + 1, 1);
@@ -143,7 +140,8 @@ char *substr(const char *src, int pos, int len) {
   }
   return dest;
 }
-int strpos(const char *hay, const char *needle, int offset) {
+int strpos(const char *hay, const char *needle, int offset)
+{
   char haystack[strlen(hay)];
   strncpy(haystack, hay+offset, strlen(hay)-offset);
   char *p = strstr(haystack, needle);
@@ -176,7 +174,8 @@ Preferences preferences;
 #define HEAPGRAPH_CORE      1
 #define SCROLLINTRO_CORE    0
 
-static void destroyTaskNow( TaskHandle_t &task ) {
+static void destroyTaskNow( TaskHandle_t &task )
+{
   vTaskSuspendAll();
   TaskHandle_t xTask = task;
   if( task != NULL ) {
@@ -187,36 +186,15 @@ static void destroyTaskNow( TaskHandle_t &task ) {
   xTaskResumeAll();
 }
 
-
-#include "Display.h" // some config settings are forced here
+#include "Display.h" // some config settings are overwritten here
 #include "DateTime.h"
 
 #if HAS_EXTERNAL_RTC
-
   #include <Wire.h>
-  // RTC Module: On Wrover Kit you can use the following pins (from the camera connector)
-  // SCL = GPIO27 (SIO_C / SCCB Clock 4)
-  // SDA = GPIO26 (SIO_D / SCCB Data)
   #include "RTC.h"
   static BLE_RTC RTC;
-
-  #if defined( ARDUINO_M5STACK_Core2 ) // M5Core2
-    #define RTC_SDA 21 // pin number
-    #define RTC_SCL 22 // pin number
-  #else
-    #define RTC_SDA 26 // pin number
-    #define RTC_SCL 27 // pin number
-  #endif
-
 #endif
 
-#if HAS_GPS
-  //#define GPS_RX 39 // io pin number
-  //#define GPS_TX 35 // io pin number
-#else
-  __attribute__((unused)) static bool GPSHasFix = false;
-  __attribute__((unused)) static bool GPSHasDateTime = false;
-#endif
 
 
 // RF stack
@@ -235,14 +213,11 @@ static void destroyTaskNow( TaskHandle_t &task ) {
 
 #endif
 
-// NimBLE Stack from https://github.com/h2zero/NimBLE-Arduino
-#include <NimBLEDevice.h>
+// NimBLE Stack
+#include <NimBLEDevice.h> // https://github.com/h2zero/NimBLE-Arduino
 #include "NimBLEEddystoneURL.h"
 #include "NimBLEEddystoneTLM.h"
 #include "NimBLEBeacon.h"
-//#include "NimBLE2902.h"
-
-
 
 // SQLite stack
 #include <sqlite3.h> // https://github.com/siara-cc/esp32_arduino_sqlite3_lib
@@ -268,10 +243,9 @@ static void destroyTaskNow( TaskHandle_t &task ) {
 // statistical values
 static int devicesCount     = 0; // devices count per scan
 static int sessDevicesCount = 0; // total devices count per session
-//static int newDevicesCount  = 0; // total devices count per session
 static int results          = 0; // total results during last query
 static unsigned int entries = 0; // total entries in database
-static byte prune_trigger   = 0; // incremented on every insertion, reset on prune()
+static uint8_t prune_trigger   = 0; // incremented on every insertion, reset on prune()
 
 // load application stack
 #include "BLECache.h" // data struct

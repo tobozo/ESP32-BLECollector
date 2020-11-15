@@ -70,9 +70,11 @@ static const int AMIGABALL_YPOS = 50;
     #define RTC_SDA 21 // pin number
     #define RTC_SCL 22 // pin number
 
+    #undef HAS_GPS
+    #define HAS_GPS true
     #undef GPS_RX
-    #undef GPS_TX
     #define GPS_RX 33 // io pin number
+    #undef GPS_TX
     #define GPS_TX 32 // io pin number
 
     //#define WITH_WIFI // enable WiFi features since M5Core2 has plenty of ram
@@ -86,6 +88,12 @@ static const int AMIGABALL_YPOS = 50;
     //#undef HEAPGRAPH_CORE
     //#define HEAPGRAPH_CORE 0
 
+  #else
+    // M5Stack Classic, Fire
+    #undef HAS_EXTERNAL_RTC
+    #define HAS_EXTERNAL_RTC false
+    #define RTC_SDA 26 // pin number
+    #define RTC_SCL 27 // pin number
   #endif
 
 #elif defined( ARDUINO_DDUINO32_XS )
@@ -207,39 +215,27 @@ static TFT_eSprite gradientSprite( &tft );  // gradient background
 static TFT_eSprite heapGraphSprite( &tft ); // activity graph
 static TFT_eSprite hallOfMacSprite( &tft ); // mac address badge holder
 
-
+static bool isQuerying = false; // state maintained while SD is accessed, useful when SD is used instead of SD_MMC
 // TODO: make this SD-driver dependant rather than platform dependant
-static bool isInQuery() {
+static bool isInQuery()
+{
   return isQuerying; // M5Stack uses SPI SD, isolate SD accesses from TFT rendering
 }
 
 
-void tft_begin() {
+void tft_begin()
+{
   M5.begin( true, true, false, false, false ); // don't start Serial
-  //tft.init();
-  //M5.ScreenShot.init( &tft, BLE_FS );
-  //M5.ScreenShot.begin();
   #if HAS_EXTERNAL_RTC
-    //DateTime(__DATE__, __TIME__).unixtime()
     Wire.begin(RTC_SDA, RTC_SCL);
     M5.I2C.scan();
     M5.update();
   #endif
   delay( 100 );
-  //tft.init();
-  //tft.setRotation(1);
-
   #ifdef __M5STACKUPDATER_H
     if( hasHID() ) {
       // build has buttons => enable SD Updater at boot
       checkSDUpdater();
-      /*
-      if(digitalRead(BUTTON_A_PIN) == 0) {
-        Serial.println("Will Load menu binary");
-        updateFromFS();
-        ESP.restart();
-      }
-      */
     } else if( hasXPaxShield() ) {
       XPadShield.init();
       XPadShield.update();
@@ -253,54 +249,53 @@ void tft_begin() {
 }
 
 
-void tft_setBrightness( uint8_t brightness ) {
+// TFT_eSPI / LGFX / Chimera-Core API
+
+void tft_setBrightness( uint8_t brightness )
+{
   tft.setBrightness( brightness );
 }
 
-// emulating Adafruit's tft.getTextBounds()
-void tft_getTextBounds(const char *string, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h) {
+void tft_getTextBounds(const char *string, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h)
+{
   *w = tft.textWidth( string );
   *h = tft.fontHeight();
 }
-/*
-void tft_getTextBounds(const __FlashStringHelper *s, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h) {
-  *w = tft.textWidth( s );
-  *h = tft.fontHeight();
-}*/
-void tft_getTextBounds(const String &str, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h) {
+
+void tft_getTextBounds(const String &str, int16_t x, int16_t y, int16_t *x1, int16_t *y1, uint16_t *w, uint16_t *h)
+{
   *w = tft.textWidth( str.c_str() );
   *h = tft.fontHeight();
 }
 
-void tft_fillCircle( uint16_t x, uint16_t y, uint16_t r, uint16_t color) {
+void tft_fillCircle( uint16_t x, uint16_t y, uint16_t r, uint16_t color)
+{
   tft.fillCircle(x, y, r, color);
-};
-void tft_drawCircle( uint16_t x, uint16_t y, uint16_t r, uint16_t color) {
+}
+
+void tft_drawCircle( uint16_t x, uint16_t y, uint16_t r, uint16_t color)
+{
   tft.drawCircle(x, y, r, color);
-};
-void tft_fillRect( uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color) {
+}
+
+void tft_fillRect( uint16_t x, uint16_t y, uint16_t w, uint16_t h, uint16_t color)
+{
   tft.fillRect(x, y, w, h, color);
-};
-void tft_fillTriangle( uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t color) {
+}
+
+void tft_fillTriangle( uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t color)
+{
   tft.fillTriangle(x0, y0, x1, y1, x2, y2, color);
 }
 
 
-// software scroll
-/*
-void tft_setupScrollArea(uint16_t tfa, uint16_t vsa, uint16_t bfa) {
-  log_w("Init Software Scroll area with tft.setScrollRect( 0, %d, %d, %d )", tfa, tft.width(), vsa);
-  tft.setScrollRect( 0, tfa, tft.width(), vsa );
-  //tft.getScrollRect( &s_x_tmp, &s_y_tmp, &s_w_tmp, &s_h_tmp );
-}
-*/
-
-// software scroll
+// software scroll (very slow, but necessary for screenshots)
 static int32_t s_x_tmp, s_y_tmp, s_w_tmp, s_h_tmp;
 static uint16_t circularScrollBufferHSize = 240;
 static uint16_t circularScrollBufferVSize = 16;
 static uint16_t circularScrollBufferSize = circularScrollBufferHSize*circularScrollBufferVSize;
-void tft_scrollTo(int32_t vsp) {
+void tft_scrollTo(int32_t vsp)
+{
   if( vsp == 0 ) return;
   //tft.getScrollRect( &s_x_tmp, &s_y_tmp, &s_w_tmp, &s_h_tmp );
   int32_t direction   = vsp>0 ? 1 : -1;
@@ -343,24 +338,23 @@ void tft_scrollTo(int32_t vsp) {
   }
 }
 
+
 // hardware scroll
-void tft_setupHScrollArea(int32_t tfa, int32_t vsa, int32_t bfa) {
-
+void tft_setupHScrollArea(int32_t tfa, int32_t vsa, int32_t bfa)
+{
   tft.setCursor(0,0);
-
-
   tft.writecommand( 0x37 ); // VSCRADD Vertical Scroll definition.
   tft.writedata(0 >> 8);
   tft.writedata(0 & 0xFF);
 
   bfa += SCROLL_OFFSET; // compensate for stubborn firmware
 
-  tft.writecommand(0x33); // ILI9341_VSCRDEF Vertical scroll definition
-  tft.writedata(tfa >> 8);           // Top Fixed Area line count
+  tft.writecommand(0x33);  // VSCRDEF Vertical scroll definition
+  tft.writedata(tfa >> 8); // Top Fixed Area line count
   tft.writedata(tfa);
-  tft.writedata(vsa >> 8);  // Vertical Scrolling Area line count
+  tft.writedata(vsa >> 8); // Vertical Scrolling Area line count
   tft.writedata(vsa);
-  tft.writedata(bfa >> 8);           // Bottom Fixed Area line count
+  tft.writedata(bfa >> 8); // Bottom Fixed Area line count
   tft.writedata(bfa);
 
   log_d("Init Hardware Scroll area with tfa/vsa/bfa %d/%d/%d on w/h %d/%d", tfa, vsa, bfa, scrollpanel_width(), scrollpanel_height());
@@ -368,14 +362,16 @@ void tft_setupHScrollArea(int32_t tfa, int32_t vsa, int32_t bfa) {
 
 
 // hardware scroll
-void tft_hScrollTo(uint16_t vsp) {
+void tft_hScrollTo(uint16_t vsp)
+{
   tft.writecommand(0x37); // ILI9341_VSCRSADD Vertical scrolling pointer
   tft.writedata(vsp>>8);
   tft.writedata(vsp);
 }
 
 
-void tft_fillGradientHRect( uint16_t x, uint16_t y, uint16_t width, uint16_t height, RGBColor colorstart, RGBColor colorend ) {
+void tft_fillGradientHRect( uint16_t x, uint16_t y, uint16_t width, uint16_t height, RGBColor colorstart, RGBColor colorend )
+{
   log_v("tft_fillGradientHRect( %d, %d, %d, %d )\n", x, y, width, height );
   gradientSprite.setPsram( false ); // don't bother using psram for that
   //gradientSprite.setSwapBytes( false );
@@ -390,7 +386,8 @@ void tft_fillGradientHRect( uint16_t x, uint16_t y, uint16_t width, uint16_t hei
   gradientSprite.deleteSprite();
 }
 
-void tft_fillGradientVRect( uint16_t x, uint16_t y, uint16_t width, uint16_t height, RGBColor colorstart, RGBColor colorend ) {
+void tft_fillGradientVRect( uint16_t x, uint16_t y, uint16_t width, uint16_t height, RGBColor colorstart, RGBColor colorend )
+{
   gradientSprite.setPsram( false ); // don't bother using psram for that
   //gradientSprite.setSwapBytes( false );
   gradientSprite.setColorDepth( 16 );
@@ -404,32 +401,36 @@ void tft_fillGradientVRect( uint16_t x, uint16_t y, uint16_t width, uint16_t hei
   gradientSprite.deleteSprite();
 }
 
-void tft_drawGradientHLine( uint32_t x, uint32_t y, uint32_t w, RGBColor colorstart, RGBColor colorend ) {
+void tft_drawGradientHLine( uint32_t x, uint32_t y, uint32_t w, RGBColor colorstart, RGBColor colorend )
+{
   tft_fillGradientHRect( x, y, w, 1, colorstart, colorend );
 }
 
-void tft_drawGradientVLine( uint32_t x, uint32_t y, uint32_t h, RGBColor colorstart, RGBColor colorend ) {
+void tft_drawGradientVLine( uint32_t x, uint32_t y, uint32_t h, RGBColor colorstart, RGBColor colorend )
+{
   tft_fillGradientVRect( x, y, 1, h, colorstart, colorend );
 }
 
-enum TextDirections {
+enum TextDirections
+{
   ALIGN_FREE   = 0,
   ALIGN_LEFT   = 1,
   ALIGN_RIGHT  = 2,
   ALIGN_CENTER = 3,
 };
 
-
-enum BLECardThemes {
-  IN_CACHE_ANON = 0,
-  IN_CACHE_NOT_ANON = 1,
-  NOT_IN_CACHE_ANON = 2,
+enum BLECardThemes
+{
+  IN_CACHE_ANON         = 0,
+  IN_CACHE_NOT_ANON     = 1,
+  NOT_IN_CACHE_ANON     = 2,
   NOT_IN_CACHE_NOT_ANON = 3
 };
 
-typedef enum {
-  TFT_SQUARE = 0,
-  TFT_PORTRAIT = 1,
+typedef enum
+{
+  TFT_SQUARE    = 0,
+  TFT_PORTRAIT  = 1,
   TFT_LANDSCAPE = 2
 } DisplayMode;
 

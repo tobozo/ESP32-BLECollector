@@ -41,7 +41,8 @@
   #define BLE_RTC BLE_RTC_BM8563 // alias for BLECollector
   #define M5_RTC M5.Rtc // syntax sugar
 
-  class BLE_RTC_BM8563 {
+  class BLE_RTC_BM8563
+  {
     public:
       static bool begin(uint8_t sdaPin=SDA, uint8_t sclPin=SCL);
       static void adjust(const tmElements_t& dt);
@@ -167,7 +168,8 @@
   #define BLE_RTC BLE_RTC_DS1307 // alias for BLECollector
 
 
-  class BLE_RTC_DS1307 {
+  class BLE_RTC_DS1307
+  {
     public:
       static bool begin(uint8_t sdaPin=SDA, uint8_t sclPin=SCL);
       static void adjust(const tmElements_t& dt);
@@ -185,35 +187,42 @@
   */
 
   /** Fonction de conversion BCD -> decimal */
-  static uint8_t BLE_RTC_bcd2bin (uint8_t bcd) {
+  static uint8_t BLE_RTC_bcd2bin (uint8_t bcd)
+  {
     return (bcd / 16 * 10) + (bcd % 16);
   }
 
 /** Fonction de conversion decimal -> BCD */
-  static uint8_t BLE_RTC_bin2bcd (uint8_t decimal) {
+  static uint8_t BLE_RTC_bin2bcd (uint8_t decimal)
+  {
     return (decimal / 10 * 16) + (decimal % 10);
   }
 
 
-  bool BLE_RTC_DS1307::begin(uint8_t sdaPin, uint8_t sclPin) {
+  bool BLE_RTC_DS1307::begin(uint8_t sdaPin, uint8_t sclPin)
+  {
     Wire.begin(sdaPin, sclPin);
     return true;
   }
-  void BLE_RTC_DS1307::adjust(const DateTime& dt) {
+  void BLE_RTC_DS1307::adjust(const DateTime& dt)
+  {
     //dumpTime("RTC Will adjust from DateTime ", dt.get_tm());
     adjust( dt.get_tm() );
   }
-  void BLE_RTC_DS1307::adjust(const time_t& dt) {
+  void BLE_RTC_DS1307::adjust(const time_t& dt)
+  {
     tmElements_t dateTimeNow;
     breakTime(dt, dateTimeNow);
     //dumpTime("RTC Will adjust from time_t ", dateTimeNow );
     adjust( dateTimeNow );
   }
-  uint32_t BLE_RTC_DS1307::unixtime() {
+  uint32_t BLE_RTC_DS1307::unixtime()
+  {
     return DateTime::tm2unixtime( now() );
   }
 
-  uint8_t BLE_RTC_DS1307::isrunning(void) {
+  uint8_t BLE_RTC_DS1307::isrunning(void)
+  {
     Wire.beginTransmission(DS1307_ADDR);
     Wire.write(ZEROINT);
     Wire.endTransmission();
@@ -222,7 +231,8 @@
     return !(ss>>7);
   }
 
-  void BLE_RTC_DS1307::adjust(const tmElements_t& dt) {
+  void BLE_RTC_DS1307::adjust(const tmElements_t& dt)
+  {
     dumpTime("RTC Will adjust from tmElements_t ", dt );
     Wire.beginTransmission(DS1307_ADDR);
     Wire.write(ZEROINT);
@@ -238,7 +248,8 @@
   }
 
 
-  tmElements_t BLE_RTC_DS1307::now() {
+  tmElements_t BLE_RTC_DS1307::now()
+  {
     tmElements_t tm;
     uint8_t sec;
     Wire.beginTransmission( DS1307_ADDR );

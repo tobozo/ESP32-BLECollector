@@ -6,7 +6,8 @@ static bool sd_mounted = false;
 
 
 
-bool M5StackSDBegin() {
+bool M5StackSDBegin()
+{
   #ifdef _SD_H_
     return SD.begin(4, SPI, 20000000);
   #endif
@@ -15,7 +16,8 @@ bool M5StackSDBegin() {
 
 
 
-bool SDSetup() {
+bool SDSetup()
+{
   if(sd_mounted) return true;
   unsigned long max_wait = 500;
   byte attempts = 100;
@@ -45,7 +47,8 @@ bool SDSetup() {
 
 
 
-static void listDirs(fs::FS &fs, const char * dirname, uint8_t levels, const char* needle=NULL) {
+static void listDirs(fs::FS &fs, const char * dirname, uint8_t levels, const char* needle=NULL)
+{
   Serial.printf("\nListing directories: %s\n\n", dirname);
 
   File root = fs.open(dirname);
@@ -86,7 +89,8 @@ static void listDirs(fs::FS &fs, const char * dirname, uint8_t levels, const cha
 }
 
 
-static void listFiles(fs::FS &fs, const char * dirname, uint8_t levels, const char* needle=NULL) {
+static void listFiles(fs::FS &fs, const char * dirname, uint8_t levels, const char* needle=NULL)
+{
   //Serial.printf("\nListing Files: %s\n\n", dirname);
 
   File root = fs.open(dirname);
@@ -138,7 +142,8 @@ static void listFiles(fs::FS &fs, const char * dirname, uint8_t levels, const ch
 }
 
 
-static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char* needle=NULL) {
+static void listDir(fs::FS &fs, const char * dirname, uint8_t levels, const char* needle=NULL)
+{
   listDirs( fs, dirname, levels, needle );
   listFiles( fs, dirname, levels, needle );
 }

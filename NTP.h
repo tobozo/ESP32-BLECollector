@@ -3,7 +3,8 @@
 \*/
 
 // returns true if time has been updated
-static bool checkForTimeUpdate( DateTime &internalDateTime ) {
+static bool checkForTimeUpdate( DateTime &internalDateTime )
+{
   //DateTime externalDateTime = internalDateTime;
   int64_t seconds_since_last_ntp_update = abs( internalDateTime.unixtime() - lastSyncDateTime.unixtime() );
   if ( seconds_since_last_ntp_update >= 3500 ) { // GPS sync every hour +/- 3% precision
@@ -31,7 +32,8 @@ static bool checkForTimeUpdate( DateTime &internalDateTime ) {
 }
 
 
-void TimeInit() {
+void TimeInit()
+{
   preferences.begin("BLEClock", true);
   lastSyncDateTime = preferences.getUInt("epoch", millis());
   byte clockUpdateSource = preferences.getUChar("source", 0);
@@ -89,7 +91,8 @@ void TimeInit() {
   const char* DEFAULT_NTP_SERVER = "europe"; // will have ".pool.ntp.org" appended later
   static char NTP_SERVER[32]; // will hold the server Address from defaults or preferences
 
-  static const struct {
+  static const struct
+  {
 	const char code[16];
 	const char *name;
   } ntpPoolZones[] = {
@@ -120,7 +123,8 @@ void TimeInit() {
   }
 
 
-  static void setPoolZone( const char* zone ) {
+  static void setPoolZone( const char* zone )
+  {
     int poolZoneID = getPoolZoneID( zone );
     const char* poolZoneTpl = "%s.pool.ntp.org";
     if( poolZoneID > -1 ) {

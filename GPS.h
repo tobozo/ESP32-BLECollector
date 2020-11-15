@@ -18,7 +18,8 @@ static double GPSLng = 0.00;
 static int GPSFailCounter = 0;
 const unsigned long GPSFailCheckDelay = 30000; // check for GPS health every 30s (unit=millis)
 
-static void GPSInit() {
+static void GPSInit()
+{
   LastGPSChange = 0;
   NoGPSSignalSince = millis();
 
@@ -30,7 +31,8 @@ static void GPSInit() {
 #include <TinyGPS++.h> // https://github.com/mikalhart/TinyGPSPlus
 TinyGPSPlus gps;
 
-static void GPSRead() {
+static void GPSRead()
+{
   while(GPS.available()) {
     gps.encode( GPS.read() );
   }
@@ -64,7 +66,8 @@ static void GPSRead() {
 }
 
 
-static void getLatLng( void * param ) {
+static void getLatLng( void * param )
+{
   if( GPSHasFix ) {
     Serial.printf("[GPS] Last fix %d seconds ago -> LAT: %f LNG: %f", int( (millis()-GPSLastFix)/1000 ), GPSLat, GPSLng );
   } else {
@@ -73,7 +76,8 @@ static void getLatLng( void * param ) {
 }
 
 
-static bool setGPSTime() {
+static bool setGPSTime()
+{
   if( !GPSHasDateTime ) {
     Serial.println("GPS has no valid DateTime, cowardly aborting");
     return false;
@@ -126,7 +130,8 @@ static bool setGPSTime() {
 }
 
 // task wrapper
-static void setGPSTime( void * param ) {
+static void setGPSTime( void * param )
+{
   setGPSTime();
 }
 

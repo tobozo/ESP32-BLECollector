@@ -49,11 +49,13 @@
 
 #include "Settings.h"
 
-void setup() {
+void setup()
+{
   BLECollector.init();
 }
 
 
-void loop() {
+void loop()
+{
   vTaskSuspend(NULL);
 }
