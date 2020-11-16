@@ -239,9 +239,8 @@ class UIUtils
       // make sure non-printable chars aren't printed (also disables utf8)
       tft.setAttribute( lgfx::cp437_switch, true );
 
-      Out.init();
+      Out.init(); // init scrollPanel
       setUISizePos(); // set position/dimensions for widgets and other UI items
-
       setIconBar(); // setup icon bar
 /*
       // test icons from the icon bar
@@ -482,13 +481,14 @@ class UIUtils
         for( byte i = 0; i<6 ; i++ ) {
           randomAddress[i] = random(0,255);
         }
-        sprintf(randomAddressStr, "%02x:%02x:%02x:%02x:%02x:%02x",
-                randomAddress[0],
-                randomAddress[1],
-                randomAddress[2],
-                randomAddress[3],
-                randomAddress[4],
-                randomAddress[5]
+        sprintf(
+          randomAddressStr, "%02x:%02x:%02x:%02x:%02x:%02x",
+          randomAddress[0],
+          randomAddress[1],
+          randomAddress[2],
+          randomAddress[3],
+          randomAddress[4],
+          randomAddress[5]
         );
         log_d("Generated fake mac: %s", randomAddressStr);
         x = hallOfMacPosX + (counter%hallofMacCols) * hallOfMacItemWidth;

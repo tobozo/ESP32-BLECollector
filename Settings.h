@@ -118,13 +118,19 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define BLEDEVCACHE_PSRAM_SIZE 1024 // use PSram to cache BLECards
 #define BLEDEVCACHE_HEAP_SIZE 32 // use some heap to cache BLECards. min = 5, max = 64, higher value = less SD/SD_MMC sollicitation
 #define MAX_DEVICES_PER_SCAN MAX_BLECARDS_WITH_TIMESTAMPS_ON_SCREEN // also max displayed devices on the screen, affects initial scan duration
-
 #define BLE_MENU_NAME "BLEMenu"
 #define BUILD_TYPE BLE_MENU_NAME
 #define BUILD_NEEDLE PLATFORM_NAME "-BLECollector by tobozo, Compiled On "
 #define BUILD_SIGNATURE __DATE__ " - " __TIME__ " - " BUILD_TYPE
 #define WELCOME_MESSAGE BUILD_NEEDLE BUILD_SIGNATURE
-const char* welcomeMessage = WELCOME_MESSAGE;
+const char* welcomeMessage = R"asciiWelcome(
+▄▄▄▄· ▄▄▌  ▄▄▄ .     ▄▄·       ▄▄▌  ▄▄▌  ▄▄▄ . ▄▄· ▄▄▄▄▄      ▄▄▄
+▐█ ▀█▪██•  ▀▄.▀·    ▐█ ▌▪▪     ██•  ██•  ▀▄.▀·▐█ ▌▪•██  ▪     ▀▄ █·
+▐█▀▀█▄██▪  ▐▀▀▪▄    ██ ▄▄ ▄█▀▄ ██▪  ██▪  ▐▀▀▪▄██ ▄▄ ▐█.▪ ▄█▀▄ ▐▀▀▄
+██▄▪▐█▐█▌▐▌▐█▄▄▌    ▐███▌▐█▌.▐▌▐█▌▐▌▐█▌▐▌▐█▄▄▌▐███▌ ▐█▌·▐█▌.▐▌▐█•█▌
+·▀▀▀▀ .▀▀▀  ▀▀▀     ·▀▀▀  ▀█▄▀▪.▀▀▀ .▀▀▀  ▀▀▀ ·▀▀▀  ▀▀▀  ▀█▄▀▪.▀  ▀
+
+)asciiWelcome" WELCOME_MESSAGE;
 
 static xSemaphoreHandle mux = NULL; // this is needed to mitigate SPI collisions
 

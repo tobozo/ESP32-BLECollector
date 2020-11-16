@@ -284,19 +284,23 @@ class BLEScanUtils
       getPrefs(); // load prefs from NVS
       UI.init(); // launch all UI tasks
       UI.BLEStarted = true;
-      setBrightnessCB();
+      setBrightnessCB(); // apply thawed brightness
       VendorFilterIcon.setStatus( UI.filterVendors ? ICON_STATUS_filter : ICON_STATUS_filter_unset );
-      doStartSerialTask();
-      doStartDBInit();
+      doStartSerialTask(); // start listening to serial commands
+      doStartDBInit(); // init the DB
+      // only autorun commands on regular boot or after a crash, ignore after software reset
+      if (resetReason != 12) { // HW Reset
+        runCommand( (char*)"help" );
+        //runCommand( (char*)"toggle" );
+        //runCommand( (char*)"ls" );
+      }
     }
 
 
     static void doStartDBInit()
     {
-
       xTaskCreatePinnedToCore( startDBInit, "startDBInit", 8192, NULL, 16, NULL, SCANTASK_CORE );
       while( !DBStarted ) vTaskDelay(10);
-
     }
 
     void doStartSerialTask()
@@ -937,6 +941,7 @@ class BLEScanUtils
 
     static void toggleCB( void * param = NULL )
     {
+      if( Tsize == 0 ) return; // no variables to toggle, too early to call
       bool setbool = true;
       if ( param != NULL ) {
         //
@@ -1058,17 +1063,20 @@ class BLEScanUtils
         { "DayChangeTrigger",    DayChangeTrigger },
         { "HourChangeTrigger",   HourChangeTrigger },
         { "timeServerIsRunning", timeServerIsRunning },
+        { "GPSDebugToSerial",    GPSDebugToSerial },
       };
       // bind static TogglableProps to local ToggleProps
       TogglableProps = ToggleProps;
       Tsize = (sizeof(ToggleProps) / sizeof(ToggleProps[0]));
 
+      /*
       // only autorun "help" command on regular boot (or after a crash)
       if (resetReason != 12) { // HW Reset
+        while( !DBStarted ) vTaskDelay(10); // wait until DB has started before showing help
         runCommand( (char*)"help" );
         //runCommand( (char*)"toggle" );
         //runCommand( (char*)"ls" );
-      }
+      }*/
 
       unsigned long lastHidCheck = millis();
 
@@ -1090,6 +1098,7 @@ class BLEScanUtils
     static void runCommand( char* command )
     {
       if ( isEmpty( command ) ) return;
+      if ( Csize == 0 ) return; // no commands yet to parse, too early to call
       if ( strcmp( command, "help" ) == 0 ) {
         Serial.println("\nAvailable Commands:\n");
         for ( uint16_t i = 0; i < Csize; i++ ) {

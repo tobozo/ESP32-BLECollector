@@ -8,20 +8,22 @@ HardwareSerial GPS(1); // uart 1
 //#define GPS_TX 32 // io pin number
 #define GPS_BAUDRATE 9600
 
-static unsigned long LastGPSChange = 0;
-static unsigned long NoGPSSignalSince = millis();
+static unsigned long LastGPSChange = 0; // holds time when last GPS state change or data collection occured
+static unsigned long NoGPSSignalSince = 1000; // milliseconds since the last GPS signal or state change
 static bool GPSHasFix = false;
 unsigned long GPSLastFix = 0;
 static bool GPSHasDateTime = false;
+static bool GPSDebugToSerial = false; // set this to true to debug, disables GPS decoding and prints to serial instead
 static double GPSLat = 0.00;
 static double GPSLng = 0.00;
 static int GPSFailCounter = 0;
-const unsigned long GPSFailCheckDelay = 30000; // check for GPS health every 30s (unit=millis)
+static int GPSFailThreshold = 10; // 2..10
+static unsigned long GPSFailCheckDelay = 4000; // check for GPS health every 4s (unit=millis)
 
 static void GPSInit()
 {
-  LastGPSChange = 0;
-  NoGPSSignalSince = millis();
+  LastGPSChange    = millis();
+  NoGPSSignalSince = 1000; // pretend there was a signal 1 second ago
 
   GPS.begin(GPS_BAUDRATE, SERIAL_8N1, GPS_RX, GPS_TX);
   GPS.flush();
@@ -33,31 +35,59 @@ TinyGPSPlus gps;
 
 static void GPSRead()
 {
-  while(GPS.available()) {
-    gps.encode( GPS.read() );
-  }
-  if( gps.location.isValid() ) {
-    GPSLat = gps.location.lat();
-    GPSLng = gps.location.lng();
-    GPSHasFix = true;
-    GPSLastFix = millis();
+
+  if( GPS.available() ) {
+    do {
+      if( GPSDebugToSerial ) {
+        Serial.write( GPS.read() );
+      } else {
+        gps.encode( GPS.read() );
+      }
+
+    } while(GPS.available());
+
+    if( gps.location.isValid() ) {
+      GPSLat = gps.location.lat();
+      GPSLng = gps.location.lng();
+      GPSHasFix = true;
+      GPSLastFix = millis();
+      log_w("[GPS] FIX -> LAT: %f LNG: %f", GPSLat, GPSLng );
+      //GPSFailCounter = 0;
+    } else {
+      GPSLat = 0.00f;
+      GPSLng = 0.00f;
+    }
+    if(gps.date.isUpdated() && gps.date.isValid() && gps.time.isValid()) {
+      LastGPSChange = millis();
+      GPSHasDateTime = true; // time is valid but date may still be incomplete at this stage
+      NoGPSSignalSince = 0;
+      GPSFailCounter = 0;
+    } else {
+      // NMEA sent garbage or has no fix yet
+      NoGPSSignalSince = millis() - LastGPSChange;
+    }
   } else {
-    GPSLat = 0.00f;
-    GPSLng = 0.00f;
-  }
-  if(gps.date.isUpdated() && gps.date.isValid() && gps.time.isValid()) {
-    LastGPSChange = millis();
-    GPSHasDateTime = true; // time is valid but date may still be incomplete at this stage
-    NoGPSSignalSince = 0;
-  } else {
+    // no signal on Serial2 ?
     NoGPSSignalSince = millis() - LastGPSChange;
   }
 
   // check for GPS health
   // no data in 30 seconds = something's wrong
   if (NoGPSSignalSince > GPSFailCheckDelay && gps.charsProcessed() < 10 ) {
-    if( GPSFailCounter < 10 ) { // don't be spammy
+    if( GPSFailCounter < GPSFailThreshold ) { // don't be spammy
       Serial.printf("[GPS] Did not get any data for %ld seconds\n", NoGPSSignalSince/1000);
+    } else {
+      // reset fail counter but double the delay
+      if( GPSFailCheckDelay < 3600000 ) { // max 1h
+        GPSFailCounter = 0;
+        GPSFailCheckDelay *=2;
+        Serial.printf("New GPSFailCheckDelay: %d\n", int(GPSFailCheckDelay) );
+      }
+      if( GPSFailThreshold > 2 ) { // don't go below 2
+        GPSFailCounter = 0;
+        GPSFailThreshold--;
+        Serial.printf("New GPSFailThreshold: %d\n", int(GPSFailThreshold) );
+      }
     }
     LastGPSChange = millis(); // reset timer to reduce spamming in the console
     GPSFailCounter++;
@@ -78,12 +108,20 @@ static void getLatLng( void * param )
 
 static bool setGPSTime()
 {
+  if( GPSFailCounter > 0 ) {
+    Serial.printf("GPS is not available (%d errors during last %d seconds)\n", int(GPSFailCounter), int(GPSFailCheckDelay/1000) );
+    return false;
+  }
   if( !GPSHasDateTime ) {
-    Serial.println("GPS has no valid DateTime, cowardly aborting");
+    Serial.println("GPS has no valid DateTime yet");
     return false;
   }
 
+
   if(gps.date.isValid() && gps.time.isValid() && gps.date.year() > 2000) {
+    // TODO: check when this date was collected before trusting it
+    // e.g. (millis() - LastGPSChange) or NoGPSSignalSince
+
     // fetch GPS Time
     DateTime GPS_UTC_Time = DateTime(gps.date.year(), gps.date.month(), gps.date.day(), gps.time.hour(), gps.time.minute(), gps.time.second());
     // apply timeZone
@@ -116,6 +154,7 @@ static bool setGPSTime()
       dumpTime( "Internal RTC adjusted from GPS Time", &now );
       logTimeActivity(SOURCE_GPS, GPS_Local_Time.unixtime());
       lastSyncDateTime = GPS_Local_Time;
+      GPSFailCounter = 0;
       return true;
     }
 
