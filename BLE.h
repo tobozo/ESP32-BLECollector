@@ -1063,7 +1063,9 @@ class BLEScanUtils
         { "DayChangeTrigger",    DayChangeTrigger },
         { "HourChangeTrigger",   HourChangeTrigger },
         { "timeServerIsRunning", timeServerIsRunning },
-        { "GPSDebugToSerial",    GPSDebugToSerial },
+        #if HAS_GPS
+          { "GPSDebugToSerial",    GPSDebugToSerial },
+        #endif
       };
       // bind static TogglableProps to local ToggleProps
       TogglableProps = ToggleProps;
