@@ -28,7 +28,7 @@ The memory cost of using sqlite and BLE libraries is quite high.
 
 Hardware requirements
 ---------------------
-  - [mandatory] ESP32 or ESP32-WROVER (WROVER is recommended)
+  - [mandatory] ESP32-Wroom or ESP32-Wrover (Wrover is recommended)
   - [mandatory] SD Card (breakout or bundled in Wrover-Kit, M5Stack, Odroid-Go, LoLinD32 Pro)
   - [mandatory] Micro SD (FAT32 formatted, **max 4GB**)
   - [mandatory] [mac-oui-light.db](https://github.com/tobozo/ESP32-BLECollector/blob/master/SD/mac-oui-light.db) and [ble-oui.db](https://github.com/tobozo/ESP32-BLECollector/blob/master/SD/ble-oui.db) files copied on the Micro SD Card root
@@ -40,12 +40,13 @@ Hardware requirements
 Software requirements (updated)
 ---------------------
   - [mandatory] Arduino IDE
-  - [⚠ NEW][mandatory] [NimBLE Library](https://github.com/h2zero/NimBLE-Arduino/archive/master.zip) supersedes the BLE (legacy or custom) library versions, install it manually in the Arduino/Libraries folder.
-  - [⚠ NEW][mandatory] [ESP32-Chimera-Core "LGFX Edition"](https://github.com/tobozo/ESP32-Chimera-Core/archive/1.0.0-alpha.zip) (M5Stack core substitute with display driver on steroids, still in beta-testing).
-  - [mandatory] https://github.com/tobozo/M5Stack-SD-Updater
-  - [mandatory] https://github.com/PaulStoffregen/Time
-  - [mandatory] https://github.com/siara-cc/esp32_arduino_sqlite3_lib
-  - [optional] https://github.com/mikalhart/TinyGPSPlus
+  - [mandatory] [ESP32-Chimera-Core](https://github.com/tobozo/ESP32-Chimera-Core/) (get it from the Arduino Library Manager)
+  - [mandatory] [LovyanGFX](https://github.com/Lovyan03/LovyanGFX/) (get it from the Arduino Library Manager)
+  - [mandatory] [M5Stack-SD-Updater](https://github.com/tobozo/M5Stack-SD-Updater) (get it from the Arduino Library Manager)
+  - [mandatory] [NimBLE Library](https://github.com/h2zero/NimBLE-Arduino/archive/master.zip) supersedes the BLE (legacy or custom) library versions, install it manually in the Arduino/Libraries folder.
+  - [mandatory] [PaulStoffregen's Time library](https://github.com/PaulStoffregen/Time) (get it from the Arduino Library Manager)
+  - [mandatory] [esp32_arduino_sqlite3_lib](https://github.com/siara-cc/esp32_arduino_sqlite3_lib) (get it from the Arduino Library Manager)
+  - [optional] [TinyGPSPlus](https://github.com/mikalhart/TinyGPSPlus)
 
 Behaviours (auto-selected except for WiFi):
 ---------------------------
@@ -82,19 +83,18 @@ Optional XPad Buttons Shield requirements
 
 Time Sharing
 ------------
-  - Once the time is set using RTC and/or GPS, the BLECollector will start the TimeSharing service and advertise a DateTime characteristic for other BLECollectors to sync with.
+  - Once the time is set using RTC, GPS or NTP, the BLECollector may start the TimeSharing service and advertise a DateTime characteristic for other BLECollectors to sync with.
   - Builds with no RTC/GPS will try to identify this service during their scan duty cycle and subscribe for notifications.
 
-File Sharing (still experimental)
+File Downloading (still experimental)
 ------------
-  - ⚠ BLE file sharing is probably broken since Nimble-Arduino
-  - ~~⚠ A new WiFi file sharing feature can now be enabled, but psram is strongly recommended for that.~~
-  - ~~This feature is currently limited to sharing the two necessary .db files, if at least one of those files is missing or corrupted at boot, the BLECollector will start a BLE File server and wait for another BLECollector to send those files.~~
-  - ~~Sending files is still a manual operation, just issue the `blesend` command when another BLECollector is ready to receive the files.~~
-  - ~~Possible outcomes of this feature: sharing/propagating the collected data (e.g. whitelists/blacklists)~~
-  - Enable the WiFi sharing by uncommenting `#define WITH_WIFI` in `Settings.h`
-  - Issue the `stopBLE` command, it will stop BLE, start WiFi and synchronize time to a nearby NTP server
-  - If the oui database isn't present, it will download it from github ~~ otherwise it'll start the [FTP Server](#ftp-server-still-experimental) and share the collected data~~
+
+Sending the `DownloadDB` command will:
+
+  - Stop BLE
+  - Start WiFi
+  - Synchronize time to a nearby NTP server
+  - Download the latest oui/vendors database from github
 
 
 Serial command interface
@@ -103,28 +103,34 @@ Serial command interface
   Available Commands:
 
     01)             help : Print this list
-    02)            start : Start/resume scan
-    03)             stop : Stop scan
-    04)     toggleFilter : Toggle vendor filter on the TFT (persistent)
-    05)       toggleEcho : Toggle BLECards in the Serial Console (persistent)
-    06)             dump : Dump returning BLE devices to the display and updates DB
-    07)    setBrightness : Set brightness to [value] (0-255)
-    08)               ls : Show [dir] Content on the SD
-    09)               rm : Delete [file] from the SD
-    10)          restart : Restart BLECollector ('restart now' to skip replication)
-    11)         bleclock : Broadcast time to another BLE Device (implicit)
-    12)          bletime : Get time from another BLE Device (explicit)
-    13)       blereceive : Update .db files from another BLE app
-    14)          blesend : Share .db files with anothe BLE app
-    15)       screenshot : Make a screenshot and save it on the SD
-    16)       screenshow : Show screenshot
-    17)           toggle : toggle a bool value
-    18)          gpstime : sync time from GPS
-    19)          resetDB : Hard Reset DB + forced restart
-    20)          pruneDB : Soft Reset DB without restarting (hopefully)
-    21)          stopBLE : Stop BLE and start WiFi (experimental)
-    22)      setWiFiSSID : Set WiFi SSID
-    23)      setWiFiPASS : Set WiFi Password
+    02)             halp : Same as help except it doesn't print anything
+    03)            start : Start/resume scan
+    04)             stop : Stop scan
+    05)     toggleFilter : Toggle vendor filter on the TFT (persistent)
+    06)       toggleEcho : Toggle BLECards in the Serial Console (persistent)
+    07)      setTimeZone : Set the timezone for next NTP Sync (persistent)
+    08)    setSummerTime : Toggle CEST / CET for next NTP Sync (persistent)
+    09)             dump : Dump returning BLE devices to the display and updates DB
+    10)    setBrightness : Set brightness to [value] (0-255) (persistent)
+    11)               ls : Show [dir] Content on the SD
+    12)               rm : Delete [file] from the SD
+    13)          restart : Restart BLECollector ('restart now' to skip replication)
+    14)       screenshot : Make a screenshot and save it on the SD
+    15)       screenshow : Show screenshot
+    16)           toggle : toggle a bool value
+    17)          resetDB : Hard Reset DB + forced restart
+    18)          pruneDB : Soft Reset DB without restarting (hopefully)
+    19)         bleclock : Broadcast time to another BLE Device (implicit)
+    20)          bletime : Get time from another BLE Device (explicit)
+    21)          gpstime : Sync time from GPS
+    22)           latlng : Print the GPS lat/lng
+    23)          stopBLE : Stop BLE (use 'restart' command to re-enable)
+    24)        startWiFi : Start WiFi (will stop BLE)
+    25)      setPoolZone : Set NTP Pool Zone for next NTP Sync (persistent)
+    26)          NTPSync : Update time from NTP (will start WiFi)
+    27)       DownloadDB : Download or update db files (will start WiFi and update NTP first)
+    28)      setWiFiSSID : Set WiFi SSID
+    29)      setWiFiPASS : Set WiFi Password
 
 
 Contributions are welcome :-)
@@ -132,8 +138,7 @@ Contributions are welcome :-)
 
 Known issues / Roadmap
 ----------------------
-~~Because sqlite3 and BLE library already use a fair amount of RAM, there isn't much room left for additional tools such as Web Server, db parser, or NTP sync, so WiFi features are kept out of the scope of this project.~~
-~~As a compensation, the M5Stack-SD-Updater is built-in and will allow hot-loading of any other .bin (default is menu.bin) located on the SD Card, making it easy to separate functional concerns into different apps.~~
+
 Implementing both [LovyanGFX](https://github.com/lovyan03/LovyanGFX) and [Nimble-Arduino](https://github.com/h2zero/NimBLE-Arduino) was such a huge optimization that none of the previous blockers exist any more!
 
 Some ideas I'll try to implement in the upcoming changes:
@@ -141,8 +146,6 @@ Some ideas I'll try to implement in the upcoming changes:
 - Add GPS Coords to entries for better pruning [as suggested by /u/playaspect](https://www.reddit.com/r/esp8266/comments/9s594c/esp32blecollector_ble_scanner_data_persistence_on/e8nipr6/?context=3)
 - Better Analysis of ServiceData (see @reelyactive's [advlib](https://github.com/reelyactive/advlib))
 - Extended logging (SDCard-less meshed builds)
-- ~~Have the data easily exported without removing the sd card (wifi, ble, serial)~~
-- ~~Auto downloading/refreshing sqlite databases~~
 
 
 Other ESP32 security related tools:
@@ -159,6 +162,5 @@ Credits/requirements:
 - @Lovyan03 for integrating his [LovyanGFX](https://github.com/lovyan03/LovyanGFX) into the [ESP32-Chimera-Core](https://github.com/tobozo/ESP32-Chimera-Core/tree/lgfx_test) thus saving an enormous amount of sram and flash space
 - @h2zero for sharing [NimBLE Library](https://github.com/h2zero/NimBLE-Arduino/) and brillantly proving that BLE can work with WiFi on Arduino without eating all sram/flash space
 - https://github.com/siara-cc/esp32_arduino_sqlite3_lib
-- https://github.com/fa1ke5/ESP32_FTPServer_SD_MMC
 - huge thanks to https://github.com/chegewara for maintaining the initial [BLE library](https://github.com/tobozo/ESP32-BLECollector/releases/download/1.2/BLE.zip) that made this project possible
 
