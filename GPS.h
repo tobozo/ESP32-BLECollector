@@ -51,8 +51,7 @@ static void GPSRead()
       GPSLng = gps.location.lng();
       GPSHasFix = true;
       GPSLastFix = millis();
-      log_w("[GPS] FIX -> LAT: %f LNG: %f", GPSLat, GPSLng );
-      //GPSFailCounter = 0;
+      log_d("[GPS] FIX -> LAT: %f LNG: %f", GPSLat, GPSLng );
     } else {
       GPSLat = 0.00f;
       GPSLng = 0.00f;
@@ -99,7 +98,8 @@ static void GPSRead()
 static void getLatLng( void * param )
 {
   if( GPSHasFix ) {
-    Serial.printf("[GPS] Last fix %d seconds ago -> LAT: %f LNG: %f", int( (millis()-GPSLastFix)/1000 ), GPSLat, GPSLng );
+    Serial.printf("[GPS] Last fix was %d seconds ago -> LAT: %f LNG: %f\n", int( (millis()-GPSLastFix)/1000 ), GPSLat, GPSLng );
+    GPSHasFix = false;
   } else {
     Serial.println("[GPS] had no fix yet");
   }

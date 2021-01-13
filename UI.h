@@ -210,7 +210,7 @@ class UIUtils
 
     void init()
     {
-      Serial.begin(115200);
+
       Serial.println(welcomeMessage);
       Serial.printf("  HAS HID: %s,\n  HAS_XPAD: %s\n  HAS PSRAM: %s\n  HAS_EXTERNAL_RTC: %s\n  HAS_GPS: %s\n  TIME_UPDATE_SOURCE: %d\n",
         hasHID() ? "true" : "false",

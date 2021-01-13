@@ -83,8 +83,6 @@ class XPad {
       _lastTime = _time;
       _time = ms;
       _changed = 0;
-      setPads();
-      return state;
     } else {
       _lastTime = _time;
       _time = ms;
@@ -97,9 +95,10 @@ class XPad {
       } else {
         _changed = 0;
       }
-      setPads();
-      return state;
     }
+
+    setPads();
+    return state;
   }
 
   uint8_t wasPressed(void) {

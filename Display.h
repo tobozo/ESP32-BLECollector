@@ -1,5 +1,10 @@
 #include <ESP32-Chimera-Core.h> // https://github.com/tobozo/ESP32-Chimera-Core
-#include <M5StackUpdater.h> // https://github.com/tobozo/M5Stack-SD-Updater
+
+// Odroid-Go prefers CrashOverride's Application Loader
+#ifndef  ARDUINO_ODROID_ESP32
+  #include <M5StackUpdater.h> // https://github.com/tobozo/M5Stack-SD-Updater
+#endif
+
 
 #ifndef _CHIMERA_CORE_
   #warning "This app needs ESP32 Chimera Core but M5Stack Core was selected, check your library path !!"
@@ -62,7 +67,15 @@ static const int AMIGABALL_YPOS = 50;
 #if defined( ARDUINO_M5Stack_Core_ESP32 ) || defined( ARDUINO_M5STACK_FIRE ) || defined( ARDUINO_ODROID_ESP32 ) || defined( ARDUINO_M5STACK_Core2 )
 
   // custom M5Stack/Odroid-Go go TFT/SD/RTC/GPS settings here (see ARDUINO_ESP32_DEV profile for available settings)
-  #if defined( ARDUINO_M5STACK_Core2 ) // M5Core2
+  #if defined( ARDUINO_ODROID_ESP32 ) // M5Core2
+
+    #undef WITH_WIFI // NTP is useless without a RTC module
+    #undef TIME_UPDATE_SOURCE // disable time update accordingly
+    #define TIME_UPDATE_SOURCE TIME_UPDATE_NONE
+    #undef tft_initOrientation // odroid go only has hardware scroll in portrait mode
+    #define tft_initOrientation() tft.setRotation(0)
+
+  #elif defined( ARDUINO_M5STACK_Core2 ) // M5Core2
     #undef HAS_EXTERNAL_RTC
     #define HAS_EXTERNAL_RTC true
     #undef RTC_SDA
@@ -225,7 +238,9 @@ static bool isInQuery()
 
 void tft_begin()
 {
+
   M5.begin( true, true, false, false, false ); // don't start Serial
+
   #if HAS_EXTERNAL_RTC
     Wire.begin(RTC_SDA, RTC_SCL);
     M5.I2C.scan();
@@ -340,15 +355,10 @@ void tft_scrollTo(int32_t vsp)
 
 
 // hardware scroll
-void tft_setupHScrollArea(int32_t tfa, int32_t vsa, int32_t bfa)
+void tft_setupHScrollArea(uint16_t tfa, uint16_t vsa, uint16_t bfa)
 {
-  tft.setCursor(0,0);
-  tft.writecommand( 0x37 ); // VSCRADD Vertical Scroll definition.
-  tft.writedata(0 >> 8);
-  tft.writedata(0 & 0xFF);
-
   bfa += SCROLL_OFFSET; // compensate for stubborn firmware
-
+  tft.startWrite();
   tft.writecommand(0x33);  // VSCRDEF Vertical scroll definition
   tft.writedata(tfa >> 8); // Top Fixed Area line count
   tft.writedata(tfa);
@@ -356,6 +366,7 @@ void tft_setupHScrollArea(int32_t tfa, int32_t vsa, int32_t bfa)
   tft.writedata(vsa);
   tft.writedata(bfa >> 8); // Bottom Fixed Area line count
   tft.writedata(bfa);
+  tft.endWrite();
 
   log_d("Init Hardware Scroll area with tfa/vsa/bfa %d/%d/%d on w/h %d/%d", tfa, vsa, bfa, scrollpanel_width(), scrollpanel_height());
 }
@@ -364,9 +375,11 @@ void tft_setupHScrollArea(int32_t tfa, int32_t vsa, int32_t bfa)
 // hardware scroll
 void tft_hScrollTo(uint16_t vsp)
 {
+  tft.startWrite();
   tft.writecommand(0x37); // ILI9341_VSCRSADD Vertical scrolling pointer
   tft.writedata(vsp>>8);
   tft.writedata(vsp);
+  tft.endWrite();
 }
 
 

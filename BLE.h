@@ -119,13 +119,16 @@ static BLEUUID Covid19RadarUUID("550e8400-e29b-41d4-a716-446655440000");
 static BLEUUID Covid19RadarTestUUID("7822fa0f-ce38-48ea-a7e8-e72af4e42c1c");
 
 // Australia CovidSafe  https://github.com/xssfox/covidsafescan PRODUCTION_UUID = 'b82ab3fc-1595-4f6a-80f0-fe094cc218f9' STAGING_UUID = '17e033d3-490e-4bc9-9fe8-2f567643f4d3'
+// Singapore TraceTogether https://github.com/lupyuen/ble-explorer      ServiceID = 'b82ab3fc-1595-4f6a-80f0-fe094cc218f9'
 static BLEUUID CovidSafeUUID("b82ab3fc-1595-4f6a-80f0-fe094cc218f9");
 
-// Belgium   Coronalert https://github.com/covid-be-app/cwa-app-android CharacteristicID = 0xFD6 / 0xFD6F
-// static BLEUUID CoronalertUUID("0xFD6F"); // not working
+// Belgium   Coronalert https://github.com/covid-be-app/cwa-app-android CharacteristicID = 0xFD6 / 0xFD6F (GAEN Exposure)
+// https://blog.google/documents/70/Exposure_Notification_-_Bluetooth_Specification_v1.2.2.pdf
+static BLEUUID GAENExposure( 0xfd6fU );
 
-static BLEUUID TraceTogetherUUID("b82ab3fc-1595-4f6a-80f0-fe094cc218f9");
-// Singapore TraceTogether https://github.com/lupyuen/ble-explorer      ServiceID = 'b82ab3fc-1595-4f6a-80f0-fe094cc218f9'
+
+
+
 
 struct WatchedBLEService
 {
@@ -138,8 +141,8 @@ WatchedBLEService watchedServices[] =
 {
   { StopCovidUUID,     "French StopCovid App", true },
   { Covid19RadarUUID,  "International Codiv19 Radar contact tracing app", true },
-  { CovidSafeUUID,     "Australian CovidSafe App", true },
-  { TraceTogetherUUID, "Singapore TraceTogether App", true },
+  { CovidSafeUUID,     "Australian/Singapore TraceTogether/CovidSafe App", true },
+  { GAENExposure,      "GAEN Exposure", true }
 };
 
 static size_t watchedServicesCount = sizeof watchedServices / sizeof watchedServices[0];
@@ -280,6 +283,7 @@ class BLEScanUtils
 
     void init()
     {
+      Serial.begin(115200);
       BLEDevice::init( PLATFORM_NAME " BLE Collector");
       getPrefs(); // load prefs from NVS
       UI.init(); // launch all UI tasks
@@ -483,8 +487,10 @@ class BLEScanUtils
           vTaskDelay( 100 );
         }
         if( param == NULL ) {
+          #if HAS_EXTERNAL_RTC
           UI.PrintMessage("Restarting...");
           ESP.restart();
+          #endif
         }
       }
 
@@ -877,7 +883,7 @@ class BLEScanUtils
     {
       if( !UI.ScreenShotLoaded ) {
         log_w("Cold ScreenShot");
-        M5.ScreenShot.init( &tft, BLE_FS );
+        M5.ScreenShot.init( &M5.Lcd, BLE_FS );
         if( M5.ScreenShot.begin() ) {
           UI.ScreenShotLoaded = true;
           UI.screenShot();
