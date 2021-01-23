@@ -328,6 +328,9 @@ class BLEScanUtils
       } else if( hasXPaxShield() ) {
         ProcessHID = XPadButtonCheck;
         log_w("Using XPAD Shield");
+      } else if( hasTouch() ) {
+        ProcessHID = TouchCheck;
+        log_w("Using LGFX Touch");
       } else {
         ProcessHID = NoHIDCheck;
         log_w("NO HID enabled");
@@ -1165,6 +1168,12 @@ class BLEScanUtils
         lastHidCheck = millis();
       }
     }
+
+    static void TouchCheck( unsigned long &lastHidCheck )
+    {
+      checkCursor();
+    }
+
 
     static void XPadButtonCheck( unsigned long &lastHidCheck )
     {

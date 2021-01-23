@@ -188,6 +188,8 @@ class UIUtils
     byte brightness = BASE_BRIGHTNESS; // multiple of 8 otherwise can't turn off ^^
     byte brightnessIncrement = 8;
     bool BLEStarted = false;
+    bool cursorVisible = false;
+    int16_t cursorX, cursorY;
 
     struct BLECardStyle
     {
