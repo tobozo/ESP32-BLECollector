@@ -22,7 +22,7 @@ bool SDSetup()
   unsigned long max_wait = 500;
   byte attempts = 100;
   while ( sd_mounted == false && attempts>0) {
-    if ( SD_begin() ) {
+    if ( SD_begin ) {
       sd_mounted = true;
     } else {
       log_e("[SD] Mount Failed");

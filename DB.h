@@ -277,13 +277,26 @@ class DBUtils
 
       initial_free_heap = freeheap;
       isQuerying = true;
+      sqlite3_initialize();
+
+      bool create_DB = false;
+
       if( !BLE_FS.exists( BLEMacsDbFSPath ) ) {
         log_w("%s DB does not exist", BLEMacsDbFSPath);
-        sqlite3_initialize();
+        create_DB = true;
+      } else {
+        fs::File dbFile = BLE_FS.open( BLEMacsDbFSPath );
+        if( dbFile.size() == 0 ) {
+          create_DB = true;
+          log_w("%s DB file is empty", BLEMacsDbFSPath);
+        }
+        dbFile.close();
+      }
+
+      if( create_DB ) {
         createDB(); // only if no exists
       } else {
         log_d("%s DB file already exists", BLEMacsDbFSPath);
-        sqlite3_initialize();
       }
       isQuerying = false;
 
@@ -589,9 +602,8 @@ class DBUtils
         UI.SetDBStateIcon(-1); // OOM or I/O error
         delay(1);
         isQuerying = false;
-        return rc;
       } else {
-        log_v("Opened database %s successfully", dbcollection[dbName].sqlitepath);
+        log_i("Opened database %s successfully", dbcollection[dbName].sqlitepath);
         if(readonly) {
           UI.SetDBStateIcon(1); // R/O
         } else {
@@ -871,11 +883,32 @@ class DBUtils
 
     void createDB()
     {
-      log_w("creating %s db", BLEMacsDbSQLitePath);
+      log_w("Will create %s (POSIX path) database", BLEMacsDbSQLitePath);
       UI.headerStats("DB: creating...");
-      open(BLE_COLLECTOR_DB, false);
-      log_d("created %s if no exists:  : %s", BLEMacsDbSQLitePath, createTableQuery);
-      DBExec( BLECollectorDB, createTableQuery ) ;
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+      if( strcmp( BLE_FS_TYPE, "littlefs" ) == 0 ) {
+        // LittleFS Exception: create file first or sqlite3 won't see it
+        if( ! BLE_FS.exists( BLEMacsDbFSPath ) ) {
+          log_i("Creating empty file %s (FS path)", BLEMacsDbFSPath );
+          fs::File tmp = BLE_FS.open( BLEMacsDbFSPath, FILE_WRITE );
+          tmp.close();
+        }
+      }
+
+      if( open(BLE_COLLECTOR_DB, false) ) {
+        // duh !
+        log_e("Could not open database");
+        return;
+      }
+      if( DBExec( BLECollectorDB, createTableQuery ) == SQLITE_OK ) {
+        log_i("created %s if no exists:  : %s", BLEMacsDbSQLitePath, createTableQuery);
+      } else {
+        log_e("CRITICAL: Failed to create db, halting system");
+        close(BLE_COLLECTOR_DB);
+        BLE_FS.remove( BLEMacsDbFSPath );
+        while(1) vTaskDelay(1);
+      }
       close(BLE_COLLECTOR_DB);
       UI.headerStats(" ");
     }

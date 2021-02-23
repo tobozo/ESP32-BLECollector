@@ -284,14 +284,15 @@ class BLEScanUtils
     void init()
     {
       Serial.begin(115200);
+      mux = xSemaphoreCreateMutex();
       BLEDevice::init( PLATFORM_NAME " BLE Collector");
       getPrefs(); // load prefs from NVS
       UI.init(); // launch all UI tasks
       UI.BLEStarted = true;
       setBrightnessCB(); // apply thawed brightness
       VendorFilterIcon.setStatus( UI.filterVendors ? ICON_STATUS_filter : ICON_STATUS_filter_unset );
-      doStartSerialTask(); // start listening to serial commands
       doStartDBInit(); // init the DB
+      doStartSerialTask(); // start listening to serial commands
       // only autorun commands on regular boot or after a crash, ignore after software reset
       if (resetReason != 12) { // HW Reset
         runCommand( (char*)"help" );
@@ -303,7 +304,7 @@ class BLEScanUtils
 
     static void doStartDBInit()
     {
-      xTaskCreatePinnedToCore( startDBInit, "startDBInit", 8192, NULL, 16, NULL, SCANTASK_CORE );
+      xTaskCreatePinnedToCore( startDBInit, "startDBInit", 8192, NULL, 16, NULL, STATUSBAR_CORE );
       while( !DBStarted ) vTaskDelay(10);
     }
 
@@ -420,10 +421,21 @@ class BLEScanUtils
       {
         WiFi.mode(WIFI_STA);
         Serial.println(WiFi.macAddress());
-        if( String( WiFi_SSID ) !="" && String( WiFi_PASS ) !="" ) {
-          WiFi.begin( WiFi_SSID, WiFi_PASS );
-        } else {
+
+        String previousSuccessfulSSID = WiFi.SSID();
+        String previousSuccessfulPWD = WiFi.psk();
+
+        if( previousSuccessfulSSID != "" && previousSuccessfulPWD != "" ) {
+          log_w("Using credentials from last known connection, SSID: %s / PSK: %s", previousSuccessfulSSID.c_str(), previousSuccessfulPWD.c_str() );
           WiFi.begin();
+        } else {
+          if( String( WiFi_SSID ) !="" && String( WiFi_PASS ) !="" ) {
+            log_w("Using credentials from NVS");
+            WiFi.begin( WiFi_SSID, WiFi_PASS );
+          } else {
+            log_w("Using default credentials (WARN: no SSID/PASS saved in NVS)");
+            WiFi.begin();
+          }
         }
         while(WiFi.status() != WL_CONNECTED) {
           log_e("Not connected");
@@ -641,10 +653,12 @@ class BLEScanUtils
             float progress = (((float)bytesDownloaded / (float)len) * 100.00);
             UI.PrintProgressBar( progress, 100.0 );
           }
+          if( bytesLeftToDownload == 0 ) break;
         }
         outFile.close();
         free( buff );
         free( client );
+        return true;
         return fs.exists( path );
       }
 

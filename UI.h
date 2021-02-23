@@ -86,9 +86,9 @@ struct MacAddressColors
       for( uint8_t sy = 0; sy < scaleY; sy++ ) {
         for( uint8_t j = 0; j < 8; j++ ) {
           if( bitRead( MACBytes[j], i ) == 1 ) {
-            sprite->pushColor( color, scaleX );
+            sprite->pushBlock( color, scaleX );
           } else {
-            sprite->pushColor( BLE_WHITE, scaleX );
+            sprite->pushBlock( BLE_WHITE, scaleX );
           }
         }
       }
@@ -117,9 +117,9 @@ struct MacAddressColors
       for( uint8_t sy = 0; sy < scaleY; sy++ ) {
         for( uint8_t j = 0; j < 8; j++ ) {
           if( bitRead( MACBytes[j], i ) == 1 ) {
-            tft.pushColor( color, scaleX );
+            tft.pushBlock( color, scaleX );
           } else {
-            tft.pushColor( BLE_WHITE, scaleX );
+            tft.pushBlock( BLE_WHITE, scaleX );
           }
         }
       }
@@ -214,9 +214,10 @@ class UIUtils
     {
 
       Serial.println(welcomeMessage);
-      Serial.printf("  HAS HID: %s,\n  HAS_XPAD: %s\n  HAS PSRAM: %s\n  HAS_EXTERNAL_RTC: %s\n  HAS_GPS: %s\n  TIME_UPDATE_SOURCE: %d\n",
+      Serial.printf("  HAS HID: %s,\n  HAS_XPAD: %s\n  HAS TOUCH: %s\n  HAS PSRAM: %s\n  HAS_EXTERNAL_RTC: %s\n  HAS_GPS: %s\n  TIME_UPDATE_SOURCE: %d\n",
         hasHID() ? "true" : "false",
         hasXPaxShield() ? "true" : "false",
+        hasTouch() ? "true" : "false",
         psramInit() ? "true" : "false",
         HAS_EXTERNAL_RTC ? "true" : "false",
         HAS_GPS ? "true" : "false",
@@ -235,8 +236,8 @@ class UIUtils
       delay(100); // otherwise brightness is ignored
       tft_setBrightness( brightness );
 
-      // start heap graph
-      xTaskCreatePinnedToCore(taskHeapGraph, "taskHeapGraph", 1024, (void*)this, 0, &HeapGraphTaskHandle, HEAPGRAPH_CORE );
+      // start heap graph and clocksync
+      xTaskCreatePinnedToCore(taskHeapGraph, "taskHeapGraph", 2048, (void*)this, 0, &HeapGraphTaskHandle, HEAPGRAPH_CORE );
 
       // make sure non-printable chars aren't printed (also disables utf8)
       tft.setAttribute( lgfx::cp437_switch, true );
@@ -409,9 +410,11 @@ class UIUtils
 
     static void stopUITasks( void * param = NULL )
     {
+      takeMuxSemaphore();
       if( ClockSyncTaskIsRunning )     destroyTaskNow( ClockSyncTaskHandle );
       if( DrawableItemsTaskIsRunning ) destroyTaskNow( DrawableItemsTaskHandle );
       if( HeapGraphTaskIsRunning )     destroyTaskNow( HeapGraphTaskHandle );
+      giveMuxSemaphore();
     }
 
 
@@ -452,7 +455,7 @@ class UIUtils
         } else {
           takeMuxSemaphore();
           Out.scrollNextPage(); // reset scroll position to zero otherwise image will have offset
-          tft.drawJpgFile( BLE_FS, (const char*)fileName, 0, 0, Out.width, Out.height, 0, 0, JPEG_DIV_NONE );
+          tft.drawJpgFile( BLE_FS, (const char*)fileName, 0, 0, Out.width, Out.height, 0, 0 );
           giveMuxSemaphore();
           vTaskDelay( 5000 );
         }
@@ -694,7 +697,7 @@ class UIUtils
     static void taskHeapGraph( void * param = NULL )
     { // always running
       HeapGraphTaskIsRunning = true;
-      mux = xSemaphoreCreateMutex();
+
       takeMuxSemaphore();
       for( uint16_t i = 0; i < hallOfMacSize; i++ ) {
         uint16_t x = hallOfMacPosX + (i%hallofMacCols) * hallOfMacItemWidth;
@@ -714,7 +717,7 @@ class UIUtils
 
     static void drawableItems( void * param )
     {
-
+      log_w("Starting drawableItems task");
       DrawableItemsTaskIsRunning = true;
 
       UIUtils *_UI = (UIUtils*)param;
@@ -742,7 +745,7 @@ class UIUtils
 
         PrintBlinkableWidgets();
         BLECollectorIconBar.draw( BLECollectorIconBarX, BLECollectorIconBarY );
-        vTaskDelay( 100 );
+        vTaskDelay(150 / portTICK_PERIOD_MS);
       }
     }
 
@@ -896,7 +899,8 @@ class UIUtils
 
     static void clockSync(void * parameter)
     {
-
+      //vTaskDelay(1000 / portTICK_PERIOD_MS);
+      log_w("Starting clockSync task");
       TickType_t lastWaketime;
       lastWaketime = xTaskGetTickCount();
       devGraphFirstStatTime = millis();
@@ -1032,6 +1036,7 @@ class UIUtils
           uint16_t coordY = 0;
 
           uint8_t perMinuteIndex = map( (devCountPerMinuteIndex+i+1)%60, 0, graphLineWidth, 0, 60 ); // map to X
+          if( mincdpm == maxcdpm ) continue; // fix for divide by zero in map() since esp32-arduino 1.0.5
           int16_t dcpm = map( devCountPerMinute[perMinuteIndex], mincdpm, maxcdpm, 0, (graphLineHeight/4)-2); // map to Y
           coordY = baseCoordY - dcpm;
           if( devCountPerMinute[perMinuteIndex] > 0 ) {
@@ -1047,6 +1052,7 @@ class UIUtils
           uint8_t perMinutePerPeriodIndex = (devCountPerMinutePerPeriodIndex+i);
           perMinutePerPeriodIndex++;
           perMinutePerPeriodIndex = perMinutePerPeriodIndex%graphLineWidth; // map to X
+          if( mincdpmpp == maxcdpmpp ) continue; // fix for divide by zero in map() since esp32-arduino 1.0.5
           int16_t dcpmpp = map( devCountPerMinutePerPeriod[perMinutePerPeriodIndex], mincdpmpp, maxcdpmpp, (graphLineHeight/4)+2, graphLineHeight*.75); // map to Y
           coordY = baseCoordY - dcpmpp;
           if( devCountPerMinutePerPeriod[perMinutePerPeriodIndex] > 0 ) {
