@@ -1,31 +1,18 @@
-#include <ESP32-Chimera-Core.h> // https://github.com/tobozo/ESP32-Chimera-Core
+#include <ESP32-Chimera-Core-Config.h>
 
-// Odroid-Go prefers CrashOverride's Application Loader
-#ifndef  ARDUINO_ODROID_ESP32
-  #include <M5StackUpdater.h> // https://github.com/tobozo/M5Stack-SD-Updater
-#endif
-
-
-#ifndef _CHIMERA_CORE_
-  #warning "This app needs ESP32 Chimera Core but M5Stack Core was selected, check your library path !!"
-  #include <SD.h>
-  #define M5STACK_SD SD
-#else
-  #define tft M5.Lcd // syntax sugar
-#endif
-
-#include "HID_XPad.h" // external HID
-
-
-#if defined( ARDUINO_M5Stack_Core_ESP32 ) \
- || defined( ARDUINO_M5STACK_Core2 ) \
- || defined( ARDUINO_M5STACK_FIRE ) \
- || defined( ARDUINO_ODROID_ESP32 ) \
- || defined( ARDUINO_ESP32_DEV ) \
- || defined( ARDUINO_DDUINO32_XS ) \
- || defined( ARDUINO_ESP32_WROVER_KIT ) \
- || defined( ARDUINO_T ) \
- || defined( ARDUINO_T_Watch )
+#if defined ARDUINO_M5Stack_Core_ESP32 \
+ || defined ARDUINO_M5STACK_Core2 \
+ || defined ARDUINO_M5STACK_FIRE \
+ || defined ARDUINO_ODROID_ESP32 \
+ || defined ARDUINO_ESP32_DEV \
+ || defined ARDUINO_DDUINO32_XS \
+ || defined ARDUINO_ESP32_WROVER_KIT \
+ || defined ARDUINO_T \
+ || defined ARDUINO_T_Watch \
+ || defined ARDUINO_TWATCH_BASE \
+ || defined ARDUINO_TWATCH_2020_V1 \
+ || defined ARDUINO_TWATCH_2020_V2 \
+ || defined ARDUINO_LOLIN_D32_PRO \
   // yay! platform is supported
 #else
   #error "NO SUPPORTED BOARD DETECTED !!"
@@ -34,6 +21,7 @@
 #endif
 
 #define BLE_FS M5STACK_SD // inherited from ESP32-Chimera-Core
+#define USE_SD_UPDATER
 
 #define tft_drawJpg tft.drawJpg
 #define tft_color565 tft.color565
@@ -42,9 +30,10 @@
 #define scrollpanel_width() tft.width()
 #define tft_initOrientation() tft.setRotation(1)
 #define tft_drawBitmap tft.drawBitmap
-#define SD_begin M5.sd_begin //M5StackSDBegin // BLE_FS.begin
-#define hasHID() (bool)true
-#define hasXPaxShield() (bool) false
+#define SD_begin M5.sd_begin() //M5StackSDBegin // BLE_FS.begin
+#define hasHID() (bool)true // inherited M5.Button support
+#define hasXPaxShield() (bool) false // custom buttons support (e.g. I2C keyboard)
+#define hasTouch() (bool) false // inherited LGFX::Touch support
 #define snapNeedsScrollReset() (bool)false // some TFT models need a scroll reset before screen capture
 #define BLE_FS_TYPE "sd" // sd = fs::SD, sdcard = fs::SD_MMC
 #define SKIP_INTRO // don't play intro (tft spi access messes up SD/DB init)
@@ -64,16 +53,32 @@ static const int AMIGABALL_YPOS = 50;
 
 
 // display profiles switcher
-#if defined( ARDUINO_M5Stack_Core_ESP32 ) || defined( ARDUINO_M5STACK_FIRE ) || defined( ARDUINO_ODROID_ESP32 ) || defined( ARDUINO_M5STACK_Core2 )
+#if defined( ARDUINO_M5Stack_Core_ESP32 ) || defined( ARDUINO_M5STACK_FIRE ) || defined( ARDUINO_ODROID_ESP32 ) || defined( ARDUINO_M5STACK_Core2 ) || defined( ARDUINO_LOLIN_D32_PRO )
 
   // custom M5Stack/Odroid-Go go TFT/SD/RTC/GPS settings here (see ARDUINO_ESP32_DEV profile for available settings)
-  #if defined( ARDUINO_ODROID_ESP32 ) // M5Core2
+  #if defined( ARDUINO_LOLIN_D32_PRO )
+
+    #undef WITH_WIFI // NTP is useless without a RTC module
+    #undef TIME_UPDATE_SOURCE // disable time update accordingly
+    #define TIME_UPDATE_SOURCE TIME_UPDATE_NONE
+    #undef tft_initOrientation // ILI9341 for D32 Pro only has hardware scroll in portrait mode
+    #define tft_initOrientation() tft.setRotation(0)
+
+    #undef hasHID
+    #undef hasXPaxShield
+    #undef hasTouch
+    #define hasHID() (bool)false
+    #define hasXPaxShield() (bool) false
+    #define hasTouch() (bool) true // inherited LGFX::Touch support
+
+  #elif defined( ARDUINO_ODROID_ESP32 ) // M5Core2
 
     #undef WITH_WIFI // NTP is useless without a RTC module
     #undef TIME_UPDATE_SOURCE // disable time update accordingly
     #define TIME_UPDATE_SOURCE TIME_UPDATE_NONE
     #undef tft_initOrientation // odroid go only has hardware scroll in portrait mode
     #define tft_initOrientation() tft.setRotation(0)
+    #undef USE_SD_UPDATER // Odroid-Go prefers CrashOverride's Application Loader
 
   #elif defined( ARDUINO_M5STACK_Core2 ) // M5Core2
     #undef HAS_EXTERNAL_RTC
@@ -120,7 +125,7 @@ static const int AMIGABALL_YPOS = 50;
   #undef SCROLL_OFFSET
 
   #define hasHID() (bool)false // disable buttons
-  #define SD_begin /*(bool)true*/BLE_FS.begin // SD_MMC is auto started
+  #define SD_begin /*(bool)true*/BLE_FS.begin() // SD_MMC is auto started
   #define tft_initOrientation() tft.setRotation(0) // default orientation for hardware scroll
   #define scrollpanel_height() tft.width() // invert these if scroll fails
   #define scrollpanel_width() tft.height() // invert these if scroll fails
@@ -158,7 +163,7 @@ static const int AMIGABALL_YPOS = 50;
   #define hasHID() (bool)false // disable buttons
   #define hasXPaxShield() (bool) true
   #define snapNeedsScrollReset() (bool)true
-  #define SD_begin /*(bool)true*/BLE_FS.begin // SD_MMC is auto started
+  #define SD_begin /*(bool)true*/BLE_FS.begin() // SD_MMC is auto started
   #define tft_initOrientation() tft.setRotation(2) // default orientation for hardware scroll
   #define scrollpanel_height() tft.height() // invert these if scroll fails
   #define scrollpanel_width() tft.width() // invert these if scroll fails
@@ -171,13 +176,13 @@ static const int AMIGABALL_YPOS = 50;
   #warning WROVER KIT DETECTED !!
 
 
-#elif defined( ARDUINO_T ) || defined( ARDUINO_T_Watch )// || defined( ARDUINO_M5STACK_Core2 ) // M5Core2 loads MPU implicitely
+#elif defined ARDUINO_TWATCH_BASE || defined ARDUINO_TWATCH_2020_V1 || defined ARDUINO_TWATCH_2020_V2 // TTGO T-Watch
 
   // => Hardware select
   // #define LILYGO_WATCH_2019_WITH_TOUCH        // To use T-Watch2019 with touchscreen, please uncomment this line
   // #define LILYGO_WATCH_2019_NO_TOUCH       // To use T-Watch2019 Not touchscreen , please uncomment this line
   // #define LILYGO_WATCH_BLOCK               // To use T-Watch Block , please uncomment this line
-  #define LILYGO_WATCH_2020_V1              // To use T-Watch2020 , please uncomment this line
+  // #define LILYGO_WATCH_2020_V1              // To use T-Watch2020 , please uncomment this line
 
 /*
   // TODO: implement pcf8563.h from https://github.com/Xinyuan-LilyGO/TTGO-T-Watch
@@ -188,22 +193,41 @@ static const int AMIGABALL_YPOS = 50;
   #define RTC_SC  22
 */
 
-  #ifdef LILYGO_WATCH_2019_NO_TOUCH
+  #ifdef ARDUINO_TWATCH_BASE
     #undef hasHID
     #define hasHID() (bool)false // disable buttons
-  #endif
-
-  #if defined LILYGO_WATCH_2019_WITH_TOUCH || defined LILYGO_WATCH_2019_NO_TOUCH
+  #elif defined LILYGO_WATCH_2019_WITH_TOUCH || defined LILYGO_WATCH_2019_NO_TOUCH
     #undef BLE_FS_TYPE
     #define BLE_FS_TYPE "sdcard" // "sd" = fs::SD, "sdcard" = fs::SD_MMC
     #warning "Scroll is fucked up with LILYGO_WATCH_2019 displays :-("
-  #else
+  #else // TWatch 2020-v1 (default), defined ARDUINO_TWATCH_2020_V1 || defined ARDUINO_TWATCH_2020_V2 // TTGO T-Watch
     #undef BLE_FS
     #undef BLE_FS_TYPE
+    #undef SD_begin
+    #undef USE_SD_UPDATER
+
+/*
+    #include <LITTLEFS.h>
+    //#define SPIFFS LITTLEFS
+    #define BLE_FS LITTLEFS // inherited from ESP32-Chimera-Core
+    #define BLE_FS_TYPE "spiffs" // sd = fs::SD, sdcard = fs::SD_MMC, spiffs = fs::SPIFFS, littlefs = fs::LITTLEFS
+    #define SD_begin BLE_FS.begin(true, "/" BLE_FS_TYPE)
+*/
+
+
+    #include <SPIFFS.h>
     #define BLE_FS SPIFFS // inherited from ESP32-Chimera-Core
     #define BLE_FS_TYPE "spiffs" // sd = fs::SD, sdcard = fs::SD_MMC, spiffs = fs::SPIFFS
-    #undef SD_begin
-    #define SD_begin SPIFFS.begin
+    #define SD_begin BLE_FS.begin()
+
+    #undef hasHID
+    //#undef hasXPaxShield
+    #undef hasTouch
+    #define hasHID() (bool)false
+    //#define hasXPaxShield() (bool) false
+    #define hasTouch() (bool) true // inherited LGFX::Touch support
+    //#define INVERT_TOUCH_COORDS
+
   #endif
 
   #undef tft_initOrientation
@@ -223,10 +247,22 @@ static const int AMIGABALL_YPOS = 50;
 
 #endif
 
+#include <ESP32-Chimera-Core.h> // https://github.com/tobozo/ESP32-Chimera-Core
+
+#if defined USE_SD_UPDATER
+  #include <M5StackUpdater.h> // https://github.com/tobozo/M5Stack-SD-Updater
+#endif
+
+#define tft M5.Lcd // syntax sugar
+#include "HID_XPad.h" // external HID
+
 
 static TFT_eSprite gradientSprite( &tft );  // gradient background
 static TFT_eSprite heapGraphSprite( &tft ); // activity graph
 static TFT_eSprite hallOfMacSprite( &tft ); // mac address badge holder
+static TFT_eSprite cursorSprite( &tft );
+static TFT_eSprite magnifierSprite( &tft );
+static TFT_eSprite alphaSprite( &magnifierSprite );
 
 static bool isQuerying = false; // state maintained while SD is accessed, useful when SD is used instead of SD_MMC
 // TODO: make this SD-driver dependant rather than platform dependant
@@ -235,6 +271,237 @@ static bool isInQuery()
   return isQuerying; // M5Stack uses SPI SD, isolate SD accesses from TFT rendering
 }
 
+
+
+
+static int32_t lastCursorX = -1, lastCursorY = -1;
+
+float magnificationLevel = 1.0;
+float zoomFactor         = 2.5;
+
+// zone to captured in the backup
+const uint32_t captureWidth  = 72;
+const uint32_t captureHeight = 144;
+
+const int32_t cursorMargin = 1;
+
+const uint32_t magnifierWidth  = captureWidth  * magnificationLevel;
+const uint32_t magnifierHeight = captureHeight * magnificationLevel;
+
+const uint32_t dpi = 48; // approximate pixels for finger size
+
+// center offset
+const int32_t magnifierOffsetX = magnifierWidth/2;
+const int32_t magnifierOffsetY = magnifierHeight/2 + dpi;
+
+const int32_t captureOffsetX = 0;
+const int32_t captureOffsetY = magnifierHeight+dpi; // over the finger
+
+float cursorAvgX = 0; // for easing
+float cursorAvgY = 0; // for easing
+
+
+void initCursor()
+{
+  cursorSprite.setPsram( false );
+  cursorSprite.setColorDepth( 16 );
+  cursorSprite.createSprite( magnifierWidth, magnifierHeight );
+
+}
+
+
+void clearCursor()
+{
+  if( lastCursorX != -1 && lastCursorY != -1 ) {
+    cursorSprite.pushSprite( lastCursorX-magnifierOffsetX, lastCursorY-magnifierOffsetY );
+  }
+}
+
+
+void resetCursor()
+{
+  clearCursor();
+  lastCursorX = -1;
+  lastCursorY = -1;
+  cursorSprite.deleteSprite();
+  alphaSprite.deleteSprite();
+}
+
+
+void drawCursor( int32_t x, int32_t y )
+{
+
+  // stick touch coords to borders minus margin
+  if( x-cursorMargin <= magnifierOffsetX ) { x = magnifierOffsetX+cursorMargin; }
+  if( y-cursorMargin <= magnifierOffsetY ) { y = magnifierOffsetY+cursorMargin; }
+  if( tft.width()-x  <= magnifierOffsetX+cursorMargin ) { x = tft.width()  - (magnifierOffsetX+cursorMargin); }
+  if( tft.height()-y <= cursorMargin )                  { y = tft.height() - (cursorMargin); }
+
+  // ease x/y values
+  float weight = 0.5; // ranges from 0 to 1, adjust this
+  if( lastCursorX != -1 && lastCursorY != -1 ) {
+    cursorAvgX = (weight * cursorAvgX) + ((1-weight) * x);
+    cursorAvgY = (weight * cursorAvgY) + ((1-weight) * y);
+    x = cursorAvgX;
+    y = cursorAvgY;
+  } else {
+    cursorAvgX = x;
+    cursorAvgY = y;
+  }
+
+  // magnifier x/y position
+  int32_t mgPosX = x-magnifierOffsetX;
+  int32_t mgPosY = y-magnifierOffsetY;
+  // capture zone x/y position in the magnifier
+  //int32_t cpPosX = magnifierWidth-captureWidth/2;
+  //int32_t cpPosY = magnifierHeight-captureHeight/2;
+
+  if( x != lastCursorX || y != lastCursorY ) {
+
+    if( lastCursorX == -1 || lastCursorY == -1 ) {
+      initCursor();
+      // backup the whole zone under the magnifier
+      tft.readRect( mgPosX, mgPosY, magnifierWidth, magnifierHeight, (uint16_t*)cursorSprite.frameBuffer(0) );
+      //log_w("First visit");
+    } else {
+      // backup the differential zone around the magnifier
+      int32_t xoffset, yoffset, xsrc, ysrc, xdst, ydst, w, h;
+      xoffset = x - lastCursorX;
+      yoffset = y - lastCursorY;
+      w = abs(xoffset);
+      h = abs(yoffset);
+
+      if( xoffset>0 ) { // going right
+        xsrc = magnifierWidth-w;
+        xdst = 0;
+      } else {          // going left
+        xsrc = 0;
+        xdst = magnifierWidth-w;
+      }
+
+      if( yoffset>0 ) { // going down
+        ysrc = magnifierHeight-h;
+        ydst = 0;
+      } else {          // going up
+        ysrc = 0;
+        ydst = magnifierHeight-h;
+      }
+
+      if( w > magnifierWidth || h > magnifierHeight ) {
+        // out of previous zone, no need to split draws
+        clearCursor();
+        tft.readRect( mgPosX, mgPosY, magnifierWidth, magnifierHeight, (uint16_t*)cursorSprite.frameBuffer(0) );
+
+      } else {
+        // transfer differential zones
+
+        if( w > 0 ) {
+          uint16_t* block = (uint16_t*)calloc( w*magnifierHeight, sizeof(uint16_t*));
+          cursorSprite.readRect( xdst, 0, w, magnifierHeight, block ); // get the reappearing zone from the "backup" sprite
+          tft.pushImage( (lastCursorX+xdst)-magnifierOffsetX, lastCursorY-magnifierOffsetY, w, magnifierHeight,  block ); // write it back to their original coords on the TFT
+          tft.readRect( (x+xsrc)-magnifierOffsetX, lastCursorY-magnifierOffsetY, w, magnifierHeight, block ); // capture next draw zone before it's covered by the magnifier sprite
+          cursorSprite.scroll( -xoffset, 0 ); // apply the offset
+          cursorSprite.pushImage( xsrc, 0, w, magnifierHeight, block ); // push it back into the "backup" sprite
+          free( block );
+          lastCursorX = x; // translate position for next differential
+          log_d("x/y[%3d:%-3d], last x/y[%3d:%-3d], offsetX[%3d], w[%3d], srcX[%3d], dstX[%3d] Going %s", x, y, lastCursorX, lastCursorY, xoffset, w, xsrc, xdst, xoffset>0 ? "RIGH" : "LEFT" );
+        }
+
+        if( h > 0 ) {
+          uint16_t* block = (uint16_t*)calloc( magnifierWidth*h, sizeof(uint16_t*));
+          cursorSprite.readRect( 0, ydst, magnifierWidth, h, block ); // get the reappearing zone from the "backup" sprite
+          tft.pushImage( lastCursorX-magnifierOffsetX, (lastCursorY+ydst)-magnifierOffsetY,  magnifierWidth, h, block ); // write it back to their original coords on the TFT
+          tft.readRect( lastCursorX-magnifierOffsetX, (y+ysrc)-magnifierOffsetY, magnifierWidth, h, block ); // capture next draw zone before it's covered by the magnifier sprite
+          cursorSprite.scroll( 0, -yoffset ); // apply the offset
+          cursorSprite.pushImage( 0, ysrc, magnifierWidth, h, block ); // push it back into the "backup" sprite
+          free( block );
+          log_d("x/y[%3d:%-3d], last x/y[%3d:%-3d], offsetY[%3d], h[%3d], srcY[%3d], dstY[%3d] Going %s", x, y, lastCursorX, lastCursorY, yoffset, h, ysrc, ydst, yoffset>0 ? "BOTTOM" : "TOP" );
+        }
+
+      } // end redraw differential zones
+
+    } // end redraw sprite memoizer
+
+    // pick a zone in the backup sprite and magnify it
+    magnifierSprite.setPsram( false );
+    magnifierSprite.setColorDepth( 16 );
+    magnifierSprite.createSprite( magnifierWidth, magnifierHeight );
+
+    // magnified view
+    magnifierSprite.pushImageRotateZoom(
+      0, 0,                                  // destination x/y (magnified zone)
+      captureWidth/4, 0,                        // source x/y (captured zone)
+      0, magnificationLevel*zoomFactor, magnificationLevel*zoomFactor, // angle, magnification x/y
+      magnifierWidth, magnifierHeight/4,     // dest width/height
+      (uint16_t*)cursorSprite.frameBuffer(0) // buffer
+    );
+
+    alphaSprite.setPsram( false );
+    alphaSprite.setColorDepth( 16 );
+    alphaSprite.createSprite( magnifierWidth, magnifierHeight );
+    alphaSprite.pushImage(0, 0, magnifierWidth, magnifierHeight, (uint16_t*)cursorSprite.frameBuffer(0) );
+    alphaSprite.fillCircle( magnifierWidth/2, magnifierHeight/4, magnifierHeight/4, TFT_BLACK );
+    alphaSprite.pushSprite( 0, 0, TFT_BLACK );
+    alphaSprite.deleteSprite();
+
+    //magnifierSprite.drawRect( 0, 0, magnifierSprite.width()-1, magnifierSprite.height()-1, TFT_GREEN ); // outline the magnified zone
+    magnifierSprite.drawCircle( magnifierWidth/2, magnifierHeight/4, (magnifierHeight/4)-1, TFT_GREEN ); // looking glass
+    magnifierSprite.drawFastVLine( magnifierWidth/2, magnifierHeight/2, magnifierHeight/4, TFT_GREEN ); // handle
+    // memoize last coords
+    lastCursorX = x;
+    lastCursorY = y;
+    // draw magnified zone
+    magnifierSprite.pushSprite( mgPosX, mgPosY, TFT_WHITE );
+    magnifierSprite.deleteSprite();
+
+  }
+
+}
+
+
+static std::int32_t x, y, lastx = -1, lasty = -1, number = 0;
+auto lasttouch = millis();
+
+void checkCursor()
+{
+  takeMuxSemaphore();
+  tft.startWrite();
+  tft.writecommand(0x11); // Wake display
+  //delay(120); // Delay for pwer supplies to stabilise
+
+  if(tft.getTouch(&x, &y, number))  // collect all touch points
+  {
+
+    #if defined INVERT_TOUCH_COORDS
+      x = tft.width() - (x+1);
+      y = tft.height() - (y+1);
+    #endif
+
+    if( x>0 && y>0 && (lastx != x || lasty != y) ) {
+      drawCursor( x, y );
+      /*
+      UI.brightness = map( y, 0, tft.height(), 255, 0 );
+      tft_setBrightness( UI.brightness );
+      */
+      tft.display();
+      lastx = x;
+      lasty = y;
+      lasttouch = millis();
+    }
+
+  } else {
+    if( lasttouch + 500 < millis() ) {
+      resetCursor();
+    }
+  }
+
+
+  tft.endWrite();
+  giveMuxSemaphore();
+}
+
+
+// TFT_eSPI / LGFX / Chimera-Core API
 
 void tft_begin()
 {
@@ -259,12 +526,43 @@ void tft_begin()
         updateFromFS();
         ESP.restart();
       }
+    } else if( hasTouch() ) {
+
+      std::uint16_t xmin = 0;
+      std::uint16_t xmax = tft.width()-1;
+      std::uint16_t ymin = 0;
+      std::uint16_t ymax = tft.height()-1;
+
+      std::uint16_t parameters[8] =
+        {
+          xmin, ymin // left top
+        , xmin, ymax // left bottom
+        , xmax, ymin // right top
+        , xmax, ymax // right bottom
+
+        };
+
+      tft.setTouchCalibrate(parameters);
+
+      if (tft.touch()) {
+        // yay touch support detected !
+        log_w("LGFX Touch support detected");
+
+        /*
+        std::int32_t x, y, number = 0;
+        while (tft.getTouch(&x, &y, number))  // collect all touch points
+        {
+          log_w("Touch #%d detected at [%d:%d]", number, x, y );
+          tft.fillCircle(x, y, 5, (std::uint32_t)(number * 0x333333u));
+          tft.display();
+
+          ++number;
+        }
+        */
+      }
     }
   #endif
 }
-
-
-// TFT_eSPI / LGFX / Chimera-Core API
 
 void tft_setBrightness( uint8_t brightness )
 {
@@ -385,7 +683,7 @@ void tft_hScrollTo(uint16_t vsp)
 
 void tft_fillGradientHRect( uint16_t x, uint16_t y, uint16_t width, uint16_t height, RGBColor colorstart, RGBColor colorend )
 {
-  log_v("tft_fillGradientHRect( %d, %d, %d, %d )\n", x, y, width, height );
+  log_v("tft_fillGradientHRect( %d, %d, %d, %d )", x, y, width, height );
   gradientSprite.setPsram( false ); // don't bother using psram for that
   //gradientSprite.setSwapBytes( false );
   gradientSprite.setColorDepth( 16 );
