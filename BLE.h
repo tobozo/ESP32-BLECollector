@@ -575,7 +575,8 @@ class BLEScanUtils
       static bool /*yolo*/wget( const char* url, fs::FS &fs, const char* path )
       {
         WiFiClientSecure *client = new WiFiClientSecure;
-        client->setCACert( NULL ); // yolo security
+        //client->setCACert( NULL ); // yolo security
+        client->setInsecure();
 
         const char* UserAgent = "ESP32HTTPClient";
 
@@ -609,9 +610,11 @@ class BLEScanUtils
           http.end();
           if( newlocation != "" ) {
             log_w("Found 302/301 location header: %s", newlocation.c_str() );
+            delete client;
             return wget( newlocation.c_str(), fs, path );
           } else {
             log_e("Empty redirect !!");
+            delete client;
             return false;
           }
         }
@@ -621,12 +624,14 @@ class BLEScanUtils
         if( stream == nullptr ) {
           http.end();
           log_e("Connection failed!");
+          delete client;
           return false;
         }
 
         File outFile = fs.open( path, FILE_WRITE );
         if( ! outFile ) {
           log_e("Can't open %s file to save url %s", path, url );
+          delete client;
           return false;
         }
 
@@ -656,8 +661,10 @@ class BLEScanUtils
           if( bytesLeftToDownload == 0 ) break;
         }
         outFile.close();
-        free( buff );
-        free( client );
+        //free( buff );
+        //free( client );
+        delete buff;
+        delete client;
         return true;
         return fs.exists( path );
       }
@@ -914,7 +921,7 @@ class BLEScanUtils
       vTaskDelete(NULL);
     }
 
-    static void setTimeZome( void * param = NULL )
+    static void setTimeZone( void * param = NULL )
     {
       if( param == NULL ) {
         log_n("Please provide a valid timeZone (0-24), floats are accepted");
@@ -1035,7 +1042,7 @@ class BLEScanUtils
         { "stop",          o->stopScanCB,             "Stop scan" },
         { "toggleFilter",  o->toggleFilterCB,         "Toggle vendor filter on the TFT (persistent)" },
         { "toggleEcho",    o->toggleEchoCB,           "Toggle BLECards in the Serial Console (persistent)" },
-        { "setTimeZone",   o->setTimeZome,            "Set the timezone for next NTP Sync (persistent)"},
+        { "setTimeZone",   o->setTimeZone,            "Set the timezone for next NTP Sync (persistent)"},
         { "setSummerTime", o->setSummerTime,          "Toggle CEST / CET for next NTP Sync (persistent)" },
         { "dump",          o->startDumpCB,            "Dump returning BLE devices to the display and updates DB" },
         { "setBrightness", o->setBrightnessCB,        "Set brightness to [value] (0-255) (persistent)" },
@@ -1167,7 +1174,9 @@ class BLEScanUtils
     static void M5ButtonCheck( unsigned long &lastHidCheck )
     {
       if( lastHidCheck + 150 < millis() ) {
+        takeMuxSemaphore();
         M5.update();
+        giveMuxSemaphore();
         if( M5.BtnA.wasPressed() ) {
           UI.brightness -= UI.brightnessIncrement;
           setBrightnessCB();

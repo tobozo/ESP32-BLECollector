@@ -88,17 +88,17 @@ static const int AMIGABALL_YPOS = 50;
     #define RTC_SDA 21 // pin number
     #define RTC_SCL 22 // pin number
 
-    #undef HAS_GPS
-    #define HAS_GPS true
-    #undef GPS_RX
-    #define GPS_RX 33 // io pin number
-    #undef GPS_TX
-    #define GPS_TX 32 // io pin number
+    // #undef HAS_GPS
+    // #define HAS_GPS true
+    // #undef GPS_RX
+    // #define GPS_RX 33 // io pin number
+    // #undef GPS_TX
+    // #define GPS_TX 32 // io pin number
 
     //#define WITH_WIFI // enable WiFi features since M5Core2 has plenty of ram
 
-    //#undef hasHID
-    //#define hasHID() (bool)false // disable buttons/touch
+    // #undef hasHID
+    // #define hasHID() (bool)false // disable buttons/touch
 
     // adjust per-device core affinity settings here
     //#undef SERIALTASK_CORE
@@ -249,7 +249,19 @@ static const int AMIGABALL_YPOS = 50;
 
 #include <ESP32-Chimera-Core.h> // https://github.com/tobozo/ESP32-Chimera-Core
 
+#if !defined ECC_VERSION_MAJOR || !defined ECC_VERSION_MAJOR || !defined ECC_VERSION_MAJOR
+  #error "This app only uses ESP32-Chimera-Core >= 1.2.3"
+#else
+  #if ((ECC_VERSION_MAJOR << 16) | (ECC_VERSION_MINOR << 8) | (ECC_VERSION_PATCH)) >= ((1 << 16) | (2 << 8) | (3))
+    // yay, minimal version requirements are met !
+  #else
+    #error "This app needs ESP32-Chimera-Core >= 1.2.3"
+  #endif
+#endif
+
+
 #if defined USE_SD_UPDATER
+  #define SDU_APP_NAME PLATFORM_NAME " BLE Collector" // title for SD-Updater UI
   #include <M5StackUpdater.h> // https://github.com/tobozo/M5Stack-SD-Updater
 #endif
 
@@ -517,13 +529,24 @@ void tft_begin()
   #ifdef __M5STACKUPDATER_H
     if( hasHID() ) {
       // build has buttons => enable SD Updater at boot
-      checkSDUpdater();
+      // New SD Updater support, requires the latest version of https://github.com/tobozo/M5Stack-SD-Updater/
+      #if defined M5_SD_UPDATER_VERSION_INT
+        SDUCfg.setLabelMenu("<< Menu");
+        SDUCfg.setLabelSkip("Launch");
+        checkSDUpdater( BLE_FS, MENU_BIN, 5000, TFCARD_CS_PIN ); // Filesystem, Launcher bin path, Wait delay, Sdcard CS pin
+      #else
+        checkSDUpdater();
+      #endif
     } else if( hasXPaxShield() ) {
       XPadShield.init();
       XPadShield.update();
       if( XPadShield.BtnA->wasPressed() ) {
         Serial.println("Will Load menu binary");
-        updateFromFS();
+        #if defined M5_SD_UPDATER_VERSION_INT
+          updateFromFS( BLE_FS, MENU_BIN );
+        #else
+          updateFromFS();
+        #endif
         ESP.restart();
       }
     } else if( hasTouch() ) {

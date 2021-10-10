@@ -133,7 +133,8 @@ struct VendorPsramCacheStruct
 };
 
 
-#define VendorDBSize 1740 // how many entries in the OUI lookup DB
+// #define VendorDBSize 1740 // how many entries in the OUI lookup DB
+#define VendorDBSize 1889 // how many entries in the OUI lookup DB
 VendorPsramCacheStruct** VendorPsramCache = NULL;
 
 // used by getOUI()
@@ -270,14 +271,18 @@ class DBUtils
       setBLEDBPath();
 
       if( !checkDBFiles() ) {
+        log_e("[ERROR] OUI and/or Mac DB Files could not be checked");
         return false;
       } else {
-        log_w("OUI and Mac DB Files okay");
+        log_w("[OK] OUI File: %s", MAC_OUI_NAMES_DB_FS_PATH );
+        log_w("[OK] Vendor File: %s", BLE_VENDOR_NAMES_DB_FS_PATH );
       }
 
       initial_free_heap = freeheap;
       isQuerying = true;
       sqlite3_initialize();
+
+      takeMuxSemaphore();
 
       bool create_DB = false;
 
@@ -301,6 +306,8 @@ class DBUtils
       isQuerying = false;
 
       entries = getEntries();
+
+      giveMuxSemaphore();
 
       return cacheWarmup();
     }
@@ -357,14 +364,14 @@ class DBUtils
       bool ret = true;
       isQuerying = true;
       if( ! BLE_FS.exists( fileName ) ) {
-        log_e( "DB file not found: %s", fileName );
+        log_e( "[ERROR] DB file not found: %s", fileName );
         ret = false;
       } else {
         File tmpFile = BLE_FS.open( fileName );
         size_t size = tmpFile.size();
         tmpFile.close();
         if( size != expectedSize ) {
-          log_e("Critical DB file %s is corrupted (expected: %d, found: %d), aborting", fileName, expectedSize, size);
+          log_e("[CRITITAL] DB file %s is corrupted (expected size: %d, found size: %d), aborting", fileName, expectedSize, size);
           ret = false;
         }
       }
@@ -376,7 +383,7 @@ class DBUtils
     void OUICacheWarmup()
     {
       if( hasPsram ) {
-        OuiPsramCache = (OUIPsramCacheStruct**)ps_calloc(OUIDBSize, sizeof( OUIPsramCacheStruct ) );
+        OuiPsramCache = (OUIPsramCacheStruct**)ps_calloc(OUIDBSize+1, sizeof( OUIPsramCacheStruct* ) );
         for(int i=0; i<OUIDBSize; i++) {
           OuiPsramCache[i] = (OUIPsramCacheStruct*)ps_calloc(1, sizeof( OUIPsramCacheStruct ));
           if( OuiPsramCache[i] == NULL ) {
@@ -397,7 +404,11 @@ class DBUtils
     void VendorCacheWarmup()
     {
       if( hasPsram ) {
-        VendorPsramCache = (VendorPsramCacheStruct**)ps_calloc(VendorDBSize, sizeof( VendorPsramCacheStruct ) );
+        VendorPsramCache = (VendorPsramCacheStruct**)ps_calloc(VendorDBSize+1, sizeof( VendorPsramCacheStruct* ) );
+        if( VendorPsramCache == NULL ) {
+          log_e("[ERROR][%d][%d] can't allocate %d bytes", freeheap, freepsheap, sizeof( VendorPsramCacheStruct* ) );
+        }
+
         for(int i=0; i<VendorDBSize; i++) {
           VendorPsramCache[i] = (VendorPsramCacheStruct*)ps_calloc(1, sizeof( VendorPsramCacheStruct ));
           if( VendorPsramCache[i] == NULL ) {
@@ -770,7 +781,12 @@ class DBUtils
         // cowardly refusing to insert empty result
         return INSERTION_IGNORED;
       }
-      open(BLE_COLLECTOR_DB, false);
+
+      int rc = open(BLE_COLLECTOR_DB, false);
+      if( rc ) {
+        log_e("Can't open database");
+        return INSERTION_FAILED;
+      }
 
       String tmpName      = String( CacheItem->name );
       String tmpOuiname   = String ( CacheItem->ouiname );
@@ -811,12 +827,12 @@ class DBUtils
         CacheItem->hits
       );
       log_d( "[INSERT QUERY] : %s", insertQuery );
-      int rc = DBExec( BLECollectorDB, insertQuery );
+      rc = DBExec( BLECollectorDB, insertQuery );
       if (rc != SQLITE_OK) {
         log_e("SQlite Error occured when heap level was at %d : %s", freeheap, insertQuery);
-        log_e("\nHeap size: %d\n", ESP.getHeapSize());
-        log_e("Free Heap: %d\n", esp_get_free_heap_size());
-        log_e("Min Free Heap: %d\n", esp_get_minimum_free_heap_size());
+        log_e("Heap size: %d\n", ESP.getHeapSize());
+        log_e("Free Heap: %d", esp_get_free_heap_size());
+        log_e("Min Free Heap: %d", esp_get_minimum_free_heap_size());
         close(BLE_COLLECTOR_DB);
         CacheItem->in_db = false;
         return INSERTION_FAILED;
@@ -884,7 +900,7 @@ class DBUtils
     void createDB()
     {
       log_w("Will create %s (POSIX path) database", BLEMacsDbSQLitePath);
-      UI.headerStats("DB: creating...");
+      //UI.headerStats("DB: creating...");
       vTaskDelay(1000 / portTICK_PERIOD_MS);
 
       if( strcmp( BLE_FS_TYPE, "littlefs" ) == 0 ) {
@@ -910,7 +926,7 @@ class DBUtils
         while(1) vTaskDelay(1);
       }
       close(BLE_COLLECTOR_DB);
-      UI.headerStats(" ");
+      //UI.headerStats(" ");
     }
 
     void dropDB()
@@ -974,9 +990,9 @@ class DBUtils
       if( insertBTDevice( CacheItem ) != INSERTION_SUCCESS ) {
         // whoops
         Serial.printf("[BUMMER] Failed to re-insert device %s\n", CacheItem->address);
-        UI.headerStats("Updated failed");
+        //UI.headerStats("Updated failed");
       } else {
-        UI.headerStats("Updated item");
+        //UI.headerStats("Updated item");
       }
     }
 
@@ -985,10 +1001,7 @@ class DBUtils
       UI.headerStats("DB replicating...");
       UI.PrintProgressBar( Out.width );
       for(uint16_t i=0; i<BLEDEVCACHE_SIZE ;i++) {
-        vTaskDelay(5);
-
-        float percent = i*100 / BLEDEVCACHE_SIZE;
-        UI.PrintProgressBar( (Out.width * percent) / 100 );
+        //vTaskDelay(5);
 
         if( isEmpty( SourceCache[i]->address ) ) continue;
         if( SourceCache[i]->is_anonymous ) {
@@ -998,12 +1011,18 @@ class DBUtils
           continue;
         }
         BLEDevTmp = SourceCache[i];
+
+        takeMuxSemaphore();
+        updateItemFromCache( SourceCache[i] );
+        giveMuxSemaphore();
+
         if( showBLECards ) {
+          float percent = i*100 / BLEDEVCACHE_SIZE;
+          UI.PrintProgressBar( (Out.width * percent) / 100 );
           UI.printBLECard( (BlueToothDeviceLink){.cacheIndex=i,.device=BLEDevTmp}/*BLEDevTmp*/ ); // render
         }
-        updateItemFromCache( SourceCache[i] );
 
-        vTaskDelay(5);
+        //vTaskDelay(5);
 
         if( resetAfter ) {
           BLEDevHelper.reset( SourceCache[i] );
@@ -1232,7 +1251,7 @@ class DBUtils
         //BLEDevCacheIndex = BLEDevHelper.getNextCacheIndex(BLEDevRAMCache, BLEDevCacheIndex);
         BLEDevHelper.reset( BLEDevDBCache ); // avoid mixing new and old data
         for (int i = 0; i < argc; i++) {
-          BLEDevHelper.set( BLEDevDBCache, azColName[i], argv[i] ? argv[i] : '\0' );
+          BLEDevHelper.set( BLEDevDBCache, azColName[i], ( argv[i] ? argv[i] : "") );
         }
         BLEDevHelper.set( BLEDevDBCache, "in_db", true );
         BLEDevHelper.set( BLEDevDBCache, "is_anonymous", false );
@@ -1249,6 +1268,12 @@ class DBUtils
     static int VendorDBCallback(void *dataVendor, int argc, char **argv, char **azColName)
     {
       results++;
+      if( results > VendorDBSize ) {
+        log_w("Too many vendors (max=%d, resultid=%d), ignoring callback", VendorDBSize, results);
+        float percent = 100;
+        UI.PrintProgressBar( (Out.width * percent) / 100 );
+        return 0;
+      }
       for (int i = 0; i < argc; i++) {
         if( strcmp( azColName[i], "id" ) == 0 ) {
           log_v("[%d] Attempting to copy result # %d %s, %d", freepsheap, results, argv[i], atoi( argv[i] ) );
@@ -1263,7 +1288,7 @@ class DBUtils
       VendorPsramCache[results-1]->hits = 0;
       if(results%100==0) {
         float percent = results*100 / VendorDBSize;
-        UI.PrintProgressBar( (Out.width * percent) / 100 );
+        //UI.PrintProgressBar( (Out.width * percent) / 100 );
       }
       return 0;
     }
@@ -1272,6 +1297,12 @@ class DBUtils
     static int OUIDBCallback(void *dataOUI, int argc, char **argv, char **azColName)
     {
       results++;
+      if( results > OUIDBSize ) {
+        log_w("Too many OUI's (max=%d, resultid=%d), ignoring callback", OUIDBSize, results);
+        float percent = 100;
+        UI.PrintProgressBar( (Out.width * percent) / 100 );
+        return 0;
+      }
       for (int i = 0; i < argc; i++) {
         if( strcmp( azColName[i], "mac" ) == 0 ) {
           copy( OuiPsramCache[results-1]->mac, argv[i], SHORT_MAC_LEN+1 );
@@ -1283,7 +1314,7 @@ class DBUtils
       OuiPsramCache[results-1]->hits = 0;
       if(results%100==0) {
         float percent = results*100 / OUIDBSize;
-        UI.PrintProgressBar( (Out.width * percent) / 100 );
+        //UI.PrintProgressBar( (Out.width * percent) / 100 );
         log_v("[Copied %d as %s / %s]", results, OuiPsramCache[results-1]->mac, OuiPsramCache[results-1]->assignment );
       }
       return 0;
