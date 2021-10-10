@@ -61,8 +61,7 @@ before_install:
   - install_library "NimBLE-Arduino"
   #- install_library https://github.com/tobozo/ESP32-BLECollector/releases/download/1.3/BLE.zip
   #- install_library https://github.com/tobozo/NimBLE-Arduino/archive/master.zip
-  - install_package "esp32:esp32" "https://dl.espressif.com/dl/package_esp32_index.json" #  # esp32:esp32:m5stack-core-esp32
-  - install_package "m5stack:esp32" "https://m5stack.oss-cn-shenzhen.aliyuncs.com/resource/arduino/package_m5stack_index.json" # m5stack:esp32:m5stack-core2
+  - install_package "esp32:esp32" "https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_dev_index.json"
   - pip install pyserial
 
 script:
@@ -89,7 +88,7 @@ script:
   - build_sketch "${TRAVIS_BUILD_DIR}/ESP32-BLECollector.ino" "esp32:esp32:m5stack-fire:PartitionScheme=default" "false" "newest"
   - cp "/tmp/m5fire/ESP32-BLECollector.ino.bin" "/tmp/BLECollector-binaries/M5Fire-BLECollector.bin"
   - set_ide_preference "build.path=/tmp/m5core2"
-  - build_sketch "${TRAVIS_BUILD_DIR}/ESP32-BLECollector.ino" "m5stack:esp32:m5stack-core2:PartitionScheme=default" "false" "newest"
+  - build_sketch "${TRAVIS_BUILD_DIR}/ESP32-BLECollector.ino" "esp32:esp32:m5stack-core2:PartitionScheme=default" "false" "newest"
   - cp "/tmp/m5core2/ESP32-BLECollector.ino.bin" "/tmp/BLECollector-binaries/M5Core2-BLECollector.bin"
   - ls /tmp/BLECollector-binaries -la
 
