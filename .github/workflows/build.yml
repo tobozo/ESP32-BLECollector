@@ -16,7 +16,9 @@ on:
   pull_request:
 
 jobs:
+
   matrix_build:
+
     name: ${{ matrix.fancy-name }}
 
     runs-on: ubuntu-latest
@@ -74,10 +76,12 @@ jobs:
       - name: Upload artifact ${{ matrix.bin-name }}
         uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.fancy-name }}
+          name: ${{ matrix.bin-name }}
           path: /home/runner/ESP32-BLECollector/build/${{ matrix.bin-name }}
 
   post_build:
+
+    name: Gather Artefacts
 
     runs-on: ubuntu-latest
 
@@ -90,4 +94,13 @@ jobs:
         id: download
         with:
           path: /home/runner/builds
-
+      - run: ls /home/runner/builds/M5stack-BLECollector.bin -la
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            /home/runner/builds/M5stack-BLECollector.bin
+            /home/runner/builds/M5Core2-BLECollector.bin
+            /home/runner/builds/M5Fire-BLECollector.bin
+            /home/runner/builds/OdroidGo-BLECollector.bin
