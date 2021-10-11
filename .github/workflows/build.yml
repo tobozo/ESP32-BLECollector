@@ -96,18 +96,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      - name: Create artifacts dir
+        if: startsWith(github.ref, 'refs/tags/')
+        run: mkdir -p /home/runner/builds
+
       - name: Download artifacts
         uses: actions/download-artifact@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          path: .
+          path: /home/runner/builds
 
       - name: Release check
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            M5stack-BLECollector.bin
-            M5Core2-BLECollector.bin
-            M5Fire-BLECollector.bin
-            OdroidGo-BLECollector.bin
+            /home/runner/builds/M5stack-BLECollector.bin
+            /home/runner/builds/M5Core2-BLECollector.bin
+            /home/runner/builds/M5Fire-BLECollector.bin
+            /home/runner/builds/OdroidGo-BLECollector.bin
