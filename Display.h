@@ -32,8 +32,6 @@
 #define tft_drawBitmap tft.drawBitmap
 #define SD_begin M5.sd_begin() //M5StackSDBegin // BLE_FS.begin
 #define hasHID() (bool)true // inherited M5.Button support
-#define hasXPaxShield() (bool) false // custom buttons support (e.g. I2C keyboard)
-#define hasTouch() (bool) false // inherited LGFX::Touch support
 #define snapNeedsScrollReset() (bool)false // some TFT models need a scroll reset before screen capture
 #define BLE_FS_TYPE "sd" // sd = fs::SD, sdcard = fs::SD_MMC
 #define SKIP_INTRO // don't play intro (tft spi access messes up SD/DB init)
@@ -65,11 +63,7 @@ static const int AMIGABALL_YPOS = 50;
     #define tft_initOrientation() tft.setRotation(0)
 
     #undef hasHID
-    #undef hasXPaxShield
-    #undef hasTouch
     #define hasHID() (bool)false
-    #define hasXPaxShield() (bool) false
-    #define hasTouch() (bool) true // inherited LGFX::Touch support
 
   #elif defined( ARDUINO_ODROID_ESP32 ) // M5Core2
 
@@ -144,7 +138,6 @@ static const int AMIGABALL_YPOS = 50;
   #undef HAS_EXTERNAL_RTC
   #undef HAS_GPS
   #undef hasHID
-  #undef hasXPaxShield
   #undef snapNeedsScrollReset
   #undef SD_begin
   #undef scrollpanel_height
@@ -161,7 +154,6 @@ static const int AMIGABALL_YPOS = 50;
   #define HAS_EXTERNAL_RTC true // will use RTC_SDA and RTC_SCL from settings.h
   #define HAS_GPS true // will use GPS_RX and GPS_TX from settings.h
   #define hasHID() (bool)false // disable buttons
-  #define hasXPaxShield() (bool) true
   #define snapNeedsScrollReset() (bool)true
   #define SD_begin /*(bool)true*/BLE_FS.begin() // SD_MMC is auto started
   #define tft_initOrientation() tft.setRotation(2) // default orientation for hardware scroll
@@ -222,11 +214,8 @@ static const int AMIGABALL_YPOS = 50;
 
     #undef hasHID
     //#undef hasXPaxShield
-    #undef hasTouch
     #define hasHID() (bool)false
     //#define hasXPaxShield() (bool) false
-    #define hasTouch() (bool) true // inherited LGFX::Touch support
-    //#define INVERT_TOUCH_COORDS
 
   #endif
 
@@ -266,15 +255,12 @@ static const int AMIGABALL_YPOS = 50;
 #endif
 
 #define tft M5.Lcd // syntax sugar
-#include "HID_XPad.h" // external HID
+//#include "HID_XPad.h" // external HID
 
 
 static TFT_eSprite gradientSprite( &tft );  // gradient background
 static TFT_eSprite heapGraphSprite( &tft ); // activity graph
 static TFT_eSprite hallOfMacSprite( &tft ); // mac address badge holder
-static TFT_eSprite cursorSprite( &tft );
-static TFT_eSprite magnifierSprite( &tft );
-static TFT_eSprite alphaSprite( &magnifierSprite );
 
 static bool isQuerying = false; // state maintained while SD is accessed, useful when SD is used instead of SD_MMC
 // TODO: make this SD-driver dependant rather than platform dependant
@@ -284,233 +270,6 @@ static bool isInQuery()
 }
 
 
-
-
-static int32_t lastCursorX = -1, lastCursorY = -1;
-
-float magnificationLevel = 1.0;
-float zoomFactor         = 2.5;
-
-// zone to captured in the backup
-const uint32_t captureWidth  = 72;
-const uint32_t captureHeight = 144;
-
-const int32_t cursorMargin = 1;
-
-const uint32_t magnifierWidth  = captureWidth  * magnificationLevel;
-const uint32_t magnifierHeight = captureHeight * magnificationLevel;
-
-const uint32_t dpi = 48; // approximate pixels for finger size
-
-// center offset
-const int32_t magnifierOffsetX = magnifierWidth/2;
-const int32_t magnifierOffsetY = magnifierHeight/2 + dpi;
-
-const int32_t captureOffsetX = 0;
-const int32_t captureOffsetY = magnifierHeight+dpi; // over the finger
-
-float cursorAvgX = 0; // for easing
-float cursorAvgY = 0; // for easing
-
-
-void initCursor()
-{
-  cursorSprite.setPsram( false );
-  cursorSprite.setColorDepth( 16 );
-  cursorSprite.createSprite( magnifierWidth, magnifierHeight );
-
-}
-
-
-void clearCursor()
-{
-  if( lastCursorX != -1 && lastCursorY != -1 ) {
-    cursorSprite.pushSprite( lastCursorX-magnifierOffsetX, lastCursorY-magnifierOffsetY );
-  }
-}
-
-
-void resetCursor()
-{
-  clearCursor();
-  lastCursorX = -1;
-  lastCursorY = -1;
-  cursorSprite.deleteSprite();
-  alphaSprite.deleteSprite();
-}
-
-
-void drawCursor( int32_t x, int32_t y )
-{
-
-  // stick touch coords to borders minus margin
-  if( x-cursorMargin <= magnifierOffsetX ) { x = magnifierOffsetX+cursorMargin; }
-  if( y-cursorMargin <= magnifierOffsetY ) { y = magnifierOffsetY+cursorMargin; }
-  if( tft.width()-x  <= magnifierOffsetX+cursorMargin ) { x = tft.width()  - (magnifierOffsetX+cursorMargin); }
-  if( tft.height()-y <= cursorMargin )                  { y = tft.height() - (cursorMargin); }
-
-  // ease x/y values
-  float weight = 0.5; // ranges from 0 to 1, adjust this
-  if( lastCursorX != -1 && lastCursorY != -1 ) {
-    cursorAvgX = (weight * cursorAvgX) + ((1-weight) * x);
-    cursorAvgY = (weight * cursorAvgY) + ((1-weight) * y);
-    x = cursorAvgX;
-    y = cursorAvgY;
-  } else {
-    cursorAvgX = x;
-    cursorAvgY = y;
-  }
-
-  // magnifier x/y position
-  int32_t mgPosX = x-magnifierOffsetX;
-  int32_t mgPosY = y-magnifierOffsetY;
-  // capture zone x/y position in the magnifier
-  //int32_t cpPosX = magnifierWidth-captureWidth/2;
-  //int32_t cpPosY = magnifierHeight-captureHeight/2;
-
-  if( x != lastCursorX || y != lastCursorY ) {
-
-    if( lastCursorX == -1 || lastCursorY == -1 ) {
-      initCursor();
-      // backup the whole zone under the magnifier
-      tft.readRect( mgPosX, mgPosY, magnifierWidth, magnifierHeight, (uint16_t*)cursorSprite.frameBuffer(0) );
-      //log_w("First visit");
-    } else {
-      // backup the differential zone around the magnifier
-      int32_t xoffset, yoffset, xsrc, ysrc, xdst, ydst, w, h;
-      xoffset = x - lastCursorX;
-      yoffset = y - lastCursorY;
-      w = abs(xoffset);
-      h = abs(yoffset);
-
-      if( xoffset>0 ) { // going right
-        xsrc = magnifierWidth-w;
-        xdst = 0;
-      } else {          // going left
-        xsrc = 0;
-        xdst = magnifierWidth-w;
-      }
-
-      if( yoffset>0 ) { // going down
-        ysrc = magnifierHeight-h;
-        ydst = 0;
-      } else {          // going up
-        ysrc = 0;
-        ydst = magnifierHeight-h;
-      }
-
-      if( w > magnifierWidth || h > magnifierHeight ) {
-        // out of previous zone, no need to split draws
-        clearCursor();
-        tft.readRect( mgPosX, mgPosY, magnifierWidth, magnifierHeight, (uint16_t*)cursorSprite.frameBuffer(0) );
-
-      } else {
-        // transfer differential zones
-
-        if( w > 0 ) {
-          uint16_t* block = (uint16_t*)calloc( w*magnifierHeight, sizeof(uint16_t*));
-          cursorSprite.readRect( xdst, 0, w, magnifierHeight, block ); // get the reappearing zone from the "backup" sprite
-          tft.pushImage( (lastCursorX+xdst)-magnifierOffsetX, lastCursorY-magnifierOffsetY, w, magnifierHeight,  block ); // write it back to their original coords on the TFT
-          tft.readRect( (x+xsrc)-magnifierOffsetX, lastCursorY-magnifierOffsetY, w, magnifierHeight, block ); // capture next draw zone before it's covered by the magnifier sprite
-          cursorSprite.scroll( -xoffset, 0 ); // apply the offset
-          cursorSprite.pushImage( xsrc, 0, w, magnifierHeight, block ); // push it back into the "backup" sprite
-          free( block );
-          lastCursorX = x; // translate position for next differential
-          log_d("x/y[%3d:%-3d], last x/y[%3d:%-3d], offsetX[%3d], w[%3d], srcX[%3d], dstX[%3d] Going %s", x, y, lastCursorX, lastCursorY, xoffset, w, xsrc, xdst, xoffset>0 ? "RIGH" : "LEFT" );
-        }
-
-        if( h > 0 ) {
-          uint16_t* block = (uint16_t*)calloc( magnifierWidth*h, sizeof(uint16_t*));
-          cursorSprite.readRect( 0, ydst, magnifierWidth, h, block ); // get the reappearing zone from the "backup" sprite
-          tft.pushImage( lastCursorX-magnifierOffsetX, (lastCursorY+ydst)-magnifierOffsetY,  magnifierWidth, h, block ); // write it back to their original coords on the TFT
-          tft.readRect( lastCursorX-magnifierOffsetX, (y+ysrc)-magnifierOffsetY, magnifierWidth, h, block ); // capture next draw zone before it's covered by the magnifier sprite
-          cursorSprite.scroll( 0, -yoffset ); // apply the offset
-          cursorSprite.pushImage( 0, ysrc, magnifierWidth, h, block ); // push it back into the "backup" sprite
-          free( block );
-          log_d("x/y[%3d:%-3d], last x/y[%3d:%-3d], offsetY[%3d], h[%3d], srcY[%3d], dstY[%3d] Going %s", x, y, lastCursorX, lastCursorY, yoffset, h, ysrc, ydst, yoffset>0 ? "BOTTOM" : "TOP" );
-        }
-
-      } // end redraw differential zones
-
-    } // end redraw sprite memoizer
-
-    // pick a zone in the backup sprite and magnify it
-    magnifierSprite.setPsram( false );
-    magnifierSprite.setColorDepth( 16 );
-    magnifierSprite.createSprite( magnifierWidth, magnifierHeight );
-
-    // magnified view
-    magnifierSprite.pushImageRotateZoom(
-      0, 0,                                  // destination x/y (magnified zone)
-      captureWidth/4, 0,                        // source x/y (captured zone)
-      0, magnificationLevel*zoomFactor, magnificationLevel*zoomFactor, // angle, magnification x/y
-      magnifierWidth, magnifierHeight/4,     // dest width/height
-      (uint16_t*)cursorSprite.frameBuffer(0) // buffer
-    );
-
-    alphaSprite.setPsram( false );
-    alphaSprite.setColorDepth( 16 );
-    alphaSprite.createSprite( magnifierWidth, magnifierHeight );
-    alphaSprite.pushImage(0, 0, magnifierWidth, magnifierHeight, (uint16_t*)cursorSprite.frameBuffer(0) );
-    alphaSprite.fillCircle( magnifierWidth/2, magnifierHeight/4, magnifierHeight/4, TFT_BLACK );
-    alphaSprite.pushSprite( 0, 0, TFT_BLACK );
-    alphaSprite.deleteSprite();
-
-    //magnifierSprite.drawRect( 0, 0, magnifierSprite.width()-1, magnifierSprite.height()-1, TFT_GREEN ); // outline the magnified zone
-    magnifierSprite.drawCircle( magnifierWidth/2, magnifierHeight/4, (magnifierHeight/4)-1, TFT_GREEN ); // looking glass
-    magnifierSprite.drawFastVLine( magnifierWidth/2, magnifierHeight/2, magnifierHeight/4, TFT_GREEN ); // handle
-    // memoize last coords
-    lastCursorX = x;
-    lastCursorY = y;
-    // draw magnified zone
-    magnifierSprite.pushSprite( mgPosX, mgPosY, TFT_WHITE );
-    magnifierSprite.deleteSprite();
-
-  }
-
-}
-
-
-static std::int32_t x, y, lastx = -1, lasty = -1, number = 0;
-auto lasttouch = millis();
-
-void checkCursor()
-{
-  takeMuxSemaphore();
-  tft.startWrite();
-  tft.writecommand(0x11); // Wake display
-  //delay(120); // Delay for pwer supplies to stabilise
-
-  if(tft.getTouch(&x, &y, number))  // collect all touch points
-  {
-
-    #if defined INVERT_TOUCH_COORDS
-      x = tft.width() - (x+1);
-      y = tft.height() - (y+1);
-    #endif
-
-    if( x>0 && y>0 && (lastx != x || lasty != y) ) {
-      drawCursor( x, y );
-      /*
-      UI.brightness = map( y, 0, tft.height(), 255, 0 );
-      tft_setBrightness( UI.brightness );
-      */
-      tft.display();
-      lastx = x;
-      lasty = y;
-      lasttouch = millis();
-    }
-
-  } else {
-    if( lasttouch + 500 < millis() ) {
-      resetCursor();
-    }
-  }
-
-
-  tft.endWrite();
-  giveMuxSemaphore();
-}
 
 
 // TFT_eSPI / LGFX / Chimera-Core API
@@ -537,52 +296,6 @@ void tft_begin()
       #else
         checkSDUpdater();
       #endif
-    } else if( hasXPaxShield() ) {
-      XPadShield.init();
-      XPadShield.update();
-      if( XPadShield.BtnA->wasPressed() ) {
-        Serial.println("Will Load menu binary");
-        #if defined M5_SD_UPDATER_VERSION_INT
-          updateFromFS( BLE_FS, MENU_BIN );
-        #else
-          updateFromFS();
-        #endif
-        ESP.restart();
-      }
-    } else if( hasTouch() ) {
-
-      std::uint16_t xmin = 0;
-      std::uint16_t xmax = tft.width()-1;
-      std::uint16_t ymin = 0;
-      std::uint16_t ymax = tft.height()-1;
-
-      std::uint16_t parameters[8] =
-        {
-          xmin, ymin // left top
-        , xmin, ymax // left bottom
-        , xmax, ymin // right top
-        , xmax, ymax // right bottom
-
-        };
-
-      tft.setTouchCalibrate(parameters);
-
-      if (tft.touch()) {
-        // yay touch support detected !
-        log_w("LGFX Touch support detected");
-
-        /*
-        std::int32_t x, y, number = 0;
-        while (tft.getTouch(&x, &y, number))  // collect all touch points
-        {
-          log_w("Touch #%d detected at [%d:%d]", number, x, y );
-          tft.fillCircle(x, y, 5, (std::uint32_t)(number * 0x333333u));
-          tft.display();
-
-          ++number;
-        }
-        */
-      }
     }
   #endif
 }

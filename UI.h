@@ -188,8 +188,6 @@ class UIUtils
     byte brightness = BASE_BRIGHTNESS; // multiple of 8 otherwise can't turn off ^^
     byte brightnessIncrement = 8;
     bool BLEStarted = false;
-    bool cursorVisible = false;
-    int16_t cursorX, cursorY;
 
     struct BLECardStyle
     {
@@ -214,10 +212,8 @@ class UIUtils
     {
 
       Serial.println(welcomeMessage);
-      Serial.printf("  HAS HID: %s,\n  HAS_XPAD: %s\n  HAS TOUCH: %s\n  HAS PSRAM: %s\n  HAS_EXTERNAL_RTC: %s\n  HAS_GPS: %s\n  TIME_UPDATE_SOURCE: %d\n",
+      Serial.printf("  HAS HID: %s,\n  HAS PSRAM: %s\n  HAS_EXTERNAL_RTC: %s\n  HAS_GPS: %s\n  TIME_UPDATE_SOURCE: %d\n",
         hasHID() ? "true" : "false",
-        hasXPaxShield() ? "true" : "false",
-        hasTouch() ? "true" : "false",
         psramInit() ? "true" : "false",
         HAS_EXTERNAL_RTC ? "true" : "false",
         HAS_GPS ? "true" : "false",

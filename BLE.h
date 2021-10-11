@@ -326,12 +326,6 @@ class BLEScanUtils
       if( hasHID() ) {
         ProcessHID = M5ButtonCheck;
         log_w("Using native M5Buttons");
-      } else if( hasXPaxShield() ) {
-        ProcessHID = XPadButtonCheck;
-        log_w("Using XPAD Shield");
-      } else if( hasTouch() ) {
-        ProcessHID = TouchCheck;
-        log_w("Using LGFX Touch");
       } else {
         ProcessHID = NoHIDCheck;
         log_w("NO HID enabled");
@@ -1189,70 +1183,6 @@ class BLEScanUtils
           toggleFilterCB();
         }
         lastHidCheck = millis();
-      }
-    }
-
-    static void TouchCheck( unsigned long &lastHidCheck )
-    {
-      checkCursor();
-    }
-
-
-    static void XPadButtonCheck( unsigned long &lastHidCheck )
-    {
-      takeMuxSemaphore();
-      XPadShield.update();
-      giveMuxSemaphore();
-
-      if( XPadShield.wasPressed() ) { // on release
-
-        // XPadShield.BtnA.wasPressed(); would work but xpad support simultaneous buttons push
-        // so a stricter approach is chosen
-
-        switch( XPadShield.state ) {
-          case 0x01: // down
-            log_w("XPadShield->down");
-            UI.brightness -= UI.brightnessIncrement;
-            setBrightnessCB();
-          break;
-          case 0x02: // up
-            log_w("XPadShield->up");
-            UI.brightness += UI.brightnessIncrement;
-            setBrightnessCB();
-          break;
-          case 0x04: // right
-            log_w("XPadShield->right");
-          break;
-          case 0x08: // leftheader_jpg
-            log_w("XPadShield->left");
-          break;
-          case 0x10: // B
-            log_w("XPadShield->B");
-            runCommand( (char*)"toggleFilter");
-          break;
-          case 0x20: // A
-            log_w("XPadShield->A");
-            if ( scanTaskRunning ) {
-              runCommand( (char*)"stop");
-            } else {
-              runCommand( (char*)"start");
-            }
-          break;
-          case 0x40: // C
-            log_w("XPadShield->C");
-            runCommand( (char*)"toggleFilter");
-          break;
-          case 0x80: // D
-            log_w("XPadShield->D");
-          break;
-          case 0xff: // probably bad I2C bus otherwise sour fingers
-          case 0x00: // no button pushed
-            // ignore
-          break;
-          default: // simultaneous buttons push
-            log_w("XPadShield->Combined: 0x%02x", XPadShield.state);
-          break;
-        }
       }
     }
 
