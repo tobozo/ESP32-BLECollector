@@ -75,6 +75,7 @@ jobs:
 
       - name: Upload artifact ${{ matrix.bin-name }}
         uses: actions/upload-artifact@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           name: ${{ matrix.bin-name }}
           path: /home/runner/ESP32-BLECollector/build/${{ matrix.bin-name }}
@@ -85,13 +86,19 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    # wait until matrix jobs are all finished
     needs: matrix_build
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
       - name: Download artifacts
         uses: actions/download-artifact@v2
+        if: startsWith(github.ref, 'refs/tags/')
         with:
           path: .
+
       - name: Release check
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
