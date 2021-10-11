@@ -78,7 +78,7 @@ jobs:
           path: /home/runner/ESP32-BLECollector/build/${{ matrix.bin-name }}
 
   post_build:
-    needs: [build]
+    needs: build
     steps:
       - run: mkdir -p /home/runner/builds
       - name: Download artifacts
