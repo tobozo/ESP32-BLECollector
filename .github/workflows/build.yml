@@ -2,6 +2,7 @@ name: Build
 
 env:
   SKETCH_NAME: "*.ino"
+  PROJECT_NAME: ESP32-BLECollector
 
 on:
   push:
@@ -68,11 +69,11 @@ jobs:
           set-build-path: true
 
       - name: Copy compiled binary
-        run:  cd ${{ github.workspace }}/src/ESP32-BLECollector/build && ls && cp ESP32-BLECollector.ino.bin ${{ matrix.bin-name }}
+        run:  cd /home/runner/ESP32-BLECollector/build && ls && cp ESP32-BLECollector.ino.bin ${{ matrix.bin-name }}
 
       - name: Upload artifact ${{ matrix.bin-name }}
         uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.fancy-name }}
-          path: ${{ github.workspace }}/src/ESP32-BLECollector/build/${{ matrix.bin-name }}
+          path: /home/runner/ESP32-BLECollector/build/${{ matrix.bin-name }}
 
