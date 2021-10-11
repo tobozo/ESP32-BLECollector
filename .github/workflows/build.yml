@@ -37,15 +37,15 @@ jobs:
           - ESP32-Chimera-Core,Time,LovyanGFX,M5Stack-SD-Updater,Sqlite3Esp32,TinyGPSPlus,NimBLE-Arduino
 
         include:
-          - arduino-boards-fqbn: esp32:esp32:esp32wroverkit
+          - arduino-boards-fqbn: esp32:esp32:esp32wroverkit:PartitionScheme=min_spiffs
             fancy-name: ESP32 Wrover Kit
-          - arduino-boards-fqbn: esp32:esp32:m5stack-core-esp32
+          - arduino-boards-fqbn: esp32:esp32:m5stack-core-esp32:PartitionScheme=min_spiffs
             fancy-name: M5Stack
           - arduino-boards-fqbn: esp32:esp32:m5stack-core2
             fancy-name: M5Core2
           - arduino-boards-fqbn: esp32:esp32:m5stack-fire
             fancy-name: M5Fire
-          - arduino-boards-fqbn: esp32:esp32:odroid_esp32
+          - arduino-boards-fqbn: esp32:esp32:odroid_esp32:PartitionScheme=min_spiffs
             fancy-name: OdroidGo
 
       fail-fast: false
