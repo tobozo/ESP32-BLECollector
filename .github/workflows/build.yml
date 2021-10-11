@@ -38,12 +38,16 @@ jobs:
         include:
           - arduino-boards-fqbn: esp32:esp32:m5stack-core-esp32:PartitionScheme=min_spiffs
             fancy-name: M5Stack
+            bin-name: M5stack-BLECollector.bin
           - arduino-boards-fqbn: esp32:esp32:m5stack-core2
             fancy-name: M5Core2
+            bin-name: M5Core2-BLECollector.bin
           - arduino-boards-fqbn: esp32:esp32:m5stack-fire
             fancy-name: M5Fire
+            bin-name: M5Fire-BLECollector.bin
           - arduino-boards-fqbn: esp32:esp32:odroid_esp32:PartitionScheme=min_spiffs
             fancy-name: OdroidGo
+            bin-name: OdroidGo-BLECollector.bin
 
       fail-fast: false
 
@@ -62,4 +66,13 @@ jobs:
           build-properties: ${{ toJson(matrix.build-properties) }}
           sketch-names: ${{ env.SKETCH_NAME }}
           set-build-path: true
+
+      - run: |
+        ls build
+        cp build/ESP32-Chimera-Core.bin build/${{ matrix.bin-name }}
+      - name: Upload artifact ${{ matrix.bin-name }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.fancy-name }}
+          path: build/${{ matrix.bin-name }}
 
