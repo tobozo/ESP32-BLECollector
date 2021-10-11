@@ -33,7 +33,8 @@ jobs:
         platform-url:
           - https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_dev_index.json
 
-        required-libraries: ESP32-Chimera-Core,Time,LovyanGFX,M5Stack-SD-Updater,Sqlite3Esp32,TinyGPSPlus,NimBLE-Arduino
+        required-libraries:
+          - ESP32-Chimera-Core,Time,LovyanGFX,M5Stack-SD-Updater,Sqlite3Esp32,TinyGPSPlus,NimBLE-Arduino
           #- ESP32-Chimera-Core
           #- https://github.com/PaulStoffregen/Time/archive/master.zip
           #- LovyanGFX
