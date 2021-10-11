@@ -15,6 +15,14 @@ bool M5StackSDBegin()
 }
 
 
+static const char* _FSFilePath( fs::File *file ) {
+  #if defined ESP_IDF_VERSION_MAJOR && ESP_IDF_VERSION_MAJOR >= 4
+    return file->path();
+  #else
+    return file->name();
+  #endif
+}
+
 
 bool SDSetup()
 {
@@ -22,7 +30,7 @@ bool SDSetup()
   unsigned long max_wait = 500;
   byte attempts = 100;
   while ( sd_mounted == false && attempts>0) {
-    if ( SD_begin() ) {
+    if ( SD_begin ) {
       sd_mounted = true;
     } else {
       log_e("[SD] Mount Failed");
@@ -79,7 +87,7 @@ static void listDirs(fs::FS &fs, const char * dirname, uint8_t levels, const cha
       // time is not set
     }
     if(file.isDirectory()) {
-      Serial.printf( "    %-32s | %20s | DIRECTORY\n", file.name(), fileDate );
+      Serial.printf( "    %-32s | %20s | DIRECTORY\n", _FSFilePath( &file ), fileDate );
     }
     file.close();
     file = root.openNextFile();
@@ -121,7 +129,7 @@ static void listFiles(fs::FS &fs, const char * dirname, uint8_t levels, const ch
     }
 
     if(!file.isDirectory()) {
-      const char* fileName = file.name();
+      const char* fileName = _FSFilePath ( &file );
       unsigned long fileSize = file.size();
       if( needle!=NULL && strcmp( fileName, needle ) == 0 ) {
         Serial.printf( "*   %-32s | %20s | %8ld Bytes\n", fileName, fileDate, fileSize );

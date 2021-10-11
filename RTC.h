@@ -111,7 +111,7 @@
 
   bool BLE_RTC_BM8563::begin(uint8_t sdaPin, uint8_t sclPin)
   {
-    M5_RTC.begin();
+   // rtc begin is now implicit with M5Core2
     return true;
   }
 

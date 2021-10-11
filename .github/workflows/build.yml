@@ -1,0 +1,113 @@
+name: Build
+
+env:
+  SKETCH_NAME: "*.ino"
+  PROJECT_NAME: ESP32-BLECollector
+
+on:
+  push:
+    paths:
+    - '**.ino'
+    - '**.cpp'
+    - '**.hpp'
+    - '**.h'
+    - '**.c'
+    - '**build.yml'
+  pull_request:
+  release:
+    types: [published]
+
+jobs:
+
+  matrix_build:
+
+    name: ${{ matrix.fancy-name }}
+
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+
+        arduino-boards-fqbn:
+          - esp32:esp32:m5stack-core-esp32:PartitionScheme=min_spiffs
+          - esp32:esp32:m5stack-fire
+          - esp32:esp32:m5stack-core2
+          - esp32:esp32:odroid_esp32:PartitionScheme=min_spiffs
+
+        platform-url:
+          - https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_dev_index.json
+
+        required-libraries:
+          - ESP32-Chimera-Core,Time,LovyanGFX,M5Stack-SD-Updater,Sqlite3Esp32,TinyGPSPlus,NimBLE-Arduino
+
+        include:
+          - arduino-boards-fqbn: esp32:esp32:m5stack-core-esp32:PartitionScheme=min_spiffs
+            fancy-name: M5Stack
+            bin-name: M5stack-BLECollector.bin
+          - arduino-boards-fqbn: esp32:esp32:m5stack-core2
+            fancy-name: M5Core2
+            bin-name: M5Core2-BLECollector.bin
+          - arduino-boards-fqbn: esp32:esp32:m5stack-fire
+            fancy-name: M5Fire
+            bin-name: M5Fire-BLECollector.bin
+          - arduino-boards-fqbn: esp32:esp32:odroid_esp32:PartitionScheme=min_spiffs
+            fancy-name: OdroidGo
+            bin-name: OdroidGo-BLECollector.bin
+
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Compile example
+        uses: ArminJo/arduino-test-compile@v3
+        with:
+          arduino-board-fqbn: ${{ matrix.arduino-boards-fqbn }}
+          platform-url: ${{ matrix.platform-url }}
+          required-libraries: ${{ matrix.required-libraries }}
+          build-properties: ${{ toJson(matrix.build-properties) }}
+          sketch-names: ${{ env.SKETCH_NAME }}
+          set-build-path: true
+
+      - name: Copy compiled binary
+        if: startsWith(github.ref, 'refs/tags/')
+        run:  cd /home/runner/ESP32-BLECollector/build && ls && cp ESP32-BLECollector.ino.bin ${{ matrix.bin-name }}
+
+      - name: Upload artifact ${{ matrix.bin-name }}
+        uses: actions/upload-artifact@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: ${{ matrix.bin-name }}
+          path: /home/runner/ESP32-BLECollector/build/${{ matrix.bin-name }}
+
+  post_build:
+
+    name: Gather Artefacts
+
+    runs-on: ubuntu-latest
+
+    # wait until matrix jobs are all finished
+    needs: matrix_build
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          path: .
+
+      - name: Release check
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            M5stack-BLECollector.bin
+            M5Core2-BLECollector.bin
+            M5Fire-BLECollector.bin
+            OdroidGo-BLECollector.bin

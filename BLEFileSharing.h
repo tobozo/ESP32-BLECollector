@@ -116,7 +116,7 @@ static void setBLETime()
   TimeIsSet = true;
 }
 
-
+/*
 static void TimeClientNotifyCallback( BLERemoteCharacteristic* pBLERemoteCharacteristic, uint8_t* pData, size_t length, bool isNotify )
 {
   //pBLERemoteCharacteristic->getHandle();
@@ -124,6 +124,7 @@ static void TimeClientNotifyCallback( BLERemoteCharacteristic* pBLERemoteCharact
   memcpy( &BLERemoteTime, pData, length );
   setBLETime();
 };
+*/
 
 class TimeClientCallbacks : public BLEClientCallbacks
 {
@@ -141,6 +142,13 @@ class TimeClientCallbacks : public BLEClientCallbacks
         log_w("[Heap: %06d] Disconnect with time!!", freeheap);
       }
     }
+    /*
+    void onNotify(BLECLient *pC) {
+      log_w("Received time");
+      memcpy( &BLERemoteTime, pC->getRemoteCharacteristic()->getData(), pC->getRemoteCharacteristic()->getDataLength() );
+      setBLETime();
+    }
+    */
 };
 
 TimeClientCallbacks *TimeClientCallback;
@@ -190,7 +198,7 @@ static void TimeClientTask( void * param )
     vTaskDelete( NULL ); return;
   }
   log_w("[Heap: %06d] registering for notification", freeheap);
-  TimeRemoteChar->registerForNotify( TimeClientNotifyCallback );
+  TimeRemoteChar->subscribe( true/*TimeClientNotifyCallback*/ );
   TickType_t last_wake_time;
   last_wake_time = xTaskGetTickCount();
 

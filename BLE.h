@@ -284,14 +284,15 @@ class BLEScanUtils
     void init()
     {
       Serial.begin(115200);
+      mux = xSemaphoreCreateMutex();
       BLEDevice::init( PLATFORM_NAME " BLE Collector");
       getPrefs(); // load prefs from NVS
       UI.init(); // launch all UI tasks
       UI.BLEStarted = true;
       setBrightnessCB(); // apply thawed brightness
       VendorFilterIcon.setStatus( UI.filterVendors ? ICON_STATUS_filter : ICON_STATUS_filter_unset );
-      doStartSerialTask(); // start listening to serial commands
       doStartDBInit(); // init the DB
+      doStartSerialTask(); // start listening to serial commands
       // only autorun commands on regular boot or after a crash, ignore after software reset
       if (resetReason != 12) { // HW Reset
         runCommand( (char*)"help" );
@@ -303,7 +304,7 @@ class BLEScanUtils
 
     static void doStartDBInit()
     {
-      xTaskCreatePinnedToCore( startDBInit, "startDBInit", 8192, NULL, 16, NULL, SCANTASK_CORE );
+      xTaskCreatePinnedToCore( startDBInit, "startDBInit", 8192, NULL, 16, NULL, STATUSBAR_CORE );
       while( !DBStarted ) vTaskDelay(10);
     }
 
@@ -325,9 +326,6 @@ class BLEScanUtils
       if( hasHID() ) {
         ProcessHID = M5ButtonCheck;
         log_w("Using native M5Buttons");
-      } else if( hasXPaxShield() ) {
-        ProcessHID = XPadButtonCheck;
-        log_w("Using XPAD Shield");
       } else {
         ProcessHID = NoHIDCheck;
         log_w("NO HID enabled");
@@ -417,10 +415,21 @@ class BLEScanUtils
       {
         WiFi.mode(WIFI_STA);
         Serial.println(WiFi.macAddress());
-        if( String( WiFi_SSID ) !="" && String( WiFi_PASS ) !="" ) {
-          WiFi.begin( WiFi_SSID, WiFi_PASS );
-        } else {
+
+        String previousSuccessfulSSID = WiFi.SSID();
+        String previousSuccessfulPWD = WiFi.psk();
+
+        if( previousSuccessfulSSID != "" && previousSuccessfulPWD != "" ) {
+          log_w("Using credentials from last known connection, SSID: %s / PSK: %s", previousSuccessfulSSID.c_str(), previousSuccessfulPWD.c_str() );
           WiFi.begin();
+        } else {
+          if( String( WiFi_SSID ) !="" && String( WiFi_PASS ) !="" ) {
+            log_w("Using credentials from NVS");
+            WiFi.begin( WiFi_SSID, WiFi_PASS );
+          } else {
+            log_w("Using default credentials (WARN: no SSID/PASS saved in NVS)");
+            WiFi.begin();
+          }
         }
         while(WiFi.status() != WL_CONNECTED) {
           log_e("Not connected");
@@ -560,7 +569,8 @@ class BLEScanUtils
       static bool /*yolo*/wget( const char* url, fs::FS &fs, const char* path )
       {
         WiFiClientSecure *client = new WiFiClientSecure;
-        client->setCACert( NULL ); // yolo security
+        //client->setCACert( NULL ); // yolo security
+        client->setInsecure();
 
         const char* UserAgent = "ESP32HTTPClient";
 
@@ -594,9 +604,11 @@ class BLEScanUtils
           http.end();
           if( newlocation != "" ) {
             log_w("Found 302/301 location header: %s", newlocation.c_str() );
+            delete client;
             return wget( newlocation.c_str(), fs, path );
           } else {
             log_e("Empty redirect !!");
+            delete client;
             return false;
           }
         }
@@ -606,12 +618,14 @@ class BLEScanUtils
         if( stream == nullptr ) {
           http.end();
           log_e("Connection failed!");
+          delete client;
           return false;
         }
 
         File outFile = fs.open( path, FILE_WRITE );
         if( ! outFile ) {
           log_e("Can't open %s file to save url %s", path, url );
+          delete client;
           return false;
         }
 
@@ -638,10 +652,14 @@ class BLEScanUtils
             float progress = (((float)bytesDownloaded / (float)len) * 100.00);
             UI.PrintProgressBar( progress, 100.0 );
           }
+          if( bytesLeftToDownload == 0 ) break;
         }
         outFile.close();
-        free( buff );
-        free( client );
+        //free( buff );
+        //free( client );
+        delete buff;
+        delete client;
+        return true;
         return fs.exists( path );
       }
 
@@ -897,7 +915,7 @@ class BLEScanUtils
       vTaskDelete(NULL);
     }
 
-    static void setTimeZome( void * param = NULL )
+    static void setTimeZone( void * param = NULL )
     {
       if( param == NULL ) {
         log_n("Please provide a valid timeZone (0-24), floats are accepted");
@@ -1018,7 +1036,7 @@ class BLEScanUtils
         { "stop",          o->stopScanCB,             "Stop scan" },
         { "toggleFilter",  o->toggleFilterCB,         "Toggle vendor filter on the TFT (persistent)" },
         { "toggleEcho",    o->toggleEchoCB,           "Toggle BLECards in the Serial Console (persistent)" },
-        { "setTimeZone",   o->setTimeZome,            "Set the timezone for next NTP Sync (persistent)"},
+        { "setTimeZone",   o->setTimeZone,            "Set the timezone for next NTP Sync (persistent)"},
         { "setSummerTime", o->setSummerTime,          "Toggle CEST / CET for next NTP Sync (persistent)" },
         { "dump",          o->startDumpCB,            "Dump returning BLE devices to the display and updates DB" },
         { "setBrightness", o->setBrightnessCB,        "Set brightness to [value] (0-255) (persistent)" },
@@ -1150,7 +1168,9 @@ class BLEScanUtils
     static void M5ButtonCheck( unsigned long &lastHidCheck )
     {
       if( lastHidCheck + 150 < millis() ) {
+        takeMuxSemaphore();
         M5.update();
+        giveMuxSemaphore();
         if( M5.BtnA.wasPressed() ) {
           UI.brightness -= UI.brightnessIncrement;
           setBrightnessCB();
@@ -1163,64 +1183,6 @@ class BLEScanUtils
           toggleFilterCB();
         }
         lastHidCheck = millis();
-      }
-    }
-
-    static void XPadButtonCheck( unsigned long &lastHidCheck )
-    {
-      takeMuxSemaphore();
-      XPadShield.update();
-      giveMuxSemaphore();
-
-      if( XPadShield.wasPressed() ) { // on release
-
-        // XPadShield.BtnA.wasPressed(); would work but xpad support simultaneous buttons push
-        // so a stricter approach is chosen
-
-        switch( XPadShield.state ) {
-          case 0x01: // down
-            log_w("XPadShield->down");
-            UI.brightness -= UI.brightnessIncrement;
-            setBrightnessCB();
-          break;
-          case 0x02: // up
-            log_w("XPadShield->up");
-            UI.brightness += UI.brightnessIncrement;
-            setBrightnessCB();
-          break;
-          case 0x04: // right
-            log_w("XPadShield->right");
-          break;
-          case 0x08: // leftheader_jpg
-            log_w("XPadShield->left");
-          break;
-          case 0x10: // B
-            log_w("XPadShield->B");
-            runCommand( (char*)"toggleFilter");
-          break;
-          case 0x20: // A
-            log_w("XPadShield->A");
-            if ( scanTaskRunning ) {
-              runCommand( (char*)"stop");
-            } else {
-              runCommand( (char*)"start");
-            }
-          break;
-          case 0x40: // C
-            log_w("XPadShield->C");
-            runCommand( (char*)"toggleFilter");
-          break;
-          case 0x80: // D
-            log_w("XPadShield->D");
-          break;
-          case 0xff: // probably bad I2C bus otherwise sour fingers
-          case 0x00: // no button pushed
-            // ignore
-          break;
-          default: // simultaneous buttons push
-            log_w("XPadShield->Combined: 0x%02x", XPadShield.state);
-          break;
-        }
       }
     }
 

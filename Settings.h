@@ -226,6 +226,7 @@ static void destroyTaskNow( TaskHandle_t &task )
 #include "NimBLEBeacon.h"
 
 // SQLite stack
+#define NDEBUG
 #include <sqlite3.h> // https://github.com/siara-cc/esp32_arduino_sqlite3_lib
 
 // used to disable brownout detector

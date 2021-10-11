@@ -160,7 +160,7 @@ static void timeHousekeeping()
 
   #if HAS_EXTERNAL_RTC
 
-    if( abs( seconds_since_boot - internalDateTime.unixtime() ) > 2 ) { // internal datetime is set
+    if( abs( int64_t(seconds_since_boot - internalDateTime.unixtime()) ) > 2 ) { // internal datetime is set
       // safe to assume internal RTC is running
       TimeIsSet = true;
     }
