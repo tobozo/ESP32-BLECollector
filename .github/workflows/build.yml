@@ -67,9 +67,11 @@ jobs:
           sketch-names: ${{ env.SKETCH_NAME }}
           set-build-path: true
 
-      - run: |
+      - name: Copy compiled binary
+        run: |
         ls build
-        cp build/ESP32-Chimera-Core.bin build/${{ matrix.bin-name }}
+        cp "build/ESP32-Chimera-Core.ino.bin" "build/${{ matrix.bin-name }}"
+
       - name: Upload artifact ${{ matrix.bin-name }}
         uses: actions/upload-artifact@v2
         with:
