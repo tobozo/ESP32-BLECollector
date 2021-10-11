@@ -88,19 +88,16 @@ jobs:
     needs: matrix_build
 
     steps:
-      - run: mkdir -p /home/runner/builds
       - name: Download artifacts
         uses: actions/download-artifact@v2
-        id: download
         with:
-          path: /home/runner/builds
-      - run: ls /home/runner/builds/M5stack-BLECollector.bin -la
-      - name: Release
+          path: .
+      - name: Release check
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           files: |
-            /home/runner/builds/M5stack-BLECollector.bin
-            /home/runner/builds/M5Core2-BLECollector.bin
-            /home/runner/builds/M5Fire-BLECollector.bin
-            /home/runner/builds/OdroidGo-BLECollector.bin
+            M5stack-BLECollector.bin
+            M5Core2-BLECollector.bin
+            M5Fire-BLECollector.bin
+            OdroidGo-BLECollector.bin
