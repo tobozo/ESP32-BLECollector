@@ -78,7 +78,7 @@ jobs:
           path: /home/runner/ESP32-BLECollector/build/${{ matrix.bin-name }}
 
   post_build:
-    needs: [M5Stack,M5Core2,M5Fire,OdroidGo]
+    needs: [build]
     steps:
       - run: mkdir -p /home/runner/builds
       - name: Download artifacts
