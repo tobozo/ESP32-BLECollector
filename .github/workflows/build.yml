@@ -24,7 +24,6 @@ jobs:
       matrix:
 
         arduino-boards-fqbn:
-          - esp32:esp32:esp32wroverkit:PartitionScheme=min_spiffs
           - esp32:esp32:m5stack-core-esp32:PartitionScheme=min_spiffs
           - esp32:esp32:m5stack-fire
           - esp32:esp32:m5stack-core2
@@ -37,8 +36,6 @@ jobs:
           - ESP32-Chimera-Core,Time,LovyanGFX,M5Stack-SD-Updater,Sqlite3Esp32,TinyGPSPlus,NimBLE-Arduino
 
         include:
-          - arduino-boards-fqbn: esp32:esp32:esp32wroverkit:PartitionScheme=min_spiffs
-            fancy-name: ESP32 Wrover Kit
           - arduino-boards-fqbn: esp32:esp32:m5stack-core-esp32:PartitionScheme=min_spiffs
             fancy-name: M5Stack
           - arduino-boards-fqbn: esp32:esp32:m5stack-core2
@@ -64,4 +61,5 @@ jobs:
           required-libraries: ${{ matrix.required-libraries }}
           build-properties: ${{ toJson(matrix.build-properties) }}
           sketch-names: ${{ env.SKETCH_NAME }}
+          set-build-path: true
 
