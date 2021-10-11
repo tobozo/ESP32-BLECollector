@@ -1,7 +1,7 @@
 name: Build
 
 env:
-  SKETCH_NAME: *.ino
+  SKETCH_NAME: "*.ino"
 
 on:
   push:
