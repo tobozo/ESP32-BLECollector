@@ -80,7 +80,7 @@ jobs:
   post_build:
     needs: [M5Stack,M5Core2,M5Fire,OdroidGo]
     steps:
-      - run mkdir /home/runner/builds
+      - run: mkdir -p /home/runner/builds
       - name: Download artifacts
         uses: actions/download-artifact@v2
         id: download
