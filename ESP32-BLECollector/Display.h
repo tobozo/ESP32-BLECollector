@@ -53,6 +53,11 @@ static const int AMIGABALL_YPOS = 50;
 // display profiles switcher
 #if defined( ARDUINO_M5Stack_Core_ESP32 ) || defined( ARDUINO_M5STACK_FIRE ) || defined( ARDUINO_ODROID_ESP32 ) || defined( ARDUINO_M5STACK_Core2 ) || defined( ARDUINO_LOLIN_D32_PRO )
 
+  #if defined ARDUINO_M5Stack_Core_ESP32
+    //#undef WITH_WIFI // M5Stack has a small partition, disable WiFi
+  #endif
+
+
   // custom M5Stack/Odroid-Go go TFT/SD/RTC/GPS settings here (see ARDUINO_ESP32_DEV profile for available settings)
   #if defined( ARDUINO_LOLIN_D32_PRO )
 

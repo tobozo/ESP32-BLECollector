@@ -57,6 +57,10 @@ float timeZone = 1; // 1 = GMT+1, 2 = GMT+2, etc
 bool summerTime = false;
 
 #define WITH_WIFI          1 // used to download oui databases, NTP sync, can be disabled if HAS_GPS is used
+// or disabled if specified by build flag
+#if defined WITHOUT_WIFI
+  #undef WITH_WIFI
+#endif
 
 byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
 #define MIN_SCAN_DURATION 10 // seconds min
