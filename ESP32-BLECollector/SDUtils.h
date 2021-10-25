@@ -9,7 +9,8 @@ static bool sd_mounted = false;
 bool M5StackSDBegin()
 {
   #ifdef _SD_H_
-    return SD.begin(4, SPI, 20000000);
+    return M5.sd_begin();
+    //return SD.begin(4, SPI, 20000000);
   #endif
   return false;
 }

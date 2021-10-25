@@ -255,7 +255,10 @@ static const int AMIGABALL_YPOS = 50;
 
 
 #if defined USE_SD_UPDATER
-  #define SDU_APP_NAME PLATFORM_NAME " BLE Collector" // title for SD-Updater UI
+  #if !defined M5_SD_UPDATER_VERSION_INT
+    #define SDU_APP_NAME PLATFORM_NAME " BLE Collector" // title for SD-Updater UI
+    #define SDU_APP_PATH "/" PLATFORM_NAME "BLECollector.bin" // path to binary on the SD
+  #endif
   #include <M5StackUpdater.h> // https://github.com/tobozo/M5Stack-SD-Updater
 #endif
 
@@ -297,6 +300,8 @@ void tft_begin()
       #if defined M5_SD_UPDATER_VERSION_INT
         SDUCfg.setLabelMenu("<< Menu");
         SDUCfg.setLabelSkip("Launch");
+        SDUCfg.setAppName( PLATFORM_NAME " BLE Collector" );
+        SDUCfg.setBinFileName( "/" PLATFORM_NAME "BLECollector.bin" );
         checkSDUpdater( BLE_FS, MENU_BIN, 5000, TFCARD_CS_PIN ); // Filesystem, Launcher bin path, Wait delay, Sdcard CS pin
       #else
         checkSDUpdater();
