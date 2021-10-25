@@ -140,7 +140,8 @@
 
   uint8_t BLE_RTC_BM8563::isrunning(void)
   {
-    return M5_RTC.isrunning();
+    return true; // M5_RTC.isrunning() is deprecated
+    //return M5_RTC.isrunning();
   }
 
 
