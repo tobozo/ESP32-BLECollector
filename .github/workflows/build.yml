@@ -71,13 +71,14 @@ jobs:
           build-properties: ${{ toJson(matrix.build-properties) }}
           sketch-names: ${{ env.SKETCH_NAME }}
           set-build-path: true
+          extra-arduino-cli-args: --warnings none
 
       - name: Copy compiled binary
         if: startsWith(github.ref, 'refs/tags/')
         run:  cd /home/runner/ESP32-BLECollector/build && ls && cp ESP32-BLECollector.ino.bin ${{ matrix.bin-name }}
 
       - name: Upload artifact ${{ matrix.bin-name }}
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         if: startsWith(github.ref, 'refs/tags/')
         with:
           name: ${{ matrix.bin-name }}
@@ -94,14 +95,14 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Create artifacts dir
         if: startsWith(github.ref, 'refs/tags/')
         run: mkdir -p /home/runner/builds
 
       - name: Download artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         if: startsWith(github.ref, 'refs/tags/')
         with:
           path: /home/runner/builds
