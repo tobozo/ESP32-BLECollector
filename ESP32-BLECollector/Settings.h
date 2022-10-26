@@ -106,7 +106,7 @@ byte SCAN_DURATION = 20; // seconds, will be adjusted upon scan results
   #define PLATFORM_NAME "M5Stack"
 #elif defined( ARDUINO_M5STACK_FIRE )
   //#warning M5STACK FIRE DETECTED !!
-  #define PLATFORM_NAME "M5Stack"
+  #define PLATFORM_NAME "M5Fire"
 #elif defined( ARDUINO_ODROID_ESP32 )
   //#warning ODROID DETECTED !!
   #define PLATFORM_NAME "Odroid-GO"
@@ -230,7 +230,7 @@ static void destroyTaskNow( TaskHandle_t &task )
 #include "NimBLEBeacon.h"
 
 // SQLite stack
-#define NDEBUG
+#define NDEBUG // disable sqlite debug
 #include <sqlite3.h> // https://github.com/siara-cc/esp32_arduino_sqlite3_lib
 
 // used to disable brownout detector
@@ -252,11 +252,11 @@ static void destroyTaskNow( TaskHandle_t &task )
  */
 
 // statistical values
-static int devicesCount     = 0; // devices count per scan
-static int sessDevicesCount = 0; // total devices count per session
-static int results          = 0; // total results during last query
-static unsigned int entries = 0; // total entries in database
-static uint8_t prune_trigger   = 0; // incremented on every insertion, reset on prune()
+static int devicesCount      = 0; // devices count per scan
+static int sessDevicesCount  = 0; // total devices count per session
+static int results           = 0; // total results during last query
+static unsigned int entries  = 0; // total entries in database
+static uint8_t prune_trigger = 0; // incremented on every insertion, reset on prune()
 
 // load application stack
 #include "BLECache.h" // data struct

@@ -425,9 +425,9 @@ class UIUtils
       tft_hScrollTo( Out.scrollTopFixedArea ); // reset hardware scroll position before capturing
       tft_scrollTo( -yRef ); // reverse software-scroll to compensate hardware scroll offset
 
-      //M5.ScreenShot.snapBMP("BLECollector", false);
-      //M5.ScreenShot.snapJPG("BLECollector", false);
-      M5.ScreenShot.snap("BLECollector", false); // filename prefix, show image after capture
+      //M5.ScreenShot->snapBMP("BLECollector", false);
+      //M5.ScreenShot->snapJPG("BLECollector", false);
+      M5.ScreenShot->snap("BLECollector", false); // filename prefix, show image after capture
 
       // restore scroll states
       tft_scrollTo( yRef ); // restore software scroll

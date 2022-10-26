@@ -1,0 +1,180 @@
+Processing m5stack-fire (board: m5stack-fire; platform: espressif32; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/espressif32/m5stack-fire.html
+PLATFORM: Espressif 32 (3.3.2) > M5Stack FIRE
+HARDWARE: ESP32 240MHz, 4.31MB RAM, 16MB Flash
+DEBUG: Current (esp-prog) External (esp-prog, iot-bus-jtag, jlink, minimodule, olimex-arm-usb-ocd, olimex-arm-usb-ocd-h, olimex-arm-usb-tiny-h, olimex-jtag-tiny, tumpa)
+PACKAGES: 
+ - framework-arduinoespressif32 3.10006.210326 (1.0.6) 
+ - tool-esptoolpy 1.30100.210531 (3.1.0) 
+ - tool-mkspiffs 2.230.0 (2.30) 
+ - toolchain-xtensa32 2.50200.97 (5.2.0)
+Converting ESP32-BLECollector.ino
+LDF: Library Dependency Finder -> http://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Library Manager: Installing SD
+Library Manager: Warning! More than one package has been found by SD requirements:
+ - adafruit/SD @ 0.0.0-alpha+sha.041f788250
+ - arduino-libraries/SD @ 1.2.4
+ - rei-vilo/SD @ 0.0.0-alpha+sha.a8a1454af9
+ - mbed-jackson-lv/SD @ 0.0.0+sha.405b46e831df
+ - mbed-1529561000/SD @ 0.0.0+sha.db4599aff06a
+Library Manager: Please specify detailed REQUIREMENTS using package owner and version (showed above) to avoid name conflicts
+Unpacking
+Library Manager: SD @ 0.0.0-alpha+sha.041f788250 has been installed!
+Library Manager: Installing LovyanGFX
+Unpacking
+Library Manager: LovyanGFX @ 0.4.5 has been installed!
+Library Manager: Installing ESP32-Chimera-Core
+Unpacking
+Library Manager: ESP32-Chimera-Core @ 1.2.5 has been installed!
+Library Manager: Installing dependencies...
+Library Manager: Installing Time
+Unpacking
+Library Manager: Time @ 1.6.1 has been installed!
+Library Manager: Installing M5Stack-SD-Updater
+Unpacking
+Library Manager: M5Stack-SD-Updater @ 1.1.4 has been installed!
+Library Manager: Installing Sqlite3Esp32
+Unpacking
+Library Manager: Sqlite3Esp32 @ 2.3.0 has been installed!
+Library Manager: Installing TinyGPSPlus
+Library Manager: Warning! More than one package has been found by TinyGPSPlus requirements:
+ - mikalhart/TinyGPSPlus @ 1.0.2
+ - mbed-aoba/TinyGPSPlus @ 0.0.0+sha.6d3813637f20
+ - mbed-okiaviation/TinyGPSPlus @ 0.0.0+sha.2576f9f1dc71
+Library Manager: Please specify detailed REQUIREMENTS using package owner and version (showed above) to avoid name conflicts
+Unpacking
+Library Manager: TinyGPSPlus @ 1.0.2 has been installed!
+Library Manager: Installing NimBLE-Arduino
+Unpacking
+Library Manager: NimBLE-Arduino @ 1.3.1 has been installed!
+Library Manager: Installing FastLED @ 3.4.0
+Library Manager: Warning! More than one package has been found by FastLED @ 3.4.0 requirements:
+ - fastled/FastLED @ 3.4.0
+ - etidbury/FastLED @ 3.3.3
+Library Manager: Please specify detailed REQUIREMENTS using package owner and version (showed above) to avoid name conflicts
+Unpacking
+Library Manager: FastLED @ 3.4.0 has been installed!
+Found 37 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- <SD> 0.0.0-alpha+sha.041f788250
+|   |-- <SPI> 1.0
+|-- <LovyanGFX> 0.4.5
+|   |-- <SPI> 1.0
+|   |-- <Wire> 1.0.1
+|-- <ESP32-Chimera-Core> 1.2.5
+|   |-- <LovyanGFX> 0.4.5
+|   |   |-- <SPI> 1.0
+|   |   |-- <Wire> 1.0.1
+|   |-- <FS> 1.0
+|   |-- <Wire> 1.0.1
+|   |-- <SPI> 1.0
+|   |-- <Preferences> 1.0
+|   |-- <SD> 0.0.0-alpha+sha.041f788250
+|   |   |-- <SPI> 1.0
+|   |-- <SD_MMC> 1.0
+|   |   |-- <FS> 1.0
+|-- <Time> 1.6.1
+|-- <M5Stack-SD-Updater> 1.1.4
+|   |-- <Preferences> 1.0
+|   |-- <FS> 1.0
+|   |-- <SD> 0.0.0-alpha+sha.041f788250
+|   |   |-- <SPI> 1.0
+|   |-- <SD_MMC> 1.0
+|   |   |-- <FS> 1.0
+|   |-- <SPIFFS> 1.0
+|   |   |-- <FS> 1.0
+|   |-- <Update> 1.0
+|-- <Sqlite3Esp32> 2.3.0
+|-- <TinyGPSPlus> 1.0.2
+|-- <NimBLE-Arduino> 1.3.1
+|-- <FastLED> 3.4.0
+|   |-- <SPI> 1.0
+|-- <SPIFFS> 1.0
+|   |-- <FS> 1.0
+|-- <HTTPClient> 1.2
+|   |-- <WiFi> 1.0
+|   |-- <WiFiClientSecure> 1.0
+|   |   |-- <WiFi> 1.0
+|-- <Preferences> 1.0
+|-- <WiFiClientSecure> 1.0
+|   |-- <WiFi> 1.0
+|-- <Wire> 1.0.1
+Building in release mode
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/Fonts/IPA/lgfx_font_japan.c.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/Fonts/efont/lgfx_efont_cn.c.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/Fonts/efont/lgfx_efont_ja.c.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/Fonts/efont/lgfx_efont_kr.c.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/Fonts/efont/lgfx_efont_tw.c.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/utility/lgfx_pngle.c.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/utility/lgfx_qrcode.c.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/utility/lgfx_tjpgd.c.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/utility/miniz.c.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v0/LGFXBase.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v0/lgfx_fonts.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v0/panel/Panel_GDEW0154M09.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v0/panel/Panel_IT8951.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v0/platforms/esp32_common.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v0/platforms/samd51_common.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v0/touch/Touch_FT5x06.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v0/touch/Touch_GT911.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v0/touch/Touch_STMPE610.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v0/touch/Touch_XPT2046.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/LGFXBase.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/LGFX_Button.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/LGFX_Sprite.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/lgfx_TTFfont.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/lgfx_fonts.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/misc/SpriteBuffer.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/panel/Panel_Device.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/panel/Panel_GDEW0154M09.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/panel/Panel_HasBuffer.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/panel/Panel_ILI9225.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/panel/Panel_IT8951.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/panel/Panel_LCD.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/panel/Panel_M5HDMI.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/panel/Panel_M5UnitLCD.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/panel/Panel_SSD1306.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/panel/Panel_SSD1327.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/panel/Panel_SSD1331.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/panel/Panel_SSD1351.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/panel/Panel_SSD1963.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/arduino_default/Bus_SPI.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/arduino_default/common.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/esp32/Bus_I2C.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/esp32/Bus_Parallel8.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/esp32/Bus_SPI.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/esp32/Light_PWM.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/esp32/common.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/esp32c3/Bus_Parallel8.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/esp32s2/Bus_Parallel16.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/esp32s2/Bus_Parallel8.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/esp8266/Bus_I2C.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/esp8266/Bus_SPI.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/esp8266/common.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/opencv/Panel_OpenCV.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/opencv/common.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/rp2040/Bus_SPI.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/rp2040/common.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/samd21/Bus_I2C.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/samd21/Bus_SPI.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/samd21/common.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/samd51/Bus_I2C.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/samd51/Bus_SPI.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/samd51/common.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/spresense/Bus_SPI.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/spresense/common.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/stm32/Bus_SPI.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/platforms/stm32/common.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/touch/Touch_FT5x06.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/touch/Touch_GT911.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/touch/Touch_STMPE610.cpp.o
+Compiling .pio/build/m5stack-fire/libcba/LovyanGFX/lgfx/v1/touch/Touch_XPT2046.cpp.o
+Compiling .pio/build/m5stack-fire/lib31a/ESP32-Chimera-Core/ESP32-Chimera-Core.cpp.o
+Compiling .pio/build/m5stack-fire/lib31a/ESP32-Chimera-Core/M5Display.cpp.o
+Compiling .pio/build/m5stack-fire/lib31a/ESP32-Chimera-Core/drivers/M5Stack/M5Faces.cpp.o
+Compiling .pio/build/m5stack-fire/lib31a/ESP32-Chimera-Core/drivers/M5Stack/M5LoRa.cpp.o
+

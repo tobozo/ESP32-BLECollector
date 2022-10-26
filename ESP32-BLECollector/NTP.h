@@ -93,16 +93,16 @@ void TimeInit()
 
   static const struct
   {
-	const char code[16];
-	const char *name;
+    const char code[16];
+    const char *name;
   } ntpPoolZones[] = {
-	{ "africa",        "Africa" },
-	{ "antarctica",    "Antarctica" },
-	{ "asia",          "Asia" },
-	{ "europe",        "Europe" },
-	{ "north-america", "North America" },
-	{ "oceania",       "Oceania" },
-	{ "south-america", "South America" },
+    { "africa",        "Africa" },
+    { "antarctica",    "Antarctica" },
+    { "asia",          "Asia" },
+    { "europe",        "Europe" },
+    { "north-america", "North America" },
+    { "oceania",       "Oceania" },
+    { "south-america", "South America" },
     { "",              "" }
   };
 

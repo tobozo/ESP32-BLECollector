@@ -95,9 +95,9 @@ static bool DBneedsReplication = false;
 #define pruneTableQuery "DELETE FROM blemacs"
 #define testVendorNamesQuery "SELECT SUBSTR(vendor,0,32)  FROM 'ble-oui' LIMIT 10"
 #define testOUIQuery "SELECT * FROM 'oui-light' limit 10"
-static char insertQuery[512]; // stack overflow ? pray that 256 is enough :D
+static char insertQuery[1024]; // stack overflow ? pray that 1024 is enough :D
 #define searchDeviceTemplate "SELECT " BLEMAC_SELECT_FIELDNAMES " FROM blemacs WHERE address='%s'"
-static char searchDeviceQuery[160];
+static char searchDeviceQuery[1024];
 #define vendorRequestTpl "SELECT vendor FROM 'ble-oui' WHERE id='%d'"
 #define OUIRequestTpl "SELECT * FROM 'oui-light' WHERE Assignment=UPPER('%s');"
 
@@ -734,7 +734,7 @@ class DBUtils
       if (strcmp(zErrMsg, "database disk image is malformed")==0) {
         isCorrupt = true;
       } else if (strcmp(zErrMsg, "file is not a database")==0) {
-        needsReset = true;
+        //needsReset = true;
       } else if (strcmp(zErrMsg, "no such table: blemacs")==0) {
         needsReset = true;
       } else if (strcmp(zErrMsg, "out of memory")==0) {

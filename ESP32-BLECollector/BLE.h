@@ -579,6 +579,7 @@ class BLEScanUtils
 
         if( ! http.begin(*client, url ) ) {
           log_e("Can't open url %s", url );
+          delete client;
           return false;
         }
 
@@ -901,8 +902,8 @@ class BLEScanUtils
     {
       if( !UI.ScreenShotLoaded ) {
         log_w("Cold ScreenShot");
-        M5.ScreenShot.init( &M5.Lcd, BLE_FS );
-        if( M5.ScreenShot.begin() ) {
+        M5.ScreenShot->init(/* &M5.Lcd, BLE_FS */);
+        if( M5.ScreenShot->begin() ) {
           UI.ScreenShotLoaded = true;
           UI.screenShot();
         } else {

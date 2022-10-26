@@ -301,7 +301,8 @@ void tft_begin()
         SDUCfg.setLabelMenu("<< Menu");
         SDUCfg.setLabelSkip("Launch");
         SDUCfg.setAppName( PLATFORM_NAME " BLE Collector" );
-        SDUCfg.setBinFileName( "/" PLATFORM_NAME "BLECollector.bin" );
+        SDUCfg.setBinFileName( "/ESP32-BLECollector.bin" );
+        //SDUCfg.useRolllback( false );
         checkSDUpdater( BLE_FS, MENU_BIN, 5000, TFCARD_CS_PIN ); // Filesystem, Launcher bin path, Wait delay, Sdcard CS pin
       #else
         checkSDUpdater();
