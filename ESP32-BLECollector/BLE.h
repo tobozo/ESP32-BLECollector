@@ -29,6 +29,8 @@
 
 */
 
+#pragma GCC diagnostic ignored "-Wunused-variable"
+
 #define TICKS_TO_DELAY 1000
 
 const char* processTemplateLong = "%s%d%s%d";

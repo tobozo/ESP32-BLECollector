@@ -57,7 +57,7 @@
  *
 \*/
 
-
+#pragma GCC diagnostic ignored "-Wunused-variable"
 
 struct BLEGATTService
 {

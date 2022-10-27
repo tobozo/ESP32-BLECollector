@@ -35,6 +35,8 @@
 
 */
 
+#pragma GCC diagnostic ignored "-Wunused-variable"
+
 #if defined( ARDUINO_M5STACK_Core2 ) // M5Core2 uses BM8563
 
   //#define BM8563_ADDR 0x51 // M5Core2 RTC I2C address

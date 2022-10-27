@@ -29,7 +29,7 @@
 
 */
 
-
+#pragma GCC diagnostic ignored "-Wunused-variable"
 
 char *macAddressToColorStr = new char[MAC_LEN+1];
 

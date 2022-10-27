@@ -29,6 +29,8 @@
 
 */
 
+#pragma GCC diagnostic ignored "-Wunused-variable"
+
 #define SPACE " "
 static bool isScrolling = false;
 static bool isInScroll()

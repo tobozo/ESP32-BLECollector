@@ -13,6 +13,7 @@
  || defined ARDUINO_TWATCH_2020_V1 \
  || defined ARDUINO_TWATCH_2020_V2 \
  || defined ARDUINO_LOLIN_D32_PRO \
+ || defined ARDUINO_ESP32_S3_BOX \
   // yay! platform is supported
 #else
   #error "NO SUPPORTED BOARD DETECTED !!"
@@ -51,7 +52,7 @@ static const int AMIGABALL_YPOS = 50;
 
 
 // display profiles switcher
-#if defined( ARDUINO_M5Stack_Core_ESP32 ) || defined( ARDUINO_M5STACK_FIRE ) || defined( ARDUINO_ODROID_ESP32 ) || defined( ARDUINO_M5STACK_Core2 ) || defined( ARDUINO_LOLIN_D32_PRO )
+#if defined( ARDUINO_M5Stack_Core_ESP32 ) || defined( ARDUINO_M5STACK_FIRE ) || defined( ARDUINO_ODROID_ESP32 ) || defined( ARDUINO_M5STACK_Core2 ) || defined( ARDUINO_LOLIN_D32_PRO ) || defined ARDUINO_ESP32_S3_BOX
 
   #if defined ARDUINO_M5Stack_Core_ESP32
     //#undef WITH_WIFI // M5Stack has a small partition, disable WiFi
@@ -104,6 +105,11 @@ static const int AMIGABALL_YPOS = 50;
     //#define SERIALTASK_CORE 1
     //#undef HEAPGRAPH_CORE
     //#define HEAPGRAPH_CORE 0
+
+
+  #elif defined ARDUINO_ESP32_S3_BOX
+
+    #undef WITH_WIFI // NTP is useless without a RTC module
 
   #else
     // M5Stack Classic, Fire
@@ -264,6 +270,8 @@ static const int AMIGABALL_YPOS = 50;
 
 #define tft M5.Lcd // syntax sugar
 //#include "HID_XPad.h" // external HID
+
+#pragma GCC diagnostic ignored "-Wunused-variable"
 
 
 static TFT_eSprite gradientSprite( &tft );  // gradient background

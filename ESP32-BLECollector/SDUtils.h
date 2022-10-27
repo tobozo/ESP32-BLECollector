@@ -2,6 +2,9 @@
  * SD Helpers
 \*/
 
+
+#pragma GCC diagnostic ignored "-Wunused-variable"
+
 static bool sd_mounted = false;
 
 
