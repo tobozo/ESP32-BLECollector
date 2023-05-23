@@ -413,7 +413,7 @@ class UIUtils
       giveMuxSemaphore();
     }
 
-
+    #if defined USE_SCREENSHOTS
     static void screenShot()
     {
       takeMuxSemaphore();
@@ -427,7 +427,8 @@ class UIUtils
 
       //M5.ScreenShot->snapBMP("BLECollector", false);
       //M5.ScreenShot->snapJPG("BLECollector", false);
-      M5.ScreenShot->snap("BLECollector", false); // filename prefix, show image after capture
+      M5.ScreenShot->snapQOI("BLECollector", false);
+      //M5.ScreenShot->snap("BLECollector", false); // filename prefix, show image after capture
 
       // restore scroll states
       tft_scrollTo( yRef ); // restore software scroll
@@ -436,6 +437,7 @@ class UIUtils
       isQuerying = false;
       giveMuxSemaphore();
     }
+    #endif
 
     static void screenShow( void * fileName = NULL )
     {
@@ -455,14 +457,23 @@ class UIUtils
           giveMuxSemaphore();
           vTaskDelay( 5000 );
         }
-      }
-      if( String( (const char*)fileName ).endsWith(".bmp" ) ) {
+      } else if( String( (const char*)fileName ).endsWith(".bmp" ) ) {
         if( !BLE_FS.exists( (const char*)fileName ) ) {
           log_e("File %s does not exist\n", (const char*)fileName );
         } else {
           takeMuxSemaphore();
           Out.scrollNextPage(); // reset scroll position to zero otherwise image will have offset
           tft.drawBmpFile( BLE_FS, (const char*)fileName, 0, 0 );
+          giveMuxSemaphore();
+          vTaskDelay( 5000 );
+        }
+      } else if( String( (const char*)fileName ).endsWith(".qoi" ) ) {
+        if( !BLE_FS.exists( (const char*)fileName ) ) {
+          log_e("File %s does not exist\n", (const char*)fileName );
+        } else {
+          takeMuxSemaphore();
+          Out.scrollNextPage(); // reset scroll position to zero otherwise image will have offset
+          tft.drawQoiFile( BLE_FS, (const char*)fileName, 0, 0 );
           giveMuxSemaphore();
           vTaskDelay( 5000 );
         }

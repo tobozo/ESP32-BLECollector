@@ -2,6 +2,7 @@
 
 #if defined ARDUINO_M5Stack_Core_ESP32 \
  || defined ARDUINO_M5STACK_Core2 \
+ || defined ARDUINO_M5STACK_CORES3 \
  || defined ARDUINO_M5STACK_FIRE \
  || defined ARDUINO_ODROID_ESP32 \
  || defined ARDUINO_ESP32_DEV \
@@ -52,7 +53,7 @@ static const int AMIGABALL_YPOS = 50;
 
 
 // display profiles switcher
-#if defined( ARDUINO_M5Stack_Core_ESP32 ) || defined( ARDUINO_M5STACK_FIRE ) || defined( ARDUINO_ODROID_ESP32 ) || defined( ARDUINO_M5STACK_Core2 ) || defined( ARDUINO_LOLIN_D32_PRO ) || defined ARDUINO_ESP32_S3_BOX
+#if defined( ARDUINO_M5Stack_Core_ESP32 ) || defined( ARDUINO_M5STACK_FIRE ) || defined( ARDUINO_ODROID_ESP32 ) || defined( ARDUINO_M5STACK_Core2 ) || defined( ARDUINO_LOLIN_D32_PRO ) || defined ARDUINO_ESP32_S3_BOX || defined ARDUINO_M5STACK_CORES3
 
   #if defined ARDUINO_M5Stack_Core_ESP32
     //#undef WITH_WIFI // M5Stack has a small partition, disable WiFi
@@ -80,7 +81,14 @@ static const int AMIGABALL_YPOS = 50;
     #define tft_initOrientation() tft.setRotation(0)
     #undef USE_SD_UPDATER // Odroid-Go prefers CrashOverride's Application Loader
 
-  #elif defined( ARDUINO_M5STACK_Core2 ) // M5Core2
+  #elif defined ARDUINO_M5STACK_CORES3 // M5CoreS3
+
+    #undef HAS_EXTERNAL_RTC
+    #define HAS_EXTERNAL_RTC false
+    #undef BASE_BRIGHTNESS
+    #define BASE_BRIGHTNESS 100
+
+  #elif defined ARDUINO_M5STACK_Core2  // M5Core2
     #undef HAS_EXTERNAL_RTC
     #define HAS_EXTERNAL_RTC true
     #undef RTC_SDA
@@ -109,7 +117,14 @@ static const int AMIGABALL_YPOS = 50;
 
   #elif defined ARDUINO_ESP32_S3_BOX
 
-    #undef WITH_WIFI // NTP is useless without a RTC module
+    #undef WITH_WIFI // can't fit on partition
+    #undef HAS_EXTERNAL_RTC
+    #define HAS_EXTERNAL_RTC true
+    #undef RTC_SDA
+    #undef RTC_SCL
+    #define RTC_SDA 41 // pin number
+    #define RTC_SCL 40 // pin number
+
 
   #else
     // M5Stack Classic, Fire
@@ -247,13 +262,17 @@ static const int AMIGABALL_YPOS = 50;
 
 #endif
 
+
+#define USE_SCREENSHOTS // load tft->snap() functions
 #include <ESP32-Chimera-Core.h> // https://github.com/tobozo/ESP32-Chimera-Core
+
 
 #if !defined ECC_VERSION_MAJOR || !defined ECC_VERSION_MAJOR || !defined ECC_VERSION_MAJOR
   #error "This app only uses ESP32-Chimera-Core >= 1.2.3"
 #else
   #if ((ECC_VERSION_MAJOR << 16) | (ECC_VERSION_MINOR << 8) | (ECC_VERSION_PATCH)) >= ((1 << 16) | (2 << 8) | (3))
     // yay, minimal version requirements are met !
+    #define TFT_eSprite LGFX_Sprite // satisfy namespace requirements, comment this out if your version of chimera-core is too old
   #else
     #error "This app needs ESP32-Chimera-Core >= 1.2.3"
   #endif
@@ -273,11 +292,12 @@ static const int AMIGABALL_YPOS = 50;
 
 #pragma GCC diagnostic ignored "-Wunused-variable"
 
-
 static TFT_eSprite gradientSprite( &tft );  // gradient background
 static TFT_eSprite heapGraphSprite( &tft ); // activity graph
 static TFT_eSprite hallOfMacSprite( &tft ); // mac address badge holder
 
+
+void tft_hScrollTo(uint16_t vsp);
 static bool isQuerying = false; // state maintained while SD is accessed, useful when SD is used instead of SD_MMC
 // TODO: make this SD-driver dependant rather than platform dependant
 static bool isInQuery()
@@ -293,7 +313,11 @@ static bool isInQuery()
 void tft_begin()
 {
 
-  M5.begin( true, true, false, false, false ); // don't start Serial
+  #ifdef __M5STACKUPDATER_H
+    M5.begin( true, false, false, false, false ); // don't start Serial and SD
+  #else
+    M5.begin( true, true, false, false, false ); // don't start Serial
+  #endif
 
   #if HAS_EXTERNAL_RTC
     Wire.begin(RTC_SDA, RTC_SCL);
@@ -302,16 +326,21 @@ void tft_begin()
   #endif
   delay( 100 );
   #ifdef __M5STACKUPDATER_H
+
+    tft_hScrollTo(0); // reset scroll position
+
     if( hasHID() ) {
       // build has buttons => enable SD Updater at boot
       // New SD Updater support, requires the latest version of https://github.com/tobozo/M5Stack-SD-Updater/
+      SDUCfg.display = &tft;
+
       #if defined M5_SD_UPDATER_VERSION_INT
-        SDUCfg.setLabelMenu("<< Menu");
-        SDUCfg.setLabelSkip("Launch");
-        SDUCfg.setAppName( PLATFORM_NAME " BLE Collector" );
-        SDUCfg.setBinFileName( "/ESP32-BLECollector.bin" );
-        //SDUCfg.useRolllback( false );
-        checkSDUpdater( BLE_FS, MENU_BIN, 5000, TFCARD_CS_PIN ); // Filesystem, Launcher bin path, Wait delay, Sdcard CS pin
+        // SDUCfg.setLabelMenu("<< Menu");
+        // SDUCfg.setLabelSkip("Launch");
+        // SDUCfg.setAppName( PLATFORM_NAME " BLE Collector" );
+        // SDUCfg.setBinFileName( "/ESP32-BLECollector.bin" );
+        // SDUCfg.useRolllback( false );
+        checkSDUpdater( BLE_FS, MENU_BIN, 15000, TFCARD_CS_PIN ); // Filesystem, Launcher bin path, Wait delay, Sdcard CS pin
       #else
         checkSDUpdater();
       #endif
