@@ -96,14 +96,15 @@ jobs:
           echo "binFile: $binFile"
           echo "binName: ${{ matrix.bin-name }}"
           ls $binPath
-          cp "$binFile" "${{ matrix.bin-name }}"
+          mkdir -p /home/runner/builds
+          cp "$binFile" "/home/runner/builds/${{ matrix.bin-name }}"
 
       - name: Upload artifact ${{ matrix.bin-name }}
         uses: actions/upload-artifact@v3
         #if: startsWith(github.ref, 'refs/tags/')
         with:
           name: ${{ matrix.bin-name }}
-          path: /home/runner/builds
+          path: /home/runner/builds/${{ matrix.bin-name }}
 
   post_build:
 
