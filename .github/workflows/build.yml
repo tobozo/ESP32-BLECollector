@@ -103,7 +103,7 @@ jobs:
         #if: startsWith(github.ref, 'refs/tags/')
         with:
           name: ${{ matrix.bin-name }}
-          path: ${{ matrix.bin-name }}
+          path: /home/runner/builds
 
   post_build:
 
