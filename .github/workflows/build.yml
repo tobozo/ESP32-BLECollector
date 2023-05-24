@@ -138,6 +138,7 @@ jobs:
             /home/runner/builds/M5Core2-BLECollector.bin
             /home/runner/builds/M5Fire-BLECollector.bin
             /home/runner/builds/OdroidGo-BLECollector.bin
+            /home/runner/builds/S3Box-BLECollector.bin
 
       - name: Release check
         uses: softprops/action-gh-release@v1
@@ -148,3 +149,4 @@ jobs:
             /home/runner/builds/M5Core2-BLECollector.bin
             /home/runner/builds/M5Fire-BLECollector.bin
             /home/runner/builds/OdroidGo-BLECollector.bin
+            /home/runner/builds/S3Box-BLECollector.bin
