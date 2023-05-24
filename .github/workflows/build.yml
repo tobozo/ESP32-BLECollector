@@ -18,6 +18,13 @@ on:
     types: [published]
 
   workflow_dispatch:
+    inputs:
+      # logLevel:
+      #   description: 'Log level'
+      #   required: true
+      #   default: 'warning'
+      tag_name:
+        description: 'Target tag'
 
 
 jobs:
@@ -112,14 +119,25 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Create artifacts dir
-        if: startsWith(github.ref, 'refs/tags/')
+        #if: startsWith(github.ref, 'refs/tags/')
         run: mkdir -p /home/runner/builds
 
       - name: Download artifacts
         uses: actions/download-artifact@v3
-        if: startsWith(github.ref, 'refs/tags/')
+        #if: startsWith(github.ref, 'refs/tags/')
         with:
           path: /home/runner/builds
+
+      - name: Dispatch check
+        uses: softprops/action-gh-release@v1
+        if: github.event.inputs.tag_name != ''
+        with:
+          tag_name: ${{ github.event.inputs.tag_name }}
+          files: |
+            /home/runner/builds/M5stack-BLECollector.bin
+            /home/runner/builds/M5Core2-BLECollector.bin
+            /home/runner/builds/M5Fire-BLECollector.bin
+            /home/runner/builds/OdroidGo-BLECollector.bin
 
       - name: Release check
         uses: softprops/action-gh-release@v1
