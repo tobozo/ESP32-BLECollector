@@ -84,7 +84,7 @@ jobs:
         #if: startsWith(github.ref, 'refs/tags/')
         run: |
           binFile=`find . | grep ESP32-BLECollector.ino.bin`
-          # binPath=`dirname $binFile`
+          binPath=`dirname $binFile`
           ls $binPath && cp $binFile ${{ matrix.bin-name }}
 
       - name: Upload artifact ${{ matrix.bin-name }}
