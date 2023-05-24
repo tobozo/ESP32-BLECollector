@@ -83,13 +83,13 @@ jobs:
       - name: Copy compiled binary
         #if: startsWith(github.ref, 'refs/tags/')
         run: |
-          binFile=`find . | grep 'ESP32-BLECollector.ino.bin'`
+          binFile=`find build | grep 'ESP32-BLECollector.ino.bin'`
           binPath=`dirname $binFile`
           echo "binPath: $binPath"
           echo "binFile: $binFile"
           echo "binName: ${{ matrix.bin-name }}"
           ls $binPath
-          cp $binFile ${{ matrix.bin-name }}
+          cp "$binFile" "${{ matrix.bin-name }}"
 
       - name: Upload artifact ${{ matrix.bin-name }}
         uses: actions/upload-artifact@v3
