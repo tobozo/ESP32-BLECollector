@@ -94,7 +94,7 @@ static const int AMIGABALL_YPOS = 50;
       #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(2, 0, 7)
         // espressif bloated the WiFi core since 2.0.7, now throwing
         // an "IRAM0 segment data does not fit" linking error when used with NimBLE
-        //#undef WITH_WIFI
+        #undef WITH_WIFI
       #endif
     #endif
 
