@@ -72,7 +72,7 @@ static const int AMIGABALL_YPOS = 50;
     #undef hasHID
     #define hasHID() (bool)false
 
-  #elif defined( ARDUINO_ODROID_ESP32 ) // M5Core2
+  #elif defined( ARDUINO_ODROID_ESP32 ) // Odroid-Go
 
     #undef WITH_WIFI // NTP is useless without a RTC module
     #undef TIME_UPDATE_SOURCE // disable time update accordingly
@@ -89,6 +89,13 @@ static const int AMIGABALL_YPOS = 50;
     #define BASE_BRIGHTNESS 100
 
   #elif defined ARDUINO_M5STACK_Core2  // M5Core2
+
+    #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(2, 0, 6)
+      // espressif bloated the WiFi core since 2.0.7, now throwing
+      // an "IRAM0 segment data does not fit" linking error when used with NimBLE
+      #undef WITH_WIFI
+    #endif
+
     #undef HAS_EXTERNAL_RTC
     #define HAS_EXTERNAL_RTC true
     #undef RTC_SDA
