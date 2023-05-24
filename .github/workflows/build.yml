@@ -33,6 +33,7 @@ jobs:
           - esp32:esp32:m5stack-fire
           - esp32:esp32:m5stack-core2
           - esp32:esp32:odroid_esp32:PartitionScheme=min_spiffs
+          - esp32:esp32:esp32s3box
 
         platform-url:
           - https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_dev_index.json
@@ -53,6 +54,9 @@ jobs:
           - arduino-boards-fqbn: esp32:esp32:odroid_esp32:PartitionScheme=min_spiffs
             fancy-name: OdroidGo
             bin-name: OdroidGo-BLECollector.bin
+          - arduino-boards-fqbn: esp32:esp32:esp32s3box
+            fancy-name: S3Box
+            bin-name: S3Box-BLECollector.bin
 
       fail-fast: false
 

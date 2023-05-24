@@ -29,6 +29,8 @@
 
 */
 
+#pragma GCC diagnostic ignored "-Wunused-variable"
+
 static unsigned long forcedUptime = 0;
 
 enum TimeUpdateSources

@@ -29,7 +29,7 @@
 
 */
 
-
+#pragma GCC diagnostic ignored "-Wunused-variable"
 
 
 const char* data = 0; // for some reason sqlite3 db callback needs this

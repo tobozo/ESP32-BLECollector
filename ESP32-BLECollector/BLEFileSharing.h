@@ -30,6 +30,7 @@
 */
 
 #pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wunused-variable"
 
 
 #define TICKS_TO_DELAY 1000

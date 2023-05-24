@@ -29,6 +29,8 @@
 
 */
 
+#pragma GCC diagnostic ignored "-Wunused-variable"
+
 #define TICKS_TO_DELAY 1000
 
 const char* processTemplateLong = "%s%d%s%d";
@@ -893,6 +895,7 @@ class BLEScanUtils
       vTaskDelete(NULL);
     }
 
+    #if defined USE_SCREENSHOTS
     static void screenShotCB( void * param = NULL )
     {
       xTaskCreate(screenShotTask, "screenShotTask", 16000, NULL, 2, NULL);
@@ -904,6 +907,7 @@ class BLEScanUtils
         log_w("Cold ScreenShot");
         M5.ScreenShot->init(/* &M5.Lcd, BLE_FS */);
         if( M5.ScreenShot->begin() ) {
+          log_w("ScreenShot Service loaded");
           UI.ScreenShotLoaded = true;
           UI.screenShot();
         } else {
@@ -915,6 +919,7 @@ class BLEScanUtils
       }
       vTaskDelete(NULL);
     }
+    #endif
 
     static void setTimeZone( void * param = NULL )
     {
@@ -1044,7 +1049,12 @@ class BLEScanUtils
         { "ls",            o->listDirCB,              "Show [dir] Content on the SD" },
         { "rm",            o->rmFileCB,               "Delete [file] from the SD" },
         { "restart",       o->restartCB,              "Restart BLECollector ('restart now' to skip replication)" },
+
+        #if defined USE_SCREENSHOTS
         { "screenshot",    o->screenShotCB,           "Make a screenshot and save it on the SD" },
+        #endif
+
+
         { "screenshow",    o->screenShowCB,           "Show screenshot" },
         { "toggle",        o->toggleCB,               "toggle a bool value" },
         { "resetDB",       o->resetCB,                "Hard Reset DB + forced restart" },
