@@ -46,7 +46,7 @@
     - Flash the sketch, wait for a GPS fix, then issue the "gpstime" command
 
 */
-
+#pragma GCC optimize("O3")
 #include "Settings.h"
 
 void setup()

@@ -224,6 +224,8 @@ static void destroyTaskNow( TaskHandle_t &task )
 #endif
 
 // NimBLE Stack
+#define CONFIG_NIMBLE_STACK_USE_MEM_POOLS 0
+#define CONFIG_BT_NIMBLE_ENABLED 0
 #include <NimBLEDevice.h> // https://github.com/h2zero/NimBLE-Arduino
 #include "NimBLEEddystoneURL.h"
 #include "NimBLEEddystoneTLM.h"

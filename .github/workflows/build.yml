@@ -17,6 +17,9 @@ on:
   release:
     types: [published]
 
+  workflow_dispatch:
+
+
 jobs:
 
   matrix_build:
@@ -78,15 +81,18 @@ jobs:
           extra-arduino-cli-args: --warnings none
 
       - name: Copy compiled binary
-        if: startsWith(github.ref, 'refs/tags/')
-        run:  cd /home/runner/ESP32-BLECollector/build && ls && cp ESP32-BLECollector.ino.bin ${{ matrix.bin-name }}
+        #if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          binFile=`find . | grep ESP32-BLECollector.ino.bin`
+          # binPath=`dirname $binFile`
+          ls $binPath && cp $binFile ${{ matrix.bin-name }}
 
       - name: Upload artifact ${{ matrix.bin-name }}
         uses: actions/upload-artifact@v3
-        if: startsWith(github.ref, 'refs/tags/')
+        #if: startsWith(github.ref, 'refs/tags/')
         with:
           name: ${{ matrix.bin-name }}
-          path: /home/runner/ESP32-BLECollector/build/${{ matrix.bin-name }}
+          path: ${{ matrix.bin-name }}
 
   post_build:
 

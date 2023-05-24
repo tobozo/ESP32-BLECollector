@@ -90,10 +90,12 @@ static const int AMIGABALL_YPOS = 50;
 
   #elif defined ARDUINO_M5STACK_Core2  // M5Core2
 
-    #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(2, 0, 6)
-      // espressif bloated the WiFi core since 2.0.7, now throwing
-      // an "IRAM0 segment data does not fit" linking error when used with NimBLE
-      #undef WITH_WIFI
+    #if defined ESP_ARDUINO_VERSION_VAL // WARN: WIFI bloat happens after 2.x.x
+      #if ESP_ARDUINO_VERSION >= ESP_ARDUINO_VERSION_VAL(2, 0, 7)
+        // espressif bloated the WiFi core since 2.0.7, now throwing
+        // an "IRAM0 segment data does not fit" linking error when used with NimBLE
+        //#undef WITH_WIFI
+      #endif
     #endif
 
     #undef HAS_EXTERNAL_RTC
@@ -729,11 +731,11 @@ const char* screenshotFilenameTpl = "/screenshot-%04d-%02d-%02d_%02dh%02dm%02ds.
 const char* hitsTimeStampTpl = "      %04d/%02d/%02d %02d:%02d:%02d %s";
 
 static char textWidgetStr[17] = { 0 };
-static char unitOutput[16] = {'\0'};
+static char unitOutput[21] = {'\0'};
 static char addressStr[24] = {'\0'};
 static char dbmStr[16] = {'\0'};
 static char hitsTimeStampStr[48] = {'\0'};
-static char hitsStr[16] = {'\0'};
+static char hitsStr[29] = {'\0'};
 static char nameStr[38] = {'\0'};
 static char ouiStr[38] = {'\0'};
 static char appearanceStr[48] = {'\0'};
