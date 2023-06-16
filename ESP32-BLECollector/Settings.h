@@ -201,7 +201,7 @@ static void destroyTaskNow( TaskHandle_t &task )
 
 #if HAS_EXTERNAL_RTC
   #include <Wire.h>
-  #include "RTC.h"
+  #include "./RTC.h"
   static BLE_RTC RTC;
 #endif
 
