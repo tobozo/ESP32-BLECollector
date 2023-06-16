@@ -83,8 +83,15 @@ static const int AMIGABALL_YPOS = 50;
 
   #elif defined ARDUINO_M5STACK_CORES3 // M5CoreS3
 
+    //#undef HAS_EXTERNAL_RTC
+    //#define HAS_EXTERNAL_RTC false
     #undef HAS_EXTERNAL_RTC
-    #define HAS_EXTERNAL_RTC false
+    #define HAS_EXTERNAL_RTC true
+    #undef RTC_SDA
+    #undef RTC_SCL
+    #define RTC_SDA 12 // pin number
+    #define RTC_SCL 11 // pin number
+
     #undef BASE_BRIGHTNESS
     #define BASE_BRIGHTNESS 100
 
@@ -324,14 +331,15 @@ void tft_begin()
 
   #ifdef __M5STACKUPDATER_H
     M5.begin( true, false, false, false, false ); // don't start Serial and SD
+    //M5.begin();
   #else
     M5.begin( true, true, false, false, false ); // don't start Serial
   #endif
 
   #if HAS_EXTERNAL_RTC
     Wire.begin(RTC_SDA, RTC_SCL);
-    M5.I2C.scan();
-    M5.update();
+    //M5.I2C.scan();
+    //M5.update();
   #endif
   delay( 100 );
   #ifdef __M5STACKUPDATER_H
@@ -340,19 +348,13 @@ void tft_begin()
 
     if( hasHID() ) {
       // build has buttons => enable SD Updater at boot
-      // New SD Updater support, requires the latest version of https://github.com/tobozo/M5Stack-SD-Updater/
-      SDUCfg.display = &tft;
-
-      #if defined M5_SD_UPDATER_VERSION_INT
-        // SDUCfg.setLabelMenu("<< Menu");
-        // SDUCfg.setLabelSkip("Launch");
-        // SDUCfg.setAppName( PLATFORM_NAME " BLE Collector" );
-        // SDUCfg.setBinFileName( "/ESP32-BLECollector.bin" );
-        // SDUCfg.useRolllback( false );
-        checkSDUpdater( BLE_FS, MENU_BIN, 15000, TFCARD_CS_PIN ); // Filesystem, Launcher bin path, Wait delay, Sdcard CS pin
-      #else
-        checkSDUpdater();
-      #endif
+      // New SD Updater support, requires version >=1.2.8 of https://github.com/tobozo/M5Stack-SD-Updater/
+      if( Flash::hasFactory() ) {
+        SDUCfg.display = &tft;
+        SDUCfg.rollBackToFactory = true;
+        SDUCfg.setLabelMenu("FW Menu");
+      }
+      checkSDUpdater( BLE_FS, "", 5000, TFCARD_CS_PIN );
     }
   #endif
 }

@@ -421,7 +421,9 @@ class UIUtils
 
       int16_t yRef = Out.yRef - Out.scrollTopFixedArea;
       // match pixel copy area with scroll area
+      //log_d("tft.setScrollRect(%d, %d, %d, %d);", 0, Out.scrollTopFixedArea, Out.width, Out.yArea);
       tft.setScrollRect(0, Out.scrollTopFixedArea, Out.width, Out.yArea);
+      //log_d("tft_hScrollTo( %d );", Out.scrollTopFixedArea );
       tft_hScrollTo( Out.scrollTopFixedArea ); // reset hardware scroll position before capturing
       tft_scrollTo( -yRef ); // reverse software-scroll to compensate hardware scroll offset
 

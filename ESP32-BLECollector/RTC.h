@@ -37,7 +37,7 @@
 
 #pragma GCC diagnostic ignored "-Wunused-variable"
 
-#if defined( ARDUINO_M5STACK_Core2 ) // M5Core2 uses BM8563
+#if defined ARDUINO_M5STACK_Core2 || defined ARDUINO_M5STACK_CORES3 // M5Core2 and M5CoreS3 use BM8563
 
   //#define BM8563_ADDR 0x51 // M5Core2 RTC I2C address
   #define BLE_RTC BLE_RTC_BM8563 // alias for BLECollector
